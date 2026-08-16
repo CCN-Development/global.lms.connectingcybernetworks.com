@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+	--background: #000000;
+	--foreground: #ffffff;
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--font-sans: var(--font-lato);
+}
+
+* {
+	box-sizing: border-box;
+	padding: 0;
+	margin: 0;
+}
+
+html {
+	font-size: 80%;
+}
+
+body {
+	background: var(--background);
+	color: var(--foreground);
+	font-family: var(--font-lato), Arial, Helvetica, sans-serif;
+}
+body {
+	background: url("/lms-bg.webp");
+	background-size: cover;
+	background-repeat: no-repeat;
+	/* background-position: center; */
+}
+
+a,
+button {
+	cursor: pointer;
+}
+
+.chip-bg {
+	background: linear-gradient(90deg, #8c24ff, #0e1934);
+}
+
+::-webkit-scrollbar {
+	width: 1px;
+}
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+	background: rgb(0, 0, 0);
+}
