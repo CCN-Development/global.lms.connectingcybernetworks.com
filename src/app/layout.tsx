@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
-import { Lato } from "next/font/google";
+import { Lato, Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { CyberSecurityProvider } from "@/contexts/CyberSecurityProvider";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 const lato = Lato({
   variable: "--font-lato",
@@ -19,8 +24,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${lato.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className={cn("h-full", "antialiased", lato.variable, "font-sans", inter.variable)}>
+      <body className="min-h-full flex flex-col">
+        <AuthProvider>
+          <CyberSecurityProvider>
+            {children}
+          </CyberSecurityProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

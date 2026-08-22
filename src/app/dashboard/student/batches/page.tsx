@@ -123,7 +123,7 @@ const BATCHES = [
 export default function OngoingBatchesPage() {
     const router = useRouter();
     return (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
             {BATCHES.map((batch) => (
                 <BatchCard
                     key={batch.id}

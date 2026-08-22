@@ -250,7 +250,7 @@ export default function ExploreBatchesPage() {
                         {filtered.length} batch{filtered.length !== 1 ? "es" : ""}
                     </Typography>
                 </Box>
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.5 }}>
                     {filtered.map((batch) => (
                         <BatchCard key={batch.id} variant="explore" {...batch} />
                     ))}

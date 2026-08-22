@@ -103,7 +103,7 @@ const BATCHES = [
 
 export default function UpcomingBatchesPage() {
     return (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
             {BATCHES.map((batch) => (
                 <BatchCard
                     key={batch.id}
