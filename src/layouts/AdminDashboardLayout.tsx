@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'CRM Users',        link: '/dashboard/admin/crm-users',         icon: <MdOutlinePeople /> },
     { label: 'LMS Users',        link: '/dashboard/admin/lms-users',         icon: <MdOutlineSchool /> },
     { label: 'HRMS Users',       link: '/dashboard/admin/hrms-users',        icon: <MdOutlineBadge /> },
-    { label: 'Chats',            link: '/dashboard/admin/chats',             icon: <MdOutlineChat /> },
+    { label: 'Chats',            link: '/dashboard/chats',             icon: <MdOutlineChat /> },
 ]
 
 export default function AdminDashboardLayout({ children, title }: Props) {

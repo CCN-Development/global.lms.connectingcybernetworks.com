@@ -30,6 +30,7 @@ import {
 } from "react-icons/lu";
 import Image from "next/image";
 import { useAuth } from "@/contexts/AuthContext";
+import { CountriesData } from "@/utils/countries";
 
 type Mode = "otp" | "password";
 type Step = "identifier" | "otp";
@@ -49,40 +50,17 @@ interface Country {
     name: string;
     iso: string;
     dial: string;
+    flag: string;
 }
 
-const COUNTRIES: Country[] = [
-    { name: "India", iso: "IN", dial: "+91" },
-    { name: "United States", iso: "US", dial: "+1" },
-    { name: "United Kingdom", iso: "GB", dial: "+44" },
-    { name: "United Arab Emirates", iso: "AE", dial: "+971" },
-    { name: "Canada", iso: "CA", dial: "+1" },
-    { name: "Australia", iso: "AU", dial: "+61" },
-    { name: "Singapore", iso: "SG", dial: "+65" },
-    { name: "Germany", iso: "DE", dial: "+49" },
-    { name: "France", iso: "FR", dial: "+33" },
-    { name: "Netherlands", iso: "NL", dial: "+31" },
-    { name: "Saudi Arabia", iso: "SA", dial: "+966" },
-    { name: "Qatar", iso: "QA", dial: "+974" },
-    { name: "Kuwait", iso: "KW", dial: "+965" },
-    { name: "Oman", iso: "OM", dial: "+968" },
-    { name: "Bahrain", iso: "BH", dial: "+973" },
-    { name: "Malaysia", iso: "MY", dial: "+60" },
-    { name: "Indonesia", iso: "ID", dial: "+62" },
-    { name: "Philippines", iso: "PH", dial: "+63" },
-    { name: "Thailand", iso: "TH", dial: "+66" },
-    { name: "Vietnam", iso: "VN", dial: "+84" },
-    { name: "Bangladesh", iso: "BD", dial: "+880" },
-    { name: "Pakistan", iso: "PK", dial: "+92" },
-    { name: "Sri Lanka", iso: "LK", dial: "+94" },
-    { name: "Nepal", iso: "NP", dial: "+977" },
-    { name: "Japan", iso: "JP", dial: "+81" },
-    { name: "South Korea", iso: "KR", dial: "+82" },
-    { name: "China", iso: "CN", dial: "+86" },
-    { name: "Brazil", iso: "BR", dial: "+55" },
-    { name: "South Africa", iso: "ZA", dial: "+27" },
-    { name: "Nigeria", iso: "NG", dial: "+234" },
-];
+const COUNTRIES: Country[] = CountriesData
+    .filter((c) => c.code !== null)
+    .map((c) => ({
+        name: c.country_name,
+        iso: c.country_code,
+        dial: c.code as string,
+        flag: c.flag,
+    }));
 
 const DEFAULT_COUNTRY = COUNTRIES.find((c) => c.iso === "IN") ?? COUNTRIES[0];
 const OTP_LENGTH = 6;
@@ -95,7 +73,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function detectChannel(raw: string): Channel {
     const s = raw.trim();
-    if (!s) return "phone";
+    if (!s) return "email";
     if (s.includes("@")) return "email";
     if (/^\d+$/.test(s.replace(/[\s\-()+]/g, ""))) return "phone";
     return "email";
@@ -115,8 +93,11 @@ function extractDial(raw: string): { country: Country; local: string } | null {
 /* ISO badge (light-themed)                                           */
 /* ------------------------------------------------------------------ */
 
-function IsoBadge({ iso }: { iso: string }) {
-    return (
+function IsoBadge({ iso, flag }: { iso: string; flag?: string }) {
+    return flag ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={flag} alt={iso} className="w-6 h-4 rounded-sm object-cover shrink-0" />
+    ) : (
         <span className="inline-flex items-center justify-center min-w-7.5 h-5.5 px-1.5 rounded-md bg-gray-100 border border-gray-200 text-[11px] font-bold tracking-widest text-gray-600">
             {iso}
         </span>
@@ -161,7 +142,7 @@ function CountryPicker({ value, onChange }: { value: Country; onChange: (c: Coun
                 aria-haspopup="listbox"
                 aria-expanded={open}
             >
-                <IsoBadge iso={value.iso} />
+                <IsoBadge iso={value.iso} flag={value.flag} />
                 <span className="text-sm font-semibold tabular-nums text-gray-800">
                     {value.dial}
                 </span>
@@ -212,7 +193,7 @@ function CountryPicker({ value, onChange }: { value: Country; onChange: (c: Coun
                                                 active ? "bg-violet-50" : "hover:bg-gray-50"
                                             }`}
                                         >
-                                            <IsoBadge iso={c.iso} />
+                                            <IsoBadge iso={c.iso} flag={c.flag} />
                                             <span
                                                 className={`text-sm flex-1 truncate ${
                                                     active ? "font-semibold text-violet-700" : "text-gray-800"
@@ -429,7 +410,7 @@ export default function LoginPage() {
             const res =
                 channel === "email"
                     ? await auth.sendEmailOtp({ email: identifier.trim() })
-                    : await auth.sendPhoneOtp({ callingCode: country.dial, phoneNumber: identifier.replace(/\D/g, "") });
+                    : await auth.sendPhoneOtp({ callingCode: country.dial.replace("+", ""), phoneNumber: identifier.replace(/\D/g, "") });
             if (!res.success) { toast.error(res.message ?? "Failed to send code"); return; }
             toast.success(channel === "email" ? "Code sent to your email" : `Code sent to ${country.dial} ${identifier}`);
             setOtp(""); setStep("otp"); setResendIn(RESEND_SECONDS);
@@ -444,7 +425,7 @@ export default function LoginPage() {
             const res =
                 channel === "email"
                     ? await auth.loginWithEmailOtp({ email: identifier.trim(), otp: val })
-                    : await auth.loginWithPhoneOtp({ callingCode: country.dial, phoneNumber: identifier.replace(/\D/g, ""), otp: val });
+                    : await auth.loginWithPhoneOtp({ callingCode: country.dial.replace("+", ""), phoneNumber: identifier.replace(/\D/g, ""), otp: val });
             if (!res.success || !res.data) { toast.error(res.message ?? "Invalid or expired code"); return; }
             toast.success("Signed in"); redirectByRole(res.data.role);
         } finally { setSubmitting(false); }
@@ -458,7 +439,7 @@ export default function LoginPage() {
             const payload =
                 channel === "email"
                     ? { email: identifier.trim(), password }
-                    : { callingCode: country.dial, phoneNumber: identifier.replace(/\D/g, ""), password };
+                    : { callingCode: country.dial.replace("+", ""), phoneNumber: identifier.replace(/\D/g, ""), password };
             const res = await auth.passwordLogin(payload);
             if (!res.success || !res.data) { toast.error(res.message ?? "Login failed"); return; }
             toast.success("Signed in"); redirectByRole(res.data.role);
@@ -529,7 +510,7 @@ export default function LoginPage() {
                 {/* Logo */}
                 <div className="relative flex items-center gap-3">
                     <div className="w-11 h-11 rounded-2xl  flex items-center justify-center">
-                        <Image src="/ccn-icon-dark.png" alt="CCN" width={28} height={28} priority />
+                        <Image src="/ccn-icon-dark.png" alt="CCN" width={50} height={50} priority />
                     </div>
                     <div>
                         <p className="text-sm font-semibold text-white leading-tight">
@@ -544,14 +525,14 @@ export default function LoginPage() {
                 {/* Hero text */}
                 <div className="relative max-w-sm">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/50 mb-5">
-                        The cyber learning platform
+                        The cyber security learning platform
                     </p>
                     <h1 className="text-5xl xl:text-[60px] font-black text-white leading-[1.05] tracking-tight">
-                        Learn.<br />
+                        Learn. 
                         <span className="text-violet-300">Defend.</span><br />
                         Deliver.
                     </h1>
-                    <p className="mt-6 text-[15px] leading-relaxed text-white/60 max-w-65">
+                    <p className="mt-6 text-[15px] leading-relaxed text-white/60 max-w-120">
                         One secure workspace for students, trainers and admins — with live batches and role-based dashboards.
                     </p>
                 </div>
@@ -724,13 +705,7 @@ export default function LoginPage() {
                                                         <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
                                                             Password
                                                         </label>
-                                                        <button
-                                                            type="button"
-                                                            className="text-[11px] font-bold text-violet-600 hover:text-violet-800 transition-colors"
-                                                            tabIndex={-1}
-                                                        >
-                                                            Forgot password?
-                                                        </button>
+                                                    
                                                     </div>
                                                     <div className="flex items-stretch h-13 rounded-xl bg-gray-50 border-2 border-gray-200 focus-within:border-violet-500 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(124,58,237,0.08)] transition-all">
                                                         <div className="pl-4 flex items-center text-gray-400">

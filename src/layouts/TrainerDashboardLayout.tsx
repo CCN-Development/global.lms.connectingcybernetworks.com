@@ -14,7 +14,7 @@ type Props = {
 const NAV_ITEMS: NavItem[] = [
     { label: 'Overview',    link: '/dashboard/trainer/overview',    icon: <MdOutlineDashboard /> },
     { label: 'My Batches', link: '/dashboard/trainer/my-batches',  icon: <MdOutlineClass /> },
-    { label: 'Chats',      link: '/dashboard/trainer/chats',       icon: <MdOutlineChat /> },
+    { label: 'Chats',      link: '/dashboard/chats',       icon: <MdOutlineChat /> },
 ]
 
 export default function TrainerDashboardLayout({ children, title }: Props) {

@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Accounts Management',           link: '/dashboard/accountants/accounts-management',            icon: <MdOutlineAccountBalance /> },
     { label: 'Expenses Management',           link: '/dashboard/accountants/expenses-management',            icon: <MdOutlineReceipt /> },
     { label: 'Student Profiles',              link: '/dashboard/accountants/student-profiles',               icon: <MdOutlinePeople /> },
-    { label: 'Chats',                         link: '/dashboard/accountants/chats',                          icon: <MdOutlineChat /> },
+    { label: 'Chats',                         link: '/dashboard/chats',                          icon: <MdOutlineChat /> },
 ]
 
 export default function AccountantDashboardLayout({ children, title }: Props) {

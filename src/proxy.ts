@@ -22,9 +22,9 @@ const ROLE_PATH_MAP: Record<UserRole, string> = {
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    console.log("Middleware triggered for path:", pathname);
+    // console.log("Middleware triggered for path:", pathname);
     const token = request.cookies.get("authToken")?.value;
-    console.log("Auth token from cookies:", token);
+    // console.log("Auth token from cookies:", token);
     if (!token) {
         if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
             return NextResponse.next();
@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
     }
 
     const secret = process.env.JWT_SECRET;
-    console.log("JWT secret from environment:", secret);
+    // console.log("JWT secret from environment:", secret);
     if (!secret) {
         if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
             return NextResponse.next();
@@ -46,9 +46,9 @@ export async function proxy(request: NextRequest) {
             token,
             new TextEncoder().encode(secret)
         );
-        console.log("Decoded JWT payload:", payload);
+        // console.log("Decoded JWT payload:", payload);
         const decoded = payload as unknown as TokenPayload;
-        console.log("Decoded user:", decoded);
+        // console.log("Decoded user:", decoded);
         const rolePath = ROLE_PATH_MAP[decoded.role];
 
         if (!rolePath) {
@@ -63,6 +63,9 @@ export async function proxy(request: NextRequest) {
         
         // If user is already on their role's path, let them through
         if (pathname.startsWith(rolePath)) {
+            return NextResponse.next();
+        }
+        if(pathname.startsWith("/dashboard/chats")) {
             return NextResponse.next();
         }
 

@@ -20,7 +20,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Batches',                link: '/dashboard/rm/batches',                icon: <MdOutlineGroups /> },
     { label: 'Student Requests',       link: '/dashboard/rm/student-requests',       icon: <MdOutlineAssignment /> },
     { label: 'Student Profiles',       link: '/dashboard/rm/student-profiles',       icon: <MdOutlinePeople /> },
-    { label: 'Chats',                  link: '/dashboard/rm/chats',                  icon: <MdOutlineChat /> },
+    { label: 'Chats',                  link: '/dashboard/chats',                  icon: <MdOutlineChat /> },
 ]
 
 export default function RMDashboardLayout({ children, title }: Props) {

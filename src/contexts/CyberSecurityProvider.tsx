@@ -846,7 +846,7 @@ export function CyberSecurityProvider({ children }: { children: ReactNode }) {
             if (cancelled) return;
             await delay(2000);
             if (cancelled) return;
-            // setPhase("ready");
+            setPhase("ready");
         })();
         return () => {
             cancelled = true;
