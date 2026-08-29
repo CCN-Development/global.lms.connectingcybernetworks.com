@@ -7,6 +7,8 @@ import {
     MdOutlineAssignment,
     MdOutlinePeople,
     MdOutlineChat,
+    MdOutlineInventory2,
+    MdOutlineMenuBook,
 } from 'react-icons/md'
 
 type Props = {
@@ -20,6 +22,8 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Batches',                link: '/dashboard/rm/batches',                icon: <MdOutlineGroups /> },
     { label: 'Student Requests',       link: '/dashboard/rm/student-requests',       icon: <MdOutlineAssignment /> },
     { label: 'Student Profiles',       link: '/dashboard/rm/student-profiles',       icon: <MdOutlinePeople /> },
+    { label: 'Packages',               link: '/dashboard/rm/packages',               icon: <MdOutlineInventory2 /> },
+    { label: 'Courses',                link: '/dashboard/rm/courses',                icon: <MdOutlineMenuBook /> },
     { label: 'Chats',                  link: '/dashboard/chats',                  icon: <MdOutlineChat /> },
 ]
 

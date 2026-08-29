@@ -22,7 +22,7 @@ export default function page({ }: Props) {
             } />}
         >
             <div
-                className='grid grid-cols-[1fr_1fr] md:grid-cols-[2fr_3fr_2fr] lg:grid-cols-[2fr_4fr_2fr] xl:grid-cols-[2fr_3fr_2fr_2fr] gap-4 justify-start'
+                className='grid grid-cols-[1fr_1fr] md:grid-cols-[2fr_3fr_2fr] lg:grid-cols-[2fr_4fr_2fr] xl:grid-cols-[2fr_4fr_2fr] gap-4 justify-start'
             >
                 <AttendanceCard
                     overallProgress={78}

@@ -3,6 +3,10 @@ import { Lato, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CyberSecurityProvider } from "@/contexts/CyberSecurityProvider";
+import { RMProvider } from "@/contexts/RMContext";
+import { ContentProvider } from "@/contexts/ContentContext";
+import { ERPProvider } from "@/contexts/ERPContext";
+import { BatchProvider } from "@/contexts/BatchContext";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -25,11 +29,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={cn("h-full", "antialiased", lato.variable, "font-sans", inter.variable)}>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full">
         <AuthProvider>
-          {/* <CyberSecurityProvider> */}
-            {children}
-          {/* </CyberSecurityProvider> */}
+          <RMProvider>
+            <ContentProvider>
+              <ERPProvider>
+                <BatchProvider>
+            {/* <CyberSecurityProvider> */}
+              {children}
+            {/* </CyberSecurityProvider> */}
+                </BatchProvider>
+              </ERPProvider>
+            </ContentProvider>
+          </RMProvider>
         </AuthProvider>
       </body>
     </html>

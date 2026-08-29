@@ -1,9 +1,11 @@
 import RMDashboardLayout from '@/layouts/RMDashboardLayout'
-import React from 'react'
+import BatchesClient from './BatchesClient'
 
 
 export default function page() {
     return (
-        <RMDashboardLayout>page</RMDashboardLayout>
+        <RMDashboardLayout title="Batches">
+            <BatchesClient />
+        </RMDashboardLayout>
     )
 }

@@ -1,9 +1,10 @@
 import RMDashboardLayout from '@/layouts/RMDashboardLayout'
-import React from 'react'
-
+import StudentProfilesClient from './StudentProfilesClient'
 
 export default function page() {
     return (
-        <RMDashboardLayout>page</RMDashboardLayout>
+        <RMDashboardLayout title="Student Profiles">
+            <StudentProfilesClient path="/dashboard/rm/student-profiles" />
+        </RMDashboardLayout>
     )
 }

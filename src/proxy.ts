@@ -20,25 +20,61 @@ const ROLE_PATH_MAP: Record<UserRole, string> = {
     Accountant: "/dashboard/accountants",
 };
 
+/** Next.js flight/RSC data request: `RSC: 1` header, or the `_rsc` cache-busting query param. */
+function isRscRequest(request: NextRequest) {
+    return (
+        request.headers.get("rsc") === "1" ||
+        request.nextUrl.searchParams.has("_rsc")
+    );
+}
+
+function isPrefetchRequest(request: NextRequest) {
+    return (
+        request.headers.get("next-router-prefetch") === "1" ||
+        request.headers.get("purpose") === "prefetch"
+    );
+}
+
+/**
+ * Redirects without leaking `_rsc` into the destination. Prefetches are answered with
+ * an empty 204 instead, so the router never caches a redirect for the link.
+ */
+function redirectTo(path: string, request: NextRequest) {
+    if (isRscRequest(request) && isPrefetchRequest(request)) {
+        return new NextResponse(null, { status: 204 });
+    }
+
+    const url = new URL(path, request.nextUrl);
+    url.search = "";
+    return NextResponse.redirect(url);
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
-    // console.log("Middleware triggered for path:", pathname);
+
+    // Never touch Next internals / static assets, even if a matcher change lets them through.
+    if (
+        pathname.startsWith("/_next") ||
+        pathname.startsWith("/api") ||
+        pathname === "/favicon.ico"
+    ) {
+        return NextResponse.next();
+    }
+
     const token = request.cookies.get("authToken")?.value;
-    // console.log("Auth token from cookies:", token);
     if (!token) {
         if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
             return NextResponse.next();
         }
-        return NextResponse.redirect(new URL("/auth/login", request.url));
+        return redirectTo("/auth/login", request);
     }
 
     const secret = process.env.JWT_SECRET;
-    // console.log("JWT secret from environment:", secret);
     if (!secret) {
         if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
             return NextResponse.next();
         }
-        return NextResponse.redirect(new URL("/auth/login", request.url));
+        return redirectTo("/auth/login", request);
     }
 
     try {
@@ -46,38 +82,33 @@ export async function proxy(request: NextRequest) {
             token,
             new TextEncoder().encode(secret)
         );
-        // console.log("Decoded JWT payload:", payload);
         const decoded = payload as unknown as TokenPayload;
-        // console.log("Decoded user:", decoded);
         const rolePath = ROLE_PATH_MAP[decoded.role];
 
         if (!rolePath) {
-            return NextResponse.redirect(new URL("/auth/login", request.url));
+            return redirectTo("/auth/login", request);
         }
         if (pathname === "/") {
-            return NextResponse.redirect(new URL(rolePath + "/overview", request.url));
+            return redirectTo(rolePath + "/overview", request);
         }
-        if(pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
-            return NextResponse.redirect(new URL(rolePath + "/overview", request.url));
+        if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/register")) {
+            return redirectTo(rolePath + "/overview", request);
         }
-        
+
         // If user is already on their role's path, let them through
         if (pathname.startsWith(rolePath)) {
             return NextResponse.next();
         }
-        if(pathname.startsWith("/dashboard/chats")) {
+        if (pathname.startsWith("/dashboard/chats")) {
             return NextResponse.next();
         }
 
         // Redirect to their role's dashboard
-        return NextResponse.redirect(new URL(rolePath + "/overview", request.url));
+        return redirectTo(rolePath + "/overview", request);
     } catch (error) {
-        // Invalid token
         console.log("Invalid token or verification failed.", error);
-        return NextResponse.redirect(new URL("/auth/login", request.url));
+        return redirectTo("/auth/login", request);
     }
-
-    
 }
 
 export const config = {

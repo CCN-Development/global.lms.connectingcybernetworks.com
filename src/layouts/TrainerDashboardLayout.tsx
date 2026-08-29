@@ -4,6 +4,7 @@ import {
     MdOutlineDashboard,
     MdOutlineClass,
     MdOutlineChat,
+    MdOutlineCalendarMonth,
 } from 'react-icons/md'
 
 type Props = {
@@ -12,9 +13,10 @@ type Props = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-    { label: 'Overview',    link: '/dashboard/trainer/overview',    icon: <MdOutlineDashboard /> },
-    { label: 'My Batches', link: '/dashboard/trainer/my-batches',  icon: <MdOutlineClass /> },
-    { label: 'Chats',      link: '/dashboard/chats',       icon: <MdOutlineChat /> },
+    { label: 'My Day',      link: '/dashboard/trainer/overview',    icon: <MdOutlineDashboard /> },
+    { label: 'My Batches',  link: '/dashboard/trainer/my-batches',  icon: <MdOutlineClass /> },
+    { label: 'My Calendar', link: '/dashboard/trainer/my-calendar', icon: <MdOutlineCalendarMonth /> },
+    { label: 'Chats',       link: '/dashboard/chats',               icon: <MdOutlineChat /> },
 ]
 
 export default function TrainerDashboardLayout({ children, title }: Props) {
