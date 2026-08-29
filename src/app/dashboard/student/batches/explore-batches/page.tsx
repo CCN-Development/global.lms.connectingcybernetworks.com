@@ -1,59 +1,85 @@
 "use client";
-import React, { useState, useMemo } from "react";
-import { Box, Typography, InputAdornment, TextField, Button, Collapse } from "@mui/material";
+import React, { useEffect, useState, useMemo } from "react";
+import { Box, Typography, InputAdornment, TextField, Button, Collapse, CircularProgress } from "@mui/material";
 import { MdSearch, MdFilterList, MdClose } from "react-icons/md";
+import { useRouter } from "next/navigation";
 import BatchCard from "@/components/batches/BatchCard";
-
-const T_ASHISH = [{ name: "Ashish Saini", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_KUSHAL = [{ name: "Kushal Korde", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_OMKAR = [{ name: "Omkar", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_SHIV = [{ name: "Shivkumar Chauhan", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-
-const EXPLORE_BATCHES = [
-    { id: 1, title: "Cisco Certified Network Associate", mode: "Offline" as const, startMonth: "AUG", startDay: 5, endMonth: "OCT", endDay: 31, duration: "3 months", batchTime: "11:00 AM – 1:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 8, trainers: T_KUSHAL },
-    { id: 2, title: "Cisco Certified Network Associate", mode: "Online" as const, startMonth: "SEP", startDay: 1, endMonth: "NOV", endDay: 30, duration: "3 months", batchTime: "7:00 PM – 9:00 PM", batchDays: "Tue – Thu", seatsLeft: 14, trainers: T_KUSHAL },
-    { id: 3, title: "Ethical Hacking & Penetration Testing", mode: "Online" as const, startMonth: "AUG", startDay: 10, endMonth: "OCT", endDay: 10, duration: "2 months", batchTime: "11:00 AM – 1:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 6, trainers: T_OMKAR },
-    { id: 4, title: "Ethical Hacking & Penetration Testing", mode: "Hybrid" as const, startMonth: "SEP", startDay: 15, endMonth: "NOV", endDay: 15, duration: "2 months", batchTime: "2:00 PM – 4:00 PM", batchDays: "Sat – Sun", seatsLeft: 2, trainers: T_OMKAR },
-    { id: 5, title: "SOC Analyst (Level 1)", mode: "Online" as const, startMonth: "AUG", startDay: 18, endMonth: "OCT", endDay: 31, duration: "2.5 months", batchTime: "10:00 AM – 12:00 PM", batchDays: "Tue – Thu – Sat", seatsLeft: 10, trainers: T_SHIV },
-    { id: 6, title: "SOC Analyst (Level 2)", mode: "Online" as const, startMonth: "OCT", startDay: 5, endMonth: "DEC", endDay: 20, duration: "2.5 months", batchTime: "7:00 PM – 9:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 12, trainers: T_SHIV },
-    { id: 7, title: "Python for Cybersecurity", mode: "Online" as const, startMonth: "AUG", startDay: 4, endMonth: "SEP", endDay: 27, duration: "2 months", batchTime: "6:00 PM – 8:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 18, trainers: T_OMKAR },
-    { id: 8, title: "Linux for Security Professionals", mode: "Online" as const, startMonth: "SEP", startDay: 8, endMonth: "OCT", endDay: 25, duration: "7 weeks", batchTime: "11:00 AM – 1:00 PM", batchDays: "Tue – Thu", seatsLeft: 9, trainers: T_KUSHAL },
-    { id: 9, title: "AWS Cloud Practitioner", mode: "Online" as const, startMonth: "AUG", startDay: 12, endMonth: "OCT", endDay: 5, duration: "2 months", batchTime: "10:00 AM – 12:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 15, trainers: T_ASHISH },
-    { id: 10, title: "Microsoft Azure Security (AZ-500)", mode: "Online" as const, startMonth: "SEP", startDay: 20, endMonth: "NOV", endDay: 20, duration: "2 months", batchTime: "7:00 PM – 9:00 PM", batchDays: "Tue – Thu – Sat", seatsLeft: 11, trainers: T_ASHISH },
-    { id: 11, title: "Cisco Certified Network Professional", mode: "Offline" as const, startMonth: "OCT", startDay: 1, endMonth: "JAN", endDay: 31, duration: "4 months", batchTime: "11:00 AM – 2:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 5, trainers: T_KUSHAL },
-    { id: 12, title: "Digital Forensics & Incident Response", mode: "Hybrid" as const, startMonth: "SEP", startDay: 5, endMonth: "NOV", endDay: 5, duration: "2 months", batchTime: "10:00 AM – 12:00 PM", batchDays: "Tue – Thu", seatsLeft: 7, trainers: T_SHIV },
-    { id: 13, title: "Soft Skills & Communication", mode: "Hybrid" as const, startMonth: "AUG", startDay: 1, endMonth: "AUG", endDay: 31, duration: "1 month", batchTime: "3:00 PM – 5:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 20, trainers: T_ASHISH },
-    { id: 14, title: "Bug Bounty Hunting (Intermediate)", mode: "Online" as const, startMonth: "OCT", startDay: 10, endMonth: "DEC", endDay: 10, duration: "2 months", batchTime: "8:00 PM – 10:00 PM", batchDays: "Tue – Thu – Sat", seatsLeft: 4, trainers: T_OMKAR },
-    { id: 15, title: "CompTIA Security+", mode: "Online" as const, startMonth: "AUG", startDay: 25, endMonth: "OCT", endDay: 25, duration: "2 months", batchTime: "6:00 PM – 8:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 13, trainers: T_ASHISH },
-    { id: 16, title: "Malware Analysis & Reverse Engineering", mode: "Online" as const, startMonth: "SEP", startDay: 22, endMonth: "NOV", endDay: 22, duration: "2 months", batchTime: "7:00 PM – 9:00 PM", batchDays: "Mon – Wed", seatsLeft: 8, trainers: T_OMKAR },
-    { id: 17, title: "Red Team Operations", mode: "Hybrid" as const, startMonth: "OCT", startDay: 15, endMonth: "DEC", endDay: 15, duration: "2 months", batchTime: "10:00 AM – 1:00 PM", batchDays: "Sat – Sun", seatsLeft: 3, trainers: T_OMKAR },
-    { id: 18, title: "Cyber Threat Intelligence", mode: "Online" as const, startMonth: "NOV", startDay: 3, endMonth: "JAN", endDay: 10, duration: "2.5 months", batchTime: "7:00 PM – 9:00 PM", batchDays: "Tue – Thu", seatsLeft: 16, trainers: T_SHIV },
-    { id: 19, title: "DevSecOps Fundamentals", mode: "Online" as const, startMonth: "AUG", startDay: 20, endMonth: "OCT", endDay: 20, duration: "2 months", batchTime: "11:00 AM – 1:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 10, trainers: T_ASHISH },
-    { id: 20, title: "Wireless Network Security", mode: "Offline" as const, startMonth: "SEP", startDay: 12, endMonth: "OCT", endDay: 25, duration: "6 weeks", batchTime: "10:00 AM – 12:00 PM", batchDays: "Mon – Wed – Fri", seatsLeft: 6, trainers: T_KUSHAL },
-];
+import RequestSuccessModal from "@/components/batches/RequestSuccessModal";
+import { useStudent, type AvailableBatch } from "@/contexts/StudentContext";
 
 // ── Filter helpers ───────────────────────────────────────────────────────────
 
 const MONTH_ORDER = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const DAY_LABELS: Record<string, string> = {
+    sun: "Sun", mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat",
+};
 
-function getTimeSlot(batchTime: string): "Morning" | "Afternoon" | "Evening" {
-    const match = batchTime.match(/^(\d+):00\s*(AM|PM)/i);
-    if (!match) return "Morning";
-    let h = parseInt(match[1]);
-    const m = match[2].toUpperCase();
-    if (m === "PM" && h !== 12) h += 12;
-    if (m === "AM" && h === 12) h = 0;
-    if (h < 12) return "Morning";
-    if (h < 17) return "Afternoon";
+type BatchMode = "Online" | "Offline" | "Hybrid";
+
+function normalizeMode(mode: string | null): BatchMode {
+    const value = (mode ?? "").trim().toLowerCase();
+    if (value === "offline") return "Offline";
+    if (value === "hybrid") return "Hybrid";
+    return "Online";
+}
+
+/** Clock times are persisted as 1970-01-01T{HH:mm}Z, so they must be read in UTC. */
+function formatClockTime(iso: string | null): string | null {
+    const date = iso ? new Date(iso) : null;
+    if (!date || Number.isNaN(date.getTime())) return null;
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    const suffix = hours >= 12 ? "PM" : "AM";
+    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
+function formatBatchTime(batch: AvailableBatch): string {
+    const start = formatClockTime(batch.classStartTime);
+    const end = formatClockTime(batch.classEndTime);
+    if (start && end) return `${start} – ${end}`;
+    return start ?? batch.classTiming ?? "Not scheduled";
+}
+
+function formatBatchDays(batchDays: string[]): string {
+    if (!batchDays?.length) return "Not scheduled";
+    return batchDays
+        .map((day) => DAY_LABELS[day.trim().toLowerCase().slice(0, 3)] ?? day)
+        .join(" – ");
+}
+
+function getTimeSlot(batch: AvailableBatch): "Morning" | "Afternoon" | "Evening" | null {
+    const date = batch.classStartTime ? new Date(batch.classStartTime) : null;
+    if (!date || Number.isNaN(date.getTime())) return null;
+    const hours = date.getUTCHours();
+    if (hours < 12) return "Morning";
+    if (hours < 17) return "Afternoon";
     return "Evening";
 }
 
-function parseDurationMonths(duration: string): number {
-    const mo = duration.match(/^([\d.]+)\s*month/i);
-    if (mo) return parseFloat(mo[1]);
-    const wk = duration.match(/^([\d.]+)\s*week/i);
-    if (wk) return parseFloat(wk[1]) / 4.33;
-    return 0;
+function durationInMonths(batch: AvailableBatch): number {
+    if (batch.course?.durationInMonths) return batch.course.durationInMonths;
+    const start = new Date(batch.batchStartDate).getTime();
+    const end = new Date(batch.batchEndDate).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0;
+    return (end - start) / (1000 * 60 * 60 * 24 * 30.44);
+}
+
+function formatDuration(batch: AvailableBatch): string {
+    const months = durationInMonths(batch);
+    if (months <= 0) return "—";
+    if (months < 1) {
+        const weeks = Math.max(1, Math.round(months * 4.33));
+        return `${weeks} week${weeks !== 1 ? "s" : ""}`;
+    }
+    const rounded = Math.round(months * 10) / 10;
+    return `${rounded} month${rounded !== 1 ? "s" : ""}`;
+}
+
+function formatDate(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "—";
+    const month = MONTH_ORDER[date.getUTCMonth()];
+    return `${date.getUTCDate()} ${month[0]}${month.slice(1).toLowerCase()} ${date.getUTCFullYear()}`;
 }
 
 // ── Filter chip ───────────────────────────────────────────────────────────────
@@ -98,6 +124,9 @@ const FilterRow = ({ label, options, value, onChange }: {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ExploreBatchesPage() {
+    const router = useRouter();
+    const { availableBatches, loadingAvailableBatches, getAvailableBatches, createBatchRequest, createBatchQuery } = useStudent();
+
     const [search, setSearch] = useState("");
     const [filterOpen, setFilterOpen] = useState(false);
     const [filterMode, setFilterMode] = useState("All");
@@ -105,11 +134,16 @@ export default function ExploreBatchesPage() {
     const [filterTime, setFilterTime] = useState("All");
     const [filterSeats, setFilterSeats] = useState("All");
     const [filterDuration, setFilterDuration] = useState("All");
+    const [successBatchTitle, setSuccessBatchTitle] = useState<string | null>(null);
 
-    const allMonths = useMemo(
-        () => MONTH_ORDER.filter((m) => EXPLORE_BATCHES.some((b) => b.startMonth === m)),
-        []
-    );
+    useEffect(() => {
+        getAvailableBatches();
+    }, [getAvailableBatches]);
+
+    const allMonths = useMemo(() => {
+        const present = new Set(availableBatches.map((b) => MONTH_ORDER[new Date(b.batchStartDate).getMonth()]));
+        return MONTH_ORDER.filter((m) => present.has(m));
+    }, [availableBatches]);
 
     const activeCount = [filterMode, filterMonth, filterTime, filterSeats, filterDuration].filter((f) => f !== "All").length;
 
@@ -118,24 +152,38 @@ export default function ExploreBatchesPage() {
         setFilterSeats("All"); setFilterDuration("All");
     };
 
-    const filtered = useMemo(() => EXPLORE_BATCHES.filter((b) => {
-        if (search && !b.title.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterMode !== "All" && b.mode !== filterMode) return false;
-        if (filterMonth !== "All" && b.startMonth !== filterMonth) return false;
-        if (filterTime !== "All" && getTimeSlot(b.batchTime) !== filterTime) return false;
+    const filtered = useMemo(() => availableBatches.filter((b) => {
+        const term = search.trim().toLowerCase();
+        if (term && !`${b.course?.courseName ?? ""} ${b.batchName}`.toLowerCase().includes(term)) return false;
+        if (filterMode !== "All" && normalizeMode(b.mode) !== filterMode) return false;
+        if (filterMonth !== "All" && MONTH_ORDER[new Date(b.batchStartDate).getMonth()] !== filterMonth) return false;
+        if (filterTime !== "All" && getTimeSlot(b) !== filterTime) return false;
         if (filterSeats !== "All") {
-            if (filterSeats === "Few (≤5)" && b.seatsLeft > 5) return false;
-            if (filterSeats === "6–10" && (b.seatsLeft < 6 || b.seatsLeft > 10)) return false;
-            if (filterSeats === "11+" && b.seatsLeft < 11) return false;
+            const seats = b.availableSeats ?? 0;
+            if (filterSeats === "Few (≤5)" && seats > 5) return false;
+            if (filterSeats === "6–10" && (seats < 6 || seats > 10)) return false;
+            if (filterSeats === "11+" && seats < 11) return false;
         }
         if (filterDuration !== "All") {
-            const mo = parseDurationMonths(b.duration);
-            if (filterDuration === "≤ 1 month" && mo > 1) return false;
-            if (filterDuration === "1–3 months" && (mo <= 1 || mo > 3)) return false;
-            if (filterDuration === "3+ months" && mo <= 3) return false;
+            const months = durationInMonths(b);
+            if (filterDuration === "≤ 1 month" && months > 1) return false;
+            if (filterDuration === "1–3 months" && (months <= 1 || months > 3)) return false;
+            if (filterDuration === "3+ months" && months <= 3) return false;
         }
         return true;
-    }), [search, filterMode, filterMonth, filterTime, filterSeats, filterDuration]);
+    }), [availableBatches, search, filterMode, filterMonth, filterTime, filterSeats, filterDuration]);
+
+    const handleRequestSeat = async (batch: AvailableBatch, mode: BatchMode) => {
+        const res = await createBatchRequest({ batchId: batch.batchId, modeRequested: mode });
+        if (!res.success) return;
+        setSuccessBatchTitle(batch.course?.courseName ?? batch.batchName);
+        await getAvailableBatches();
+    };
+
+    const handleAskQuery = async (batch: AvailableBatch, queryType: string, queryText: string) => {
+        const res = await createBatchQuery({ batchId: batch.batchId, queryType, queryText });
+        if (res.success) await getAvailableBatches();
+    };
 
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -250,17 +298,69 @@ export default function ExploreBatchesPage() {
                         {filtered.length} batch{filtered.length !== 1 ? "es" : ""}
                     </Typography>
                 </Box>
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.5 }}>
-                    {filtered.map((batch) => (
-                        <BatchCard key={batch.id} variant="explore" {...batch} />
-                    ))}
-                </Box>
-                {filtered.length === 0 && (
-                    <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
-                        {search || activeCount > 0 ? "No batches match your filters." : "No batches available."}
-                    </Typography>
+
+                {loadingAvailableBatches ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                        <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+                    </Box>
+                ) : (
+                    <>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.5 }}>
+                            {filtered.map((batch) => {
+                                const startDate = new Date(batch.batchStartDate);
+                                const endDate = new Date(batch.batchEndDate);
+                                return (
+                                    <BatchCard
+                                        key={batch.batchId}
+                                        variant="explore"
+                                        title={batch.course?.courseName ?? batch.batchName}
+                                        mode={normalizeMode(batch.mode)}
+                                        trainers={batch.batchTrainers.map((item) => ({ name: item.trainer.trainerName }))}
+                                        startMonth={MONTH_ORDER[startDate.getMonth()]}
+                                        startDay={startDate.getDate()}
+                                        endMonth={MONTH_ORDER[endDate.getMonth()]}
+                                        endDay={endDate.getDate()}
+                                        duration={formatDuration(batch)}
+                                        batchTime={formatBatchTime(batch)}
+                                        batchDays={formatBatchDays(batch.batchDays)}
+                                        seatsLeft={batch.availableSeats ?? 0}
+                                        myRequest={batch.myRequest && {
+                                            status: batch.myRequest.requestStatus,
+                                            mode: batch.myRequest.modeRequested,
+                                            requestedOn: formatDate(batch.myRequest.createdAt),
+                                        }}
+                                        myQuery={batch.myQuery && {
+                                            queryType: batch.myQuery.queryType,
+                                            queryText: batch.myQuery.queryText,
+                                            queryStatus: batch.myQuery.queryStatus,
+                                            queryResponse: batch.myQuery.queryResponse,
+                                            askedOn: formatDate(batch.myQuery.createdAt),
+                                        }}
+                                        onViewDetails={() => router.push(`/dashboard/student/batch/${batch.batchId}`)}
+                                        onRequestSeat={(mode) => handleRequestSeat(batch, mode)}
+                                        onAskQuery={(queryType, message) => handleAskQuery(batch, queryType, message)}
+                                    />
+                                );
+                            })}
+                        </Box>
+                        {filtered.length === 0 && (
+                            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
+                                {search || activeCount > 0 ? "No batches match your filters." : "No batches available."}
+                            </Typography>
+                        )}
+                    </>
                 )}
             </Box>
+
+            <RequestSuccessModal
+                open={Boolean(successBatchTitle)}
+                onClose={() => setSuccessBatchTitle(null)}
+                batchTitle={successBatchTitle ?? undefined}
+                onGoToBatches={() => {
+                    setSuccessBatchTitle(null);
+                    router.push("/dashboard/student/batches/upcoming");
+                }}
+            />
         </Box>
     );
 }

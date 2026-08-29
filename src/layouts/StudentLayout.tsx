@@ -40,11 +40,11 @@ const NAV_ITEMS = [
     { label: "Chats", icon: MdOutlineChat, href: "/dashboard/chats" },
     { label: "News & Updates", icon: MdOutlineCampaign, href: "/dashboard/student/news" },
     { label: "CCN Community", icon: MdOutlineShield, href: "/dashboard/student/community" },
-    { label: "Settings", icon: MdOutlineSettings, href: "/dashboard/student/settings" },
+    // { label: "Settings", icon: MdOutlineSettings, href: "/dashboard/student/settings" },
 ];
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-const SIDEBAR_EXPANDED = 170;
+const SIDEBAR_EXPANDED = 200;
 const SIDEBAR_COLLAPSED = 64;
 
 // ─── Component ─────────────────────────────────────────────────────────────
@@ -117,8 +117,8 @@ export default function StudentLayout({ children, header }: StudentLayoutProps) 
                     <Box
                         onClick={() => setCollapsed((c) => !c)}
                         sx={{
-                            width: 24,
-                            height: 24,
+                            width: 32,
+                            height: 32,
                             borderRadius: "8px",
                             display: "flex",
                             alignItems: "center",
@@ -126,10 +126,11 @@ export default function StudentLayout({ children, header }: StudentLayoutProps) 
                             cursor: "pointer",
                             flexShrink: 0,
                             color: "#FEFEFE",
+                            background: "rgba(255, 255, 255, 0.05)",
                         }}
-                        className="Menu size-10 p-4 bg-linear-to-b from-indigo-200/10 to-gray-500/10 rounded-xl inline-flex justify-center items-center gap-3 overflow-hidden"
+                        // className="Menu size-10 p-4 bg-linear-to-b from-indigo-200/10 to-gray-500/10 rounded-xl inline-flex justify-center items-center gap-3 overflow-hidden"
                     >
-                        {collapsed ? <MdChevronRight size={14} /> : <MdChevronLeft size={14} />}
+                        {collapsed ? <MdChevronRight size={14} color="#ffffff" /> : <MdChevronLeft size={14} color="#ffffff" />}
                     </Box>
                 </Box>
 
@@ -175,14 +176,14 @@ export default function StudentLayout({ children, header }: StudentLayoutProps) 
                                         alignItems: "center",
                                         gap: collapsed ? 0 : 1.25,
                                         px: collapsed ? 0 : 1,
-                                        py: 0.9,
+                                        py: 1.3,
                                         borderRadius: "10px",
                                         cursor: "pointer",
                                         justifyContent: collapsed ? "center" : "flex-start",
                                         color: isActive ? "#fff" : "rgb(255, 255, 255)",
                                     }}
                                     className={cn(
-                                        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-light transition-all duration-200",
+                                        "group relative flex items-center gap-3 rounded-xl px-3 py-5 text-[13px] font-light transition-all duration-200",
                                         isActive
                                             ? "bg-linear-to-r from-[#002cbd] to-black/10 text-white "
                                             : "text-zinc-400 hover:bg-white/5 hover:text-white",

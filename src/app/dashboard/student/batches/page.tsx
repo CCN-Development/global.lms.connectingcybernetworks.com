@@ -1,140 +1,99 @@
 "use client";
-import { Box } from "@mui/material";
+import { useEffect } from "react";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import BatchCard from "@/components/batches/BatchCard";
 import { useRouter } from "next/navigation";
-const T_ASHISH = [{ name: "Ashish Saini", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_KUSHAL = [{ name: "Kushal Korde", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_OMKAR = [{ name: "Omkar", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_SHIV = [{ name: "Shivkumar Chauhan", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
+import { useStudent, type EnrolledBatch } from "@/contexts/StudentContext";
 
-const BATCHES = [
-    {
-        id: 1,
-        title: "Cisco Certified Network Associate",
-        batchProgress: 45,
-        attendance: 78,
-        mode: "Offline" as const,
-        todayTopic: "Subnetting & VLSM",
-        todayTime: "Tomorrow • 11:00 AM",
-        hasJoinClass: false,
-        trainers: T_KUSHAL,
-    },
-    {
-        id: 2,
-        title: "Soft Skills & Communication",
-        batchProgress: 82,
-        attendance: 95,
-        mode: "Hybrid" as const,
-        todayTopic: "Resume & LinkedIn Masterclass",
-        todayTime: "3rd Aug • 3:00 PM",
-        hasJoinClass: false,
-        trainers: T_ASHISH,
-    },
-    {
-        id: 3,
-        title: "Ethical Hacking & Penetration Testing",
-        batchProgress: 31,
-        attendance: 88,
-        mode: "Online" as const,
-        todayTopic: "Web Application Attacks (OWASP Top 10)",
-        todayTime: "Today • 11:00 AM",
-        hasJoinClass: true,
-        trainers: T_OMKAR,
-    },
-    {
-        id: 4,
-        title: "SOC Analyst (Level 1)",
-        batchProgress: 58,
-        attendance: 83,
-        mode: "Online" as const,
-        todayTopic: "SIEM Fundamentals & Log Analysis",
-        todayTime: "Today • 2:00 PM",
-        hasJoinClass: true,
-        trainers: T_SHIV,
-    },
-    {
-        id: 5,
-        title: "AWS Cloud Practitioner",
-        batchProgress: 14,
-        attendance: 91,
-        mode: "Online" as const,
-        todayTopic: "IAM Roles, Policies & MFA",
-        todayTime: "2nd Aug • 10:00 AM",
-        hasJoinClass: false,
-        trainers: T_ASHISH,
-    },
-    {
-        id: 6,
-        title: "Cisco Certified Network Professional",
-        batchProgress: 72,
-        attendance: 80,
-        mode: "Offline" as const,
-        todayTopic: "BGP Route Policies & Path Selection",
-        todayTime: "Today • 4:00 PM",
-        hasJoinClass: true,
-        trainers: T_KUSHAL,
-    },
-    {
-        id: 7,
-        title: "Python for Cybersecurity",
-        batchProgress: 38,
-        attendance: 86,
-        mode: "Online" as const,
-        todayTopic: "Building a Port Scanner with Sockets",
-        todayTime: "Tomorrow • 12:00 PM",
-        hasJoinClass: false,
-        trainers: T_OMKAR,
-    },
-    {
-        id: 8,
-        title: "Digital Forensics & Incident Response",
-        batchProgress: 22,
-        attendance: 74,
-        mode: "Hybrid" as const,
-        todayTopic: "Memory Forensics with Volatility",
-        todayTime: "31st Jul • 10:00 AM",
-        hasJoinClass: false,
-        trainers: T_SHIV,
-    },
-    {
-        id: 9,
-        title: "Linux for Security Professionals",
-        batchProgress: 61,
-        attendance: 89,
-        mode: "Online" as const,
-        todayTopic: "Bash Scripting & Cron Job Automation",
-        todayTime: "Today • 5:00 PM",
-        hasJoinClass: true,
-        trainers: T_KUSHAL,
-    },
-    {
-        id: 10,
-        title: "Microsoft Azure Security (AZ-500)",
-        batchProgress: 9,
-        attendance: 96,
-        mode: "Online" as const,
-        todayTopic: "Azure Active Directory & Conditional Access",
-        todayTime: "4th Aug • 11:00 AM",
-        hasJoinClass: false,
-        trainers: T_ASHISH,
-    },
-];
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function normalizeMode(mode: string | null): "Online" | "Offline" | "Hybrid" {
+    const value = (mode ?? "").trim().toLowerCase();
+    if (value === "offline") return "Offline";
+    if (value === "hybrid") return "Hybrid";
+    return "Online";
+}
+
+/** Session dates/times are persisted in UTC, so they must be read in UTC. */
+function formatClockTime(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes();
+    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
+}
+
+function daysFromToday(iso: string): number | null {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return null;
+    const now = new Date();
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const target = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    return Math.round((target - today) / 86400000);
+}
+
+function formatSessionTiming(session: EnrolledBatch["nextSession"]): string {
+    if (!session) return "No upcoming session";
+    const offset = daysFromToday(session.sessionDate);
+    const date = new Date(session.sessionDate);
+    const day = offset === 0
+        ? "Today"
+        : offset === 1
+            ? "Tomorrow"
+            : `${date.getUTCDate()} ${MONTH_LABELS[date.getUTCMonth()]}`;
+    return `${day} • ${formatClockTime(session.sessionTime)}`;
+}
 
 export default function OngoingBatchesPage() {
     const router = useRouter();
+    const { enrolledBatches, loadingEnrolledBatches, getEnrolledBatches } = useStudent();
+
+    useEffect(() => {
+        getEnrolledBatches();
+    }, [getEnrolledBatches]);
+
+    if (loadingEnrolledBatches) {
+        return (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+            </Box>
+        );
+    }
+
+    if (enrolledBatches.length === 0) {
+        return (
+            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
+                You are not enrolled in any batch yet.
+            </Typography>
+        );
+    }
+
     return (
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
-            {BATCHES.map((batch) => (
-                <BatchCard
-                    key={batch.id}
-                    variant="ongoing"
-                    trainers={batch.trainers}
-                    {...batch}
-                    onViewDetails={() => {
-                        router.push(`/dashboard/student/batch/${batch.id}`);
-                    }}
-                />
-            ))}
+            {enrolledBatches.map((enrollment) => {
+                const { batch, nextSession } = enrollment;
+                const joinLink = nextSession?.sessionLink ?? batch.batchLink;
+                const isToday = nextSession ? daysFromToday(nextSession.sessionDate) === 0 : false;
+                return (
+                    <BatchCard
+                        key={enrollment.batchStudentId}
+                        variant="ongoing"
+                        title={batch.course?.courseName ?? batch.batchName}
+                        mode={normalizeMode(batch.mode)}
+                        trainers={batch.batchTrainers.map((item) => ({ name: item.trainer.trainerName }))}
+                        batchProgress={enrollment.progress.progressPercentage}
+                        attendance={enrollment.attendance.attendancePercentage}
+                        nextSession={nextSession && {
+                            label: isToday ? "Today's Class" : "Next Session",
+                            title: `Session ${nextSession.sessionNumber} of ${enrollment.progress.totalSessions}`,
+                            timing: formatSessionTiming(nextSession),
+                        }}
+                        hasJoinClass={Boolean(isToday && joinLink)}
+                        onViewDetails={() => router.push(`/dashboard/student/batch/${batch.batchId}`)}
+                        onJoinClass={() => { if (joinLink) window.open(joinLink, "_blank", "noopener,noreferrer"); }}
+                    />
+                );
+            })}
         </Box>
     );
 }

@@ -180,3 +180,110 @@ button {
     @apply font-sans;
 	}
 }
+
+/* ---------- Rich text (TipTap editor + rendered output) ---------- */
+.rich-text {
+	font-size: 0.78rem;
+	line-height: 1.55;
+	color: #374151;
+	word-break: break-word;
+}
+
+.rich-text:focus {
+	outline: none;
+}
+
+.rte-input {
+	padding: 0.625rem 0.75rem;
+	overflow-y: auto;
+	max-height: 320px;
+}
+
+.rich-text p {
+	margin: 0 0 0.35rem;
+}
+
+.rich-text p:last-child {
+	margin-bottom: 0;
+}
+
+.rich-text h1 {
+	font-size: 1rem;
+	font-weight: 700;
+	color: #111827;
+	margin: 0.5rem 0 0.3rem;
+}
+
+.rich-text h2 {
+	font-size: 0.9rem;
+	font-weight: 700;
+	color: #1f2937;
+	margin: 0.5rem 0 0.3rem;
+}
+
+.rich-text h3 {
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: #1f2937;
+	margin: 0.45rem 0 0.25rem;
+}
+
+.rich-text ul,
+.rich-text ol {
+	margin: 0 0 0.35rem;
+	padding-left: 1.1rem;
+}
+
+.rich-text ul {
+	list-style: disc;
+}
+
+.rich-text ol {
+	list-style: decimal;
+}
+
+.rich-text li {
+	margin: 0.1rem 0;
+}
+
+.rich-text li p {
+	margin: 0;
+}
+
+.rich-text blockquote {
+	border-left: 3px solid #7c3aed;
+	background-color: #ede9fe;
+	border-radius: 0 6px 6px 0;
+	padding: 0.3rem 0.6rem;
+	margin: 0 0 0.35rem;
+	color: #4c1d95;
+}
+
+.rich-text code {
+	background-color: #f1f5f9;
+	border: 1px solid #e2e8f0;
+	border-radius: 4px;
+	padding: 0.05rem 0.25rem;
+	font-size: 0.72rem;
+	font-family: var(--font-geist-mono, monospace);
+	color: #0f172a;
+}
+
+.rich-text a {
+	color: #009dff;
+	text-decoration: underline;
+}
+
+.rich-text hr {
+	border: none;
+	border-top: 1px solid #e5e7eb;
+	margin: 0.5rem 0;
+}
+
+.rich-text p.is-editor-empty:first-child::before {
+	content: attr(data-placeholder);
+	float: left;
+	height: 0;
+	pointer-events: none;
+	color: #9ca3af;
+}

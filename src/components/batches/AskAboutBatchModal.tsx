@@ -58,8 +58,8 @@ export default function AskAboutBatchModal({
     const [message, setMessage] = useState("");
 
     const handleSubmit = () => {
-        if (!queryType) return;
-        onSubmit?.(queryType, message);
+        if (!queryType || !message.trim()) return;
+        onSubmit?.(queryType, message.trim());
         setQueryType("");
         setMessage("");
         onClose();

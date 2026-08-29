@@ -3,6 +3,7 @@
 import { CalendarDays, Clock, MapPin, Users, BookOpen, Link2, FileText, Edit2, Armchair } from "lucide-react";
 import { Button } from "@mui/material";
 import type { BatchDetail, SessionStatus } from "@/contexts/BatchContext";
+import RichTextView from "@/components/editor/RichTextView";
 import {
     BRAND, EmptyState, Panel, PanelRow, Surface, formatDate, formatTime,
 } from "@/components/batches/batch-ui";
@@ -127,7 +128,7 @@ export default function OverviewTab({
                 <Surface accent={BRAND.slate} className="p-3">
                     <div className="flex items-start gap-2">
                         <FileText size={13} className="mt-0.5 shrink-0" style={{ color: BRAND.slate }} />
-                        <p className="text-xs text-gray-700 whitespace-pre-wrap">{batch.batchDescription}</p>
+                        <RichTextView html={batch.batchDescription} className="min-w-0 flex-1" />
                     </div>
                 </Surface>
             ) : (

@@ -1,7 +1,18 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import axiosHandler from "@/lib/enhanced-axios";
+import type { StandardResponse } from "./AuthContext";
 import type { Benefit, Course, PackageBase } from "./ContentContext";
+import type {
+    Batch,
+    BatchQuery,
+    BatchQueryStatus,
+    BatchRequest,
+    BatchRequestStatus,
+    BatchStudent,
+    BatchStudentStatus,
+} from "./BatchContext";
 
 /* ------------------------------------------------------------------ */
 /* Prisma-derived types — mirror student.prisma + erp.prisma           */
@@ -188,12 +199,318 @@ export interface LMSStudentData {
 }
 
 /* ------------------------------------------------------------------ */
-/* Context placeholder — extend when student-specific calls are added  */
+/* Student batch types — mirror student.controller.ts responses        */
 /* ------------------------------------------------------------------ */
 
-const StudentContext = createContext<null>(null);
+export interface StudentBatchCourse {
+    courseId: string;
+    courseName: string;
+    durationInMonths: number | null;
+    noOfModules: number | null;
+    isCertified: boolean;
+}
 
-export function useStudent() {
+export interface StudentBatchTrainer {
+    trainerId: string;
+    trainerName: string;
+    email: string | null;
+    callingCode: string;
+    phoneNumber: string;
+}
+
+/** Batch row enriched with the course + trainers included by the student endpoints */
+export interface StudentBatch extends Batch {
+    course: StudentBatchCourse;
+    batchTrainers: { trainer: StudentBatchTrainer }[];
+}
+
+/** The student's own latest request on a batch, as returned by `/batches/available` */
+export interface MyBatchRequest {
+    batchRequestId: string;
+    requestStatus: BatchRequestStatus;
+    modeRequested: string;
+    requestReason: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** The student's own latest query on a batch, as returned by `/batches/available` */
+export interface MyBatchQuery {
+    batchQueryId: string;
+    queryType: string;
+    queryText: string;
+    queryStatus: BatchQueryStatus;
+    queryResponse: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** `GET /batches/available` — batch plus this student's relationship to it */
+export interface AvailableBatch extends StudentBatch {
+    _count: { batchStudents: number; batchSessions: number };
+    isEnrolled: boolean;
+    myRequest: MyBatchRequest | null;
+    myQuery: MyBatchQuery | null;
+}
+
+/** `GET /batches/enrolled` and `GET /batches/completed` */
+export interface StudentBatchEnrollment extends BatchStudent {
+    batch: StudentBatch;
+}
+
+export interface StudentBatchProgress {
+    totalSessions: number;
+    completedSessions: number;
+    progressPercentage: number;
+}
+
+export interface StudentBatchAttendance {
+    totalSessionsHeld: number;
+    attendedSessions: number;
+    attendancePercentage: number;
+}
+
+export interface StudentNextSession {
+    batchSessionId: string;
+    sessionNumber: number;
+    sessionDate: string;
+    sessionTime: string;
+    sessionStatus: string;
+    sessionLink: string | null;
+}
+
+/** `GET /batches/enrolled` — enrollment with session progress, attendance and next session */
+export interface EnrolledBatch extends StudentBatchEnrollment {
+    progress: StudentBatchProgress;
+    attendance: StudentBatchAttendance;
+    nextSession: StudentNextSession | null;
+}
+
+/** `GET /batches/completed` — same shape as an enrolled batch */
+export type CompletedBatch = EnrolledBatch;
+
+/** `GET /batch-requests` */
+export interface StudentBatchRequest extends BatchRequest {
+    batch: StudentBatch;
+}
+
+/** `GET /batches/:batchId` — full batch with this student's request/query history */
+export interface StudentBatchDetail extends StudentBatch {
+    _count: { batchStudents: number; batchSessions: number };
+    batchRequests: MyBatchRequest[];
+    batchQueries: MyBatchQuery[];
+    isEnrolled: boolean;
+    myRequest: MyBatchRequest | null;
+    myQuery: MyBatchQuery | null;
+    progress: StudentBatchProgress;
+    attendance: StudentBatchAttendance;
+    nextSession: StudentNextSession | null;
+}
+
+/** `GET /batch-queries` */
+export interface StudentBatchQuery extends BatchQuery {
+    batch: StudentBatch;
+}
+
+export interface CreateStudentBatchRequestInput {
+    batchId: string;
+    modeRequested?: string;
+    requestReason?: string;
+}
+
+export interface CreateStudentBatchQueryInput {
+    batchId: string;
+    queryType: string;
+    queryText: string;
+}
+
+export type { BatchQueryStatus, BatchRequestStatus, BatchStudentStatus };
+
+/* ------------------------------------------------------------------ */
+/* Context shape                                                       */
+/* ------------------------------------------------------------------ */
+
+interface StudentContextValue {
+    availableBatches: AvailableBatch[];
+    enrolledBatches: EnrolledBatch[];
+    completedBatches: CompletedBatch[];
+    batchRequests: StudentBatchRequest[];
+    batchQueries: StudentBatchQuery[];
+    batchDetail: StudentBatchDetail | null;
+
+    loadingAvailableBatches: boolean;
+    loadingEnrolledBatches: boolean;
+    loadingCompletedBatches: boolean;
+    loadingBatchRequests: boolean;
+    loadingBatchQueries: boolean;
+    loadingBatchDetail: boolean;
+
+    getAvailableBatches: () => Promise<StandardResponse<AvailableBatch[]>>;
+    getEnrolledBatches: () => Promise<StandardResponse<EnrolledBatch[]>>;
+    getCompletedBatches: () => Promise<StandardResponse<CompletedBatch[]>>;
+    getBatchDetails: (batchId: string) => Promise<StandardResponse<StudentBatchDetail>>;
+    getBatchRequests: () => Promise<StandardResponse<StudentBatchRequest[]>>;
+    getBatchQueries: () => Promise<StandardResponse<StudentBatchQuery[]>>;
+    createBatchRequest: (data: CreateStudentBatchRequestInput) => Promise<StandardResponse<BatchRequest>>;
+    createBatchQuery: (data: CreateStudentBatchQueryInput) => Promise<StandardResponse<BatchQuery>>;
+}
+
+const StudentContext = createContext<StudentContextValue | null>(null);
+
+const BASE = "/api/v1/student";
+
+function toMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
+}
+
+export function StudentProvider({ children }: { children: ReactNode }) {
+    const [availableBatches, setAvailableBatches] = useState<AvailableBatch[]>([]);
+    const [enrolledBatches, setEnrolledBatches] = useState<EnrolledBatch[]>([]);
+    const [completedBatches, setCompletedBatches] = useState<CompletedBatch[]>([]);
+    const [batchRequests, setBatchRequests] = useState<StudentBatchRequest[]>([]);
+    const [batchQueries, setBatchQueries] = useState<StudentBatchQuery[]>([]);
+    const [batchDetail, setBatchDetail] = useState<StudentBatchDetail | null>(null);
+
+    const [loadingAvailableBatches, setLoadingAvailableBatches] = useState(false);
+    const [loadingEnrolledBatches, setLoadingEnrolledBatches] = useState(false);
+    const [loadingCompletedBatches, setLoadingCompletedBatches] = useState(false);
+    const [loadingBatchRequests, setLoadingBatchRequests] = useState(false);
+    const [loadingBatchQueries, setLoadingBatchQueries] = useState(false);
+    const [loadingBatchDetail, setLoadingBatchDetail] = useState(false);
+
+    const getAvailableBatches = useCallback(async (): Promise<StandardResponse<AvailableBatch[]>> => {
+        setLoadingAvailableBatches(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batches/available`, method: "GET" }) as AvailableBatch[];
+            setAvailableBatches(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch available batches"), data: null };
+        } finally {
+            setLoadingAvailableBatches(false);
+        }
+    }, []);
+
+    const getEnrolledBatches = useCallback(async (): Promise<StandardResponse<EnrolledBatch[]>> => {
+        setLoadingEnrolledBatches(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batches/enrolled`, method: "GET" }) as EnrolledBatch[];
+            setEnrolledBatches(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch enrolled batches"), data: null };
+        } finally {
+            setLoadingEnrolledBatches(false);
+        }
+    }, []);
+
+    const getCompletedBatches = useCallback(async (): Promise<StandardResponse<CompletedBatch[]>> => {
+        setLoadingCompletedBatches(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batches/completed`, method: "GET" }) as CompletedBatch[];
+            setCompletedBatches(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch completed batches"), data: null };
+        } finally {
+            setLoadingCompletedBatches(false);
+        }
+    }, []);
+
+    const getBatchDetails = useCallback(async (batchId: string): Promise<StandardResponse<StudentBatchDetail>> => {
+        setLoadingBatchDetail(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batches/${batchId}`, method: "GET" }) as StudentBatchDetail;
+            setBatchDetail(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch batch details"), data: null };
+        } finally {
+            setLoadingBatchDetail(false);
+        }
+    }, []);
+
+    const getBatchRequests = useCallback(async (): Promise<StandardResponse<StudentBatchRequest[]>> => {
+        setLoadingBatchRequests(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batch-requests`, method: "GET" }) as StudentBatchRequest[];
+            setBatchRequests(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch batch requests"), data: null };
+        } finally {
+            setLoadingBatchRequests(false);
+        }
+    }, []);
+
+    const getBatchQueries = useCallback(async (): Promise<StandardResponse<StudentBatchQuery[]>> => {
+        setLoadingBatchQueries(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/batch-queries`, method: "GET" }) as StudentBatchQuery[];
+            setBatchQueries(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch batch queries"), data: null };
+        } finally {
+            setLoadingBatchQueries(false);
+        }
+    }, []);
+
+    const createBatchRequest = useCallback(async (
+        data: CreateStudentBatchRequestInput
+    ): Promise<StandardResponse<BatchRequest>> => {
+        try {
+            const res = await axiosHandler({
+                path: `${BASE}/batch-requests/create`,
+                method: "POST",
+                body: data,
+            }) as BatchRequest;
+            setAvailableBatches((prev) => prev.map((batch) => (
+                batch.batchId === data.batchId ? { ...batch, myRequest: res } : batch
+            )));
+            return { success: true, message: "Batch request created successfully", data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to create batch request"), data: null };
+        }
+    }, []);
+
+    const createBatchQuery = useCallback(async (
+        data: CreateStudentBatchQueryInput
+    ): Promise<StandardResponse<BatchQuery>> => {
+        try {
+            const res = await axiosHandler({
+                path: `${BASE}/batch-queries/create`,
+                method: "POST",
+                body: data,
+            }) as BatchQuery;
+            setAvailableBatches((prev) => prev.map((batch) => (
+                batch.batchId === data.batchId ? { ...batch, myQuery: res } : batch
+            )));
+            return { success: true, message: "Batch query created successfully", data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to create batch query"), data: null };
+        }
+    }, []);
+
+    const value = useMemo<StudentContextValue>(() => ({
+        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail,
+        loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
+        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail,
+        getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
+        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery,
+    }), [
+        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail,
+        loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
+        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail,
+        getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
+        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery,
+    ]);
+
+    return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;
+}
+
+export function useStudent(): StudentContextValue {
     const ctx = useContext(StudentContext);
+    if (!ctx) throw new Error("useStudent must be used inside <StudentProvider>");
     return ctx;
 }

@@ -5,6 +5,7 @@ import StudentLayout from "@/layouts/StudentLayout";
 import StudentHeader from "@/layouts/StudentHeader";
 import { Box, Typography, Button } from "@mui/material";
 import { MdArrowBack, MdKeyboardArrowUp, MdKeyboardArrowDown } from "react-icons/md";
+import CCNTabs from "@/components/CCNTabs";
 
 const TABS = [
     { label: "Ongoing", href: "/dashboard/student/batches" },
@@ -18,6 +19,11 @@ export default function BatchesLayout({ children }: { children: React.ReactNode 
     const isExplore = pathname.includes("explore-batches");
     const isCompleted = pathname === "/dashboard/student/batches/completed";
     const [year, setYear] = useState(new Date().getFullYear());
+
+    const activeHref =
+        TABS.find(({ href }) =>
+            href === "/dashboard/student/batches" ? pathname === href : pathname.startsWith(href)
+        )?.href ?? "/dashboard/student/batches";
 
     const changeYear = (delta: number) => {
         const next = year + delta;
@@ -49,44 +55,11 @@ export default function BatchesLayout({ children }: { children: React.ReactNode 
         <StudentLayout header={header}>
             {!isExplore && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5, flexWrap: "wrap" }}>
-                    {/* Tab pills */}
-                    <Box sx={{
-                        display: "flex",
-                        gap: 0.5,
-                        bgcolor: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: "10px",
-                        p: "3px",
-                    }}>
-                        {TABS.map(({ label, href }) => {
-                            const active = href === "/dashboard/student/batches"
-                                ? pathname === href
-                                : pathname.startsWith(href);
-                            return (
-                                <Button
-                                    key={href}
-                                    onClick={() => router.push(href)}
-                                    sx={{
-                                        borderRadius: "7px",
-                                        px: 1.5,
-                                        py: 0.45,
-                                        fontSize: "0.75rem",
-                                        fontWeight: active ? 600 : 500,
-                                        textTransform: "none",
-                                        bgcolor: active ? "rgba(255,255,255,0.12)" : "transparent",
-                                        color: active ? "#fff" : "rgba(255,255,255,0.45)",
-                                        minWidth: 0,
-                                        lineHeight: 1.4,
-                                        "&:hover": {
-                                            bgcolor: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
-                                        },
-                                    }}
-                                >
-                                    {label}
-                                </Button>
-                            );
-                        })}
-                    </Box>
+                    <CCNTabs
+                        tabs={TABS}
+                        value={activeHref}
+                        onChange={({ href }) => href && router.push(href)}
+                    />
 
                     <Box sx={{ flex: 1 }} />
 
@@ -120,20 +93,18 @@ export default function BatchesLayout({ children }: { children: React.ReactNode 
                     <Button
                         onClick={() => router.push("/dashboard/student/batches/explore-batches")}
                         sx={{
-                            border: "1px solid rgba(255,255,255,0.22)",
-                            color: "#fff",
+                            background: "rgb(255, 255, 255)",
+                            color: "#000",
                             borderRadius: "8px",
                             fontSize: "0.75rem",
                             fontWeight: 600,
-                            py: 0.55,
+                            py: 1,
                             px: 1.5,
                             textTransform: "none",
-                            "&:hover": {
-                                bgcolor: "rgba(255,255,255,0.05)",
-                                border: "1px solid rgba(255,255,255,0.4)",
-                            },
+                            
                         }}
                     >
+                        
                         Explore Batches
                     </Button>
                 </Box>

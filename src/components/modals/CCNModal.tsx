@@ -45,7 +45,7 @@ export default function CCNModal({
                     bgcolor: "#000000",
                     backgroundImage: "none",
                     borderRadius: "18px",
-                    border: "1px solid rgb(255, 255, 255)",
+                    // border: "1px solid rgb(255, 255, 255)",
                     boxShadow: "0 30px 80px rgba(0,0,0,0.65)",
                     maxWidth,
                     width: "100%",
@@ -64,20 +64,9 @@ export default function CCNModal({
                 },
             }}
         >
-            {/* Subtle gradient glow at the top edge */}
-            {/* <Box
-                sx={{
-                    position: "absolute",
-                    top: 0,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: "60%",
-                    height: 2,
-                    background: "linear-gradient(90deg, transparent, #7c3aed, #3b5bdb, transparent)",
-                    borderRadius: "0 0 4px 4px",
-                    pointerEvents: "none",
-                }}
-            /> */}
+            <div data-layer="Ellipse 697" className="absolute w-[50px] h-[200%] left-[10%] top-[20%] origin-top-left -rotate-50 bg-linear-210 from-blue-800/0 to-blue-800/90 rounded-full blur-[50px]" style={{
+                transform: "translate(-50%, -50%)",
+            }} />
 
             {showCloseButton && (
                 <IconButton
@@ -95,8 +84,10 @@ export default function CCNModal({
                     <MdClose size={16} />
                 </IconButton>
             )}
+            <div className="z-10 relative">
 
-            {children}
+                {children}
+            </div>
         </Dialog>
     );
 }

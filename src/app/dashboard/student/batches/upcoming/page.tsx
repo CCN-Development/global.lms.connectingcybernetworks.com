@@ -1,116 +1,84 @@
 "use client";
-import React from "react";
-import { Box } from "@mui/material";
+import React, { useEffect, useState } from "react";
+import { Box, Typography, CircularProgress } from "@mui/material";
 import BatchCard from "@/components/batches/BatchCard";
+import ViewBatchRequestModal from "@/components/batches/ViewBatchRequestModal";
+import { useStudent, type StudentBatchRequest } from "@/contexts/StudentContext";
 
-const T_ASHISH = [{ name: "Ashish Saini", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_KUSHAL = [{ name: "Kushal Korde", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_OMKAR = [{ name: "Omkar", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
-const T_SHIV = [{ name: "Shivkumar Chauhan", avatar: "https://cdn-icons-png.flaticon.com/512/1754/1754623.png" }];
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const BATCHES = [
-    {
-        id: 1,
-        title: "CompTIA Security+",
-        mode: "Online" as const,
-        requestedOn: "25 Jul 2026",
-        batchStartDate: "15 Aug 2026",
-        requestStatus: "Approved" as const,
-        trainers: T_ASHISH,
-    },
-    {
-        id: 2,
-        title: "Cisco Certified Network Professional",
-        mode: "Offline" as const,
-        requestedOn: "27 Jul 2026",
-        batchStartDate: "1 Sep 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_KUSHAL,
-    },
-    {
-        id: 3,
-        title: "Malware Analysis & Reverse Engineering",
-        mode: "Online" as const,
-        requestedOn: "26 Jul 2026",
-        batchStartDate: "5 Aug 2026",
-        requestStatus: "Approved" as const,
-        trainers: T_OMKAR,
-    },
-    {
-        id: 4,
-        title: "Cloud Security (GCP Associate)",
-        mode: "Online" as const,
-        requestedOn: "28 Jul 2026",
-        batchStartDate: "20 Aug 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_SHIV,
-    },
-    {
-        id: 5,
-        title: "CompTIA Network+",
-        mode: "Hybrid" as const,
-        requestedOn: "22 Jul 2026",
-        batchStartDate: "10 Sep 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_KUSHAL,
-    },
-    {
-        id: 6,
-        title: "Wireless Network Security",
-        mode: "Offline" as const,
-        requestedOn: "20 Jul 2026",
-        batchStartDate: "25 Aug 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_ASHISH,
-    },
-    {
-        id: 7,
-        title: "DevSecOps Fundamentals",
-        mode: "Online" as const,
-        requestedOn: "29 Jul 2026",
-        batchStartDate: "3 Sep 2026",
-        requestStatus: "Approved" as const,
-        trainers: T_OMKAR,
-    },
-    {
-        id: 8,
-        title: "Bug Bounty Hunting (Intermediate)",
-        mode: "Online" as const,
-        requestedOn: "28 Jul 2026",
-        batchStartDate: "15 Sep 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_OMKAR,
-    },
-    {
-        id: 9,
-        title: "Cyber Threat Intelligence",
-        mode: "Online" as const,
-        requestedOn: "29 Jul 2026",
-        batchStartDate: "1 Oct 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_SHIV,
-    },
-    {
-        id: 10,
-        title: "Red Team Operations",
-        mode: "Hybrid" as const,
-        requestedOn: "29 Jul 2026",
-        batchStartDate: "15 Oct 2026",
-        requestStatus: "Pending" as const,
-        trainers: T_KUSHAL,
-    },
-];
+function normalizeMode(mode: string | null): "Online" | "Offline" | "Hybrid" {
+    const value = (mode ?? "").trim().toLowerCase();
+    if (value === "offline") return "Offline";
+    if (value === "hybrid") return "Hybrid";
+    return "Online";
+}
+
+function formatDate(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "—";
+    return `${date.getUTCDate()} ${MONTH_LABELS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
+function normalizeStatus(status: StudentBatchRequest["requestStatus"]): "Pending" | "Approved" | "Rejected" {
+    if (status === "approved") return "Approved";
+    if (status === "rejected") return "Rejected";
+    return "Pending";
+}
 
 export default function UpcomingBatchesPage() {
+    const { batchRequests, loadingBatchRequests, getBatchRequests } = useStudent();
+    const [selectedRequest, setSelectedRequest] = useState<StudentBatchRequest | null>(null);
+
+    useEffect(() => {
+        getBatchRequests();
+    }, [getBatchRequests]);
+
+    if (loadingBatchRequests) {
+        return (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+            </Box>
+        );
+    }
+
+    if (batchRequests.length === 0) {
+        return (
+            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
+                You have not requested any batch yet.
+            </Typography>
+        );
+    }
+
     return (
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
-            {BATCHES.map((batch) => (
+            {batchRequests.map((request) => (
                 <BatchCard
-                    key={batch.id}
+                    key={request.batchRequestId}
                     variant="upcoming"
-                    {...batch}
+                    title={request.batch.course?.courseName ?? request.batch.batchName}
+                    mode={normalizeMode(request.modeRequested ?? request.batch.mode)}
+                    trainers={request.batch.batchTrainers.map((item) => ({ name: item.trainer.trainerName }))}
+                    requestedOn={formatDate(request.createdAt)}
+                    batchStartDate={formatDate(request.batch.batchStartDate)}
+                    requestStatus={normalizeStatus(request.requestStatus)}
+                    onViewRequest={() => setSelectedRequest(request)}
                 />
             ))}
+
+            {selectedRequest && (
+                <ViewBatchRequestModal
+                    open
+                    onClose={() => setSelectedRequest(null)}
+                    batchTitle={selectedRequest.batch.course?.courseName ?? selectedRequest.batch.batchName}
+                    modeRequested={normalizeMode(selectedRequest.modeRequested ?? selectedRequest.batch.mode)}
+                    requestStatus={selectedRequest.requestStatus}
+                    requestReason={selectedRequest.requestReason}
+                    requestedOn={formatDate(selectedRequest.createdAt)}
+                    batchStartDate={formatDate(selectedRequest.batch.batchStartDate)}
+                    lastUpdatedOn={formatDate(selectedRequest.updatedAt)}
+                />
+            )}
         </Box>
     );
 }

@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import { useBatch, type Batch, type CreateBatchInput, type UpdateBatchInput } from "@/contexts/BatchContext";
 import { useContent } from "@/contexts/ContentContext";
+import RichTextEditor, { isRichTextEmpty } from "@/components/editor/RichTextEditor";
 import {
     AppDateField, AppNumberField, AppOptionSelect, AppMultiSelect, AppSelect, AppTextField, AppTimeField,
     BRAND, CLASS_TIMING_OPTIONS, DayPicker, MODE_OPTIONS, toDateInput, toTimeInput,
@@ -138,7 +139,7 @@ export default function BatchFormDialog({
         classRoomNumber: form.classRoomNumber || undefined,
         classTiming: form.classTiming || undefined,
         batchLink: form.batchLink || undefined,
-        batchDescription: form.batchDescription || undefined,
+        batchDescription: isRichTextEmpty(form.batchDescription) ? undefined : form.batchDescription,
     });
 
     const submit = async () => {
@@ -243,12 +244,12 @@ export default function BatchFormDialog({
                     </div>
 
                     <AppTextField label="Batch link" value={form.batchLink} onChange={(e) => set("batchLink", e.target.value)} />
-                    <AppTextField
+                    <RichTextEditor
                         label="Description"
                         value={form.batchDescription}
-                        onChange={(e) => set("batchDescription", e.target.value)}
-                        multiline
-                        minRows={2}
+                        onChange={(v) => set("batchDescription", v)}
+                        placeholder="Add syllabus highlights, prerequisites, notes…"
+                        disabled={busy}
                     />
 
                     {isEdit && (
