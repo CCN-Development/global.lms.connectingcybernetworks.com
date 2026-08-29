@@ -107,5 +107,9 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
         </div>
     );
 
-    return <StudentLayout header={profileHeader}>{children}</StudentLayout>;
+    return <>
+    {profileHeader}
+        {children}
+        
+    </>
 }

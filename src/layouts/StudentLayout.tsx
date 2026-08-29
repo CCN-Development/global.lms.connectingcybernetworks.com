@@ -38,7 +38,7 @@ const NAV_ITEMS = [
     { label: "Placement", icon: MdOutlineBusinessCenter, href: "/dashboard/student/placement" },
     { label: "My Requests", icon: MdOutlineSend, href: "/dashboard/student/requests" },
     { label: "Chats", icon: MdOutlineChat, href: "/dashboard/chats" },
-    { label: "News & Updates", icon: MdOutlineCampaign, href: "/dashboard/student/news" },
+    { label: "News & Updates", icon: MdOutlineCampaign, href: "/dashboard/student/updates" },
     { label: "CCN Community", icon: MdOutlineShield, href: "/dashboard/student/community" },
     // { label: "Settings", icon: MdOutlineSettings, href: "/dashboard/student/settings" },
 ];

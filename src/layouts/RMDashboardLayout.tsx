@@ -17,14 +17,15 @@ type Props = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-    { label: 'Overview',               link: '/dashboard/rm/overview',               icon: <MdOutlineDashboard /> },
-    { label: 'Onboarding Verification',link: '/dashboard/rm/onboarding-verification',icon: <MdOutlineVerified /> },
-    { label: 'Batches',                link: '/dashboard/rm/batches',                icon: <MdOutlineGroups /> },
-    { label: 'Student Requests',       link: '/dashboard/rm/student-requests',       icon: <MdOutlineAssignment /> },
-    { label: 'Student Profiles',       link: '/dashboard/rm/student-profiles',       icon: <MdOutlinePeople /> },
-    { label: 'Packages',               link: '/dashboard/rm/packages',               icon: <MdOutlineInventory2 /> },
-    { label: 'Courses',                link: '/dashboard/rm/courses',                icon: <MdOutlineMenuBook /> },
-    { label: 'Chats',                  link: '/dashboard/chats',                  icon: <MdOutlineChat /> },
+    { label: 'Overview', link: '/dashboard/rm/overview', icon: <MdOutlineDashboard /> },
+    { label: 'Onboarding Verification', link: '/dashboard/rm/onboarding-verification', icon: <MdOutlineVerified /> },
+    { label: 'Batches', link: '/dashboard/rm/batches', icon: <MdOutlineGroups /> },
+    { label: 'Student Requests', link: '/dashboard/rm/student-requests', icon: <MdOutlineAssignment /> },
+    { label: 'Student Profiles', link: '/dashboard/rm/student-profiles', icon: <MdOutlinePeople /> },
+    { label: 'News and Updates', link: '/dashboard/rm/updates', icon: <MdOutlineChat /> },
+    { label: 'Packages', link: '/dashboard/rm/packages', icon: <MdOutlineInventory2 /> },
+    { label: 'Courses', link: '/dashboard/rm/courses', icon: <MdOutlineMenuBook /> },
+    { label: 'Chats', link: '/dashboard/chats', icon: <MdOutlineChat /> },
 ]
 
 export default function RMDashboardLayout({ children, title }: Props) {
