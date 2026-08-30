@@ -323,6 +323,24 @@ export interface StudentsListResult {
     meta: PaginationMeta;
 }
 
+/** `GET /rm/dashboard/stats` — branch-scoped counters */
+export interface RMDashboardStats {
+    students: {
+        total: number;
+        active: number;
+        inactive: number;
+        dropped: number;
+    };
+    batches: {
+        total: number;
+        active: number;
+        inactive: number;
+        upcoming: number;
+        ongoing: number;
+        completed: number;
+    };
+}
+
 /* ------------------------------------------------------------------ */
 /* Context shape                                                       */
 /* ------------------------------------------------------------------ */
@@ -332,9 +350,12 @@ interface RMContextValue {
     meta: PaginationMeta | null;
     students: LMSStudentData[];
     studentsMeta: PaginationMeta | null;
+    dashboardStats: RMDashboardStats | null;
     loadingList: boolean;
     loadingDetail: boolean;
     loadingStudents: boolean;
+    loadingDashboardStats: boolean;
+    getDashboardStats: () => Promise<StandardResponse<RMDashboardStats>>;
     getOnboardings: (params?: GetOnboardingsParams) => Promise<StandardResponse<OnboardingsListResult>>;
     getOnboardingById: (onboardingId: string) => Promise<StandardResponse<OnboardingDetail>>;
     getAllStudentsForBranch: (params?: GetStudentsParams) => Promise<StandardResponse<StudentsListResult>>;
@@ -387,9 +408,24 @@ export function RMProvider({ children }: { children: ReactNode }) {
     const [meta, setMeta] = useState<PaginationMeta | null>(null);
     const [students, setStudents] = useState<LMSStudentData[]>([]);
     const [studentsMeta, setStudentsMeta] = useState<PaginationMeta | null>(null);
+    const [dashboardStats, setDashboardStats] = useState<RMDashboardStats | null>(null);
     const [loadingList, setLoadingList] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [loadingStudents, setLoadingStudents] = useState(false);
+    const [loadingDashboardStats, setLoadingDashboardStats] = useState(false);
+
+    const getDashboardStats = useCallback(async (): Promise<StandardResponse<RMDashboardStats>> => {
+        setLoadingDashboardStats(true);
+        try {
+            const res = await axiosHandler({ path: "/api/v1/rm/dashboard/stats", method: "GET" }) as RMDashboardStats;
+            setDashboardStats(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch dashboard stats"), data: null };
+        } finally {
+            setLoadingDashboardStats(false);
+        }
+    }, []);
 
     const getOnboardings = useCallback(async (params: GetOnboardingsParams = {}): Promise<StandardResponse<OnboardingsListResult>> => {
         setLoadingList(true);
@@ -756,9 +792,12 @@ export function RMProvider({ children }: { children: ReactNode }) {
         meta,
         students,
         studentsMeta,
+        dashboardStats,
         loadingList,
         loadingDetail,
         loadingStudents,
+        loadingDashboardStats,
+        getDashboardStats,
         getOnboardings,
         getOnboardingById,
         getAllStudentsForBranch,
@@ -797,6 +836,7 @@ export function RMProvider({ children }: { children: ReactNode }) {
     }), [
         onboardings, meta, students, studentsMeta,
         loadingList, loadingDetail, loadingStudents,
+        dashboardStats, loadingDashboardStats, getDashboardStats,
         getOnboardings, getOnboardingById,
         getAllStudentsForBranch, getStudent, createStudent, updateStudent,
         addParentDetails, updateParentDetails, removeParentDetails,

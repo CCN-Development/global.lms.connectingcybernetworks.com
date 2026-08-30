@@ -162,6 +162,66 @@ export interface StudentPaymentsResult {
     pagination: PaginationMeta;
 }
 
+export interface ERPStatsBankAccount {
+    bankAccountDetailsId: string;
+    bankHolderName: string | null;
+    accountNumber: string | null;
+    commonCallingName: string | null;
+    currentBalance: number | null;
+}
+
+export interface ExpenseStatusBucket {
+    count: number;
+    amount: number;
+}
+
+export interface ERPStats {
+    dateRange: { startDate: string | null; endDate: string | null };
+    students: {
+        total: number;
+        active: number;
+        dropped: number;
+    };
+    purchases: {
+        total: number;
+        fullyPaid: number;
+        totalAmount: number;
+        collectedAmount: number;
+        outstandingAmount: number;
+    };
+    payments: {
+        completedCount: number;
+        completedAmount: number;
+        fineAmount: number;
+        pendingCount: number;
+        pendingAmount: number;
+    };
+    schedules: {
+        overdueCount: number;
+        overdueAmount: number;
+        upcomingCount: number;
+        upcomingAmount: number;
+    };
+    expenses: {
+        pending: ExpenseStatusBucket;
+        approved: ExpenseStatusBucket;
+        rejected: ExpenseStatusBucket;
+        completed: ExpenseStatusBucket;
+        totalCount: number;
+        totalAmount: number;
+    };
+    bankAccounts: {
+        count: number;
+        totalBalance: number;
+        accounts: ERPStatsBankAccount[];
+    };
+    summary: {
+        totalIncome: number;
+        totalExpense: number;
+        netProfitLoss: number;
+    };
+}
+
 /* ------------------------------------------------------------------ */
 /* Input types                                                         */
 /* ------------------------------------------------------------------ */
@@ -236,6 +296,11 @@ export interface CreateStudentPaymentInput {
 
 export type UpdateStudentPaymentInput = Partial<Omit<CreateStudentPaymentInput, "studentId" | "bankAccountDetailsId" | "purchaseId">>;
 
+export interface ERPStatsQuery {
+    startDate?: string;
+    endDate?: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Context shape                                                       */
 /* ------------------------------------------------------------------ */
@@ -253,11 +318,15 @@ interface ERPContextValue {
     studentPaymentsMeta: PaginationMeta | null;
     studentPaymentsTotalAmount: number;
     studentPaymentsTotalFineAmount: number;
+    erpStats: ERPStats | null;
     loadingBankAccounts: boolean;
     loadingTransactions: boolean;
     loadingExpenses: boolean;
     loadingPayments: boolean;
     loadingStudentPayments: boolean;
+    loadingStats: boolean;
+
+    getERPStats: (query?: ERPStatsQuery) => Promise<StandardResponse<ERPStats>>;
 
     getBankAccounts: () => Promise<StandardResponse<BankAccount[]>>;
     getBankAccountById: (bankAccountDetailsId: string) => Promise<StandardResponse<BankAccountDetail>>;
@@ -310,11 +379,28 @@ export function ERPProvider({ children }: { children: ReactNode }) {
     const [studentPaymentsMeta, setStudentPaymentsMeta] = useState<PaginationMeta | null>(null);
     const [studentPaymentsTotalAmount, setStudentPaymentsTotalAmount] = useState(0);
     const [studentPaymentsTotalFineAmount, setStudentPaymentsTotalFineAmount] = useState(0);
+    const [erpStats, setErpStats] = useState<ERPStats | null>(null);
     const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
     const [loadingTransactions, setLoadingTransactions] = useState(false);
     const [loadingExpenses, setLoadingExpenses] = useState(false);
     const [loadingPayments, setLoadingPayments] = useState(false);
     const [loadingStudentPayments, setLoadingStudentPayments] = useState(false);
+    const [loadingStats, setLoadingStats] = useState(false);
+
+    /* --------------------------- Stats ---------------------------- */
+
+    const getERPStats = useCallback(async (query?: ERPStatsQuery): Promise<StandardResponse<ERPStats>> => {
+        setLoadingStats(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/get-erp-stats`, method: "GET", params: query }) as ERPStats;
+            setErpStats(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch ERP stats"), data: null };
+        } finally {
+            setLoadingStats(false);
+        }
+    }, []);
 
     /* ------------------------ Bank accounts ----------------------- */
 
@@ -535,11 +621,14 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         studentPaymentsMeta,
         studentPaymentsTotalAmount,
         studentPaymentsTotalFineAmount,
+        erpStats,
         loadingBankAccounts,
         loadingTransactions,
         loadingExpenses,
         loadingPayments,
         loadingStudentPayments,
+        loadingStats,
+        getERPStats,
         getBankAccounts,
         getBankAccountById,
         createBankAccount,
@@ -570,11 +659,14 @@ export function ERPProvider({ children }: { children: ReactNode }) {
         studentPaymentsMeta,
         studentPaymentsTotalAmount,
         studentPaymentsTotalFineAmount,
+        erpStats,
         loadingBankAccounts,
         loadingTransactions,
         loadingExpenses,
         loadingPayments,
         loadingStudentPayments,
+        loadingStats,
+        getERPStats,
         getBankAccounts,
         getBankAccountById,
         createBankAccount,
