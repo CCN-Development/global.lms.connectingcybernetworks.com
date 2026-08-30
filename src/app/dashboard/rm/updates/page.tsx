@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function Page() {
-    redirect("/dashboard/student/updates/news");
+    redirect("/dashboard/rm/updates/news");
 }

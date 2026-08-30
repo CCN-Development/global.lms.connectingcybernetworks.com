@@ -107,9 +107,9 @@ export default function ProfileLayout({ children }: { children: React.ReactNode 
         </div>
     );
 
-    return <>
+    return <div className="min-h-screen">
     {profileHeader}
         {children}
         
-    </>
+    </div>
 }

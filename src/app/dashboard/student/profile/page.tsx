@@ -1,12 +1,16 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
+import { CircularProgress } from "@mui/material";
 import {
     MdEdit,
     MdCheckCircle,
     MdWarningAmber,
     MdLock,
     MdLocationOn,
+    MdPersonOutline,
+    MdSchool,
 } from "react-icons/md";
+import { useStudent, type StudentAddress, type StudentDocument } from "@/contexts/StudentContext";
 
 // ─── Shared card style ──────────────────────────────────────────────────────
 const card: React.CSSProperties = {
@@ -15,6 +19,29 @@ const card: React.CSSProperties = {
     borderRadius: "16px",
     padding: "14px 16px",
 };
+
+const EMPTY = "—";
+
+function formatDate(value: string | null | undefined): string {
+    if (!value) return EMPTY;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return EMPTY;
+    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
+        .replace(/\//g, "-");
+}
+
+function formatPhone(callingCode: string | null | undefined, number: string | null | undefined): string {
+    if (!number) return EMPTY;
+    return callingCode ? `+${callingCode} ${number}` : number;
+}
+
+function addressLabel(address: StudentAddress): string {
+    return address.addressType?.trim() || "Address";
+}
+
+function isPermanent(address: StudentAddress): boolean {
+    return (address.addressType ?? "").toLowerCase().includes("permanent");
+}
 
 // ─── Section label pill ─────────────────────────────────────────────────────
 function Pill({ children }: { children: React.ReactNode }) {
@@ -30,6 +57,7 @@ function Pill({ children }: { children: React.ReactNode }) {
                 background: "rgba(139,92,246,0.22)",
                 color: "#c4b5fd",
                 letterSpacing: "0.02em",
+                textTransform: "capitalize",
             }}
         >
             {children}
@@ -115,7 +143,7 @@ function CardHeader({ title }: { title: string }) {
 }
 
 // ─── VerifiedBadge ───────────────────────────────────────────────────────────
-function VerifiedBadge() {
+function VerifiedBadge({ verified }: { verified: boolean }) {
     return (
         <span
             style={{
@@ -125,17 +153,133 @@ function VerifiedBadge() {
                 width: 18,
                 height: 18,
                 borderRadius: "50%",
-                background: "rgba(34,197,94,0.15)",
+                background: verified ? "rgba(34,197,94,0.15)" : "rgba(250,204,21,0.15)",
                 flexShrink: 0,
             }}
         >
-            <MdCheckCircle size={13} color="#22c55e" />
+            {verified ? (
+                <MdCheckCircle size={13} color="#22c55e" />
+            ) : (
+                <MdWarningAmber size={13} color="#facc15" />
+            )}
         </span>
+    );
+}
+
+function EmptyRow({ label }: { label: string }) {
+    return (
+        <div
+            style={{
+                fontSize: "0.7rem",
+                color: "rgba(255,255,255,0.4)",
+                padding: "10px 0",
+                textAlign: "center",
+            }}
+        >
+            {label}
+        </div>
+    );
+}
+
+// ─── Address block ───────────────────────────────────────────────────────────
+function AddressBlock({ address }: { address: StudentAddress }) {
+    return (
+        <>
+            <div style={{ marginBottom: "10px" }}>
+                <Pill>{addressLabel(address)}</Pill>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+                <Field label="Street Address" value={address.addressLine ?? EMPTY} />
+                <Field label="City" value={address.city ?? EMPTY} />
+                <Field label="State" value={address.state ?? EMPTY} />
+                <Field label="Country" value={address.country ?? EMPTY} />
+                <Field label="ZIP" value={address.postalCode ?? EMPTY} />
+            </div>
+        </>
+    );
+}
+
+// ─── Document row ────────────────────────────────────────────────────────────
+function DocumentRow({ document }: { document: StudentDocument }) {
+    return (
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                borderRadius: "10px",
+                padding: "8px 12px",
+            }}
+        >
+            <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
+                    {document.documentType}
+                </div>
+                <div
+                    style={{
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        color: "#fff",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                    }}
+                >
+                    {document.documentName}
+                </div>
+            </div>
+            <a
+                href={document.documentUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    color: "#60a5fa",
+                    whiteSpace: "nowrap",
+                    textDecoration: "none",
+                }}
+            >
+                View Document
+                <VerifiedBadge verified={document.isVerified} />
+            </a>
+        </div>
     );
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export default function ProfilePage() {
+    const { profile, loadingProfile, getProfile } = useStudent();
+
+    useEffect(() => {
+        getProfile();
+    }, [getProfile]);
+
+    if (loadingProfile && !profile) {
+        return (
+            <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
+                <CircularProgress size={24} sx={{ color: "#a78bfa" }} />
+            </div>
+        );
+    }
+
+    if (!profile) {
+        return <EmptyRow label="Profile could not be loaded." />;
+    }
+
+    const parent = profile.parentDetails[0] ?? null;
+    const currentAddress = profile.studentAddresses.find((address) => !isPermanent(address))
+        ?? profile.studentAddresses[0]
+        ?? null;
+    const permanentAddress = profile.studentAddresses.find(isPermanent) ?? null;
+    const adhaar = profile.studentAdhaarDatas[0] ?? null;
+
     return (
         <div
             style={{
@@ -174,14 +318,21 @@ export default function ProfilePage() {
                                 border: "3px solid #0b0c1e",
                                 overflow: "hidden",
                                 background: "rgba(255,255,255,0.08)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
                             }}
                         >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-                                alt="avatar"
-                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                            />
+                            {profile.studentPhoto ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={profile.studentPhoto}
+                                    alt={profile.studentName}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                />
+                            ) : (
+                                <MdPersonOutline size={30} color="rgba(255,255,255,0.5)" />
+                            )}
                         </div>
                     </div>
 
@@ -191,15 +342,25 @@ export default function ProfilePage() {
                             fontSize: "0.82rem",
                             fontWeight: 700,
                             color: "#fff",
+                            marginBottom: "4px",
+                        }}
+                    >
+                        {profile.studentName}
+                    </p>
+                    <p
+                        style={{
+                            textAlign: "center",
+                            fontSize: "0.65rem",
+                            color: "rgba(255,255,255,0.45)",
                             marginBottom: "14px",
                         }}
                     >
-                        Aanchal Ravi Gupta
+                        {profile.studentRegistrationNumber ?? "Registration pending"} · {profile.branch.branchName}
                     </p>
 
                     <div style={{ display: "flex", gap: "8px" }}>
-                        <Field label="Gender" value="Female" />
-                        <Field label="Date of Birth" value="06-11-2006" />
+                        <Field label="Gender" value={profile.gender ?? EMPTY} />
+                        <Field label="Date of Birth" value={formatDate(profile.dateOfBirth)} />
                     </div>
                 </div>
 
@@ -207,50 +368,42 @@ export default function ProfilePage() {
                 <div style={card}>
                     <CardHeader title="Contact Details" />
 
-                    {/* Primary Details tab */}
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: "10px",
-                        }}
-                    >
+                    <div style={{ marginBottom: "10px" }}>
                         <Pill>Primary Details</Pill>
-                        <span
-                            style={{
-                                fontSize: "0.62rem",
-                                color: "rgba(255,255,255,0.45)",
-                            }}
-                        >
-                            2/2 verified
-                        </span>
                     </div>
 
                     <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                         <Field
                             label="Phone Number"
-                            value="+91 7888337278"
-                            badge={<VerifiedBadge />}
+                            value={formatPhone(profile.callingCode, profile.phoneNumber)}
                         />
-                        <Field
-                            label="Email"
-                            value="aanchalg@gmail.com"
-                            badge={<VerifiedBadge />}
-                        />
+                        <Field label="Email" value={profile.email ?? EMPTY} />
                     </div>
 
-                    {/* WhatsApp Details tab */}
                     <div style={{ marginBottom: "10px" }}>
-                        <Pill>WhatsApp Details</Pill>
+                        <Pill>Alternate Details</Pill>
                     </div>
 
                     <Field
-                        label="WhatsApp Number"
-                        value="+91 7454459098"
-                        badge={<VerifiedBadge />}
+                        label="Alternate Number"
+                        value={formatPhone(profile.callingCode, profile.studentAlternatePhoneNumber)}
                     />
                 </div>
+
+                {/* ── Identity ── */}
+                {adhaar && (
+                    <div style={card}>
+                        <CardHeader title="Identity" />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                            <Field
+                                label="Aadhaar Number"
+                                value={adhaar.adhaarNumber ?? EMPTY}
+                                badge={<VerifiedBadge verified={adhaar.isVerified} />}
+                            />
+                            <Field label="Name on Aadhaar" value={adhaar.adhaarName ?? EMPTY} />
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Password ── */}
                 <div
@@ -283,7 +436,7 @@ export default function ProfilePage() {
                                 Password
                             </div>
                             <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
-                                Last updated on 24 Jan 2026
+                                Keep your account secure with a strong password
                             </div>
                         </div>
                     </div>
@@ -313,36 +466,25 @@ export default function ProfilePage() {
                     <CardHeader title="Academic Details" />
 
                     <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                        {/* College logo */}
                         <div
                             style={{
                                 width: 64,
                                 height: 64,
                                 borderRadius: "10px",
                                 border: "1px solid rgba(255,255,255,0.12)",
-                                background: "#fff",
+                                background: "rgba(255,255,255,0.06)",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                overflow: "hidden",
                                 flexShrink: 0,
                             }}
                         >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src="https://upload.wikimedia.org/wikipedia/en/thumb/6/6d/Little_Flower_High_School_logo.png/200px-Little_Flower_High_School_logo.png"
-                                alt="college"
-                                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = "none";
-                                }}
-                            />
+                            <MdSchool size={26} color="rgba(255,255,255,0.55)" />
                         </div>
 
-                        {/* College info */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", marginBottom: 3 }}>
-                                Little Flower College of Science
+                                {profile.highestEducationInstitute ?? "Institute not added"}
                             </div>
                             <div
                                 style={{
@@ -355,39 +497,26 @@ export default function ProfilePage() {
                                 }}
                             >
                                 <MdLocationOn size={12} />
-                                SakiNaka, Mumbai
+                                {profile.branch.branchName}
                             </div>
 
-                            <div style={{ display: "flex", gap: "8px" }}>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
-                                        Your Highest Education
-                                    </div>
-                                    <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
-                                        Class 12
-                                    </div>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
-                                        12th Marksheet
-                                    </div>
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 4,
-                                            fontSize: "0.75rem",
-                                            fontWeight: 600,
-                                            color: "#60a5fa",
-                                            cursor: "pointer",
-                                        }}
-                                    >
-                                        View Document
-                                        <MdWarningAmber size={13} color="#facc15" />
-                                    </div>
-                                </div>
+                            <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
+                                Your Highest Education
+                            </div>
+                            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
+                                {profile.highestEducation ?? EMPTY}
                             </div>
                         </div>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+                        {profile.studentDocuments.length === 0 ? (
+                            <EmptyRow label="No documents uploaded yet." />
+                        ) : (
+                            profile.studentDocuments.map((document) => (
+                                <DocumentRow key={document.documentId} document={document} />
+                            ))
+                        )}
                     </div>
                 </div>
 
@@ -395,88 +524,45 @@ export default function ProfilePage() {
                 <div style={card}>
                     <CardHeader title="Parents Details" />
 
-                    <div style={{ marginBottom: "10px" }}>
-                        <Pill>Primary Details</Pill>
-                    </div>
+                    {!parent ? (
+                        <EmptyRow label="No parent details added yet." />
+                    ) : (
+                        <>
+                            <div style={{ marginBottom: "10px" }}>
+                                <Pill>Primary Details</Pill>
+                            </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                        <Field label="Full Name" value="Ravi Ashok Sharma" />
-                        <Field
-                            label="Phone Number"
-                            value="+91 7888337278"
-                            badge={
-                                <span
-                                    style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: 3,
-                                        fontSize: "0.6rem",
-                                        fontWeight: 600,
-                                        color: "#22c55e",
-                                        background: "rgba(34,197,94,0.12)",
-                                        borderRadius: "99px",
-                                        padding: "2px 6px",
-                                        whiteSpace: "nowrap",
-                                        flexShrink: 0,
-                                    }}
-                                >
-                                    <MdCheckCircle size={10} /> Verified
-                                </span>
-                            }
-                        />
-                        <Field label="Email" value="sanjaysharma@gmail.com" />
-                        <Field label="Relationship" value="Father" />
-                    </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                                <Field label="Full Name" value={parent.parentName} />
+                                <Field
+                                    label="Phone Number"
+                                    value={formatPhone(parent.parentCallingCode, parent.parentPhoneNumber)}
+                                />
+                                <Field label="Email" value={parent.parentEmail ?? EMPTY} />
+                                <Field label="Relationship" value={parent.parentRelation ?? EMPTY} />
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* ── Address ── */}
                 <div style={card}>
                     <CardHeader title="Address" />
 
-                    <div style={{ marginBottom: "10px" }}>
-                        <Pill>Residential/Current Address</Pill>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                        <Field label="Street Address" value="Shree Heights, Andheri East" />
-                        <Field label="Apartment" value="A Wing FlatNo. 1604" />
-                        <Field label="City" value="Mumbai" />
-                        <Field label="State" value="Maharashtra" />
-                        <Field label="ZIP" value="400069" />
-                    </div>
-
-                    <div
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            marginBottom: "8px",
-                        }}
-                    >
-                        <Pill>Permanent Address</Pill>
-                        <label
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                                fontSize: "0.62rem",
-                                color: "rgba(255,255,255,0.55)",
-                                cursor: "pointer",
-                            }}
-                        >
-                            <input
-                                type="checkbox"
-                                defaultChecked
-                                style={{
-                                    accentColor: "#6d28d9",
-                                    width: 12,
-                                    height: 12,
-                                    cursor: "pointer",
-                                }}
-                            />
-                            Same as Residential/Current Address
-                        </label>
-                    </div>
+                    {profile.studentAddresses.length === 0 ? (
+                        <EmptyRow label="No address added yet." />
+                    ) : (
+                        <>
+                            {currentAddress && <AddressBlock address={currentAddress} />}
+                            {permanentAddress && permanentAddress.addressId !== currentAddress?.addressId ? (
+                                <AddressBlock address={permanentAddress} />
+                            ) : (
+                                <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.45)" }}>
+                                    Permanent address is same as the address above.
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </div>
         </div>

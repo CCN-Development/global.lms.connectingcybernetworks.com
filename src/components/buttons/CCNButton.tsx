@@ -5,15 +5,17 @@ type Props = {
     onClick?: () => void;
     children?: React.ReactNode;
     className?: string;
+    disabled?: boolean;
 }
 
 export default function CCNButton({
     onClick,
     children,
     className,
+    disabled,
 }: Props) {
     return (
-        <Button onClick={onClick} className={`bg-linear-to-r from-[#00098B]  via-13% to-[#5900AC] text-white ${className}`} sx={{
+        <Button onClick={onClick} disabled={disabled} className={`bg-linear-to-r from-[#00098B]  via-13% to-[#5900AC] text-white ${className}`} sx={{
             borderRadius: "7px",
             textTransform: "none",
             fontWeight: 600,
@@ -26,6 +28,10 @@ export default function CCNButton({
             "&:hover": {
                 transform: "translateY(-2px)",
                 boxShadow: "0 6px 16px rgba(0,0,0,0.35)",
+            },
+            "&.Mui-disabled": {
+                color: "rgba(255,255,255,0.55)",
+                opacity: 0.6,
             },
         }}>
             {children}

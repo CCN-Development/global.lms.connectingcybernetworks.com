@@ -1,18 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Menu, MenuItem, CircularProgress } from "@mui/material";
 import StudentLayout from "@/layouts/StudentLayout";
 import StudentHeader from "@/layouts/StudentHeader";
 import {
+    useStudent,
+    type AttendanceDailyPoint,
+    type AttendanceHistoryRecord,
+    type AttendancePerBatch,
+} from "@/contexts/StudentContext";
+import {
     MdStar,
     MdCheckCircleOutline,
-    MdAccessTime,
+    MdEventAvailable,
     MdSentimentDissatisfied,
     MdFavorite,
     MdArrowDropDown,
     MdDownload,
     MdInfoOutline,
-    MdArrowForward,
 } from "react-icons/md";
 
 // ─── Palette ────────────────────────────────────────────────────────────────
@@ -23,7 +29,59 @@ const TEXT_SUB = "rgba(255,255,255,0.65)";
 const TEAL = "#2dd4bf";
 const GREEN = "#22c55e";
 const RED = "#ef4444";
-const ORANGE = "#f97316";
+
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const MONTHS_LONG = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+];
+const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const OVERALL = "overall";
+
+const menuSx = {
+    "& .MuiPaper-root": {
+        background: "#111827",
+        border: `1px solid ${BORDER}`,
+        borderRadius: "8px",
+        color: "#fff",
+        maxHeight: 300,
+    },
+    "& .MuiMenuItem-root": { fontSize: "0.74rem" },
+} as const;
+
+// ─── Formatting helpers ─────────────────────────────────────────────────────
+function formatDay(iso: string): string {
+    return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+function formatTime(iso: string | null): string {
+    if (!iso) return "–";
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function formatDuration(start: string | null, end: string | null): string {
+    if (!start || !end) return "–";
+    const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60000);
+    if (minutes <= 0) return "–";
+    return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+function toCSV(rows: AttendanceHistoryRecord[]): string {
+    const header = ["Date", "Time", "Batch", "Course", "Trainer", "Mode", "Duration", "Status"];
+    const body = rows.map((row) => [
+        formatDay(row.sessionDate),
+        formatTime(row.sessionTime),
+        row.batchName,
+        row.courseName,
+        row.trainerName ?? "",
+        row.mode ?? "",
+        formatDuration(row.sessionStartedAt, row.sessionEndedAt),
+        row.status,
+    ]);
+    return [header, ...body]
+        .map((cells) => cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+}
 
 // ─── Stat Card ──────────────────────────────────────────────────────────────
 function StatCard({
@@ -47,7 +105,7 @@ function StatCard({
                 display: "flex",
                 flexDirection: "column",
                 gap: 6,
-                flex: 1,
+                flex: "1 1 140px",
                 minWidth: 0,
             }}
         >
@@ -64,17 +122,69 @@ function StatCard({
     );
 }
 
-// ─── Monthly Bar Chart ───────────────────────────────────────────────────────
-const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-const ATTENDANCE_VALUES = [78, 85, 92, 88, 76, 91, 87, 89, 83, 94, 81, 95];
-const MAX_VAL = 100;
+// ─── Dropdown button ────────────────────────────────────────────────────────
+function Dropdown({
+    label,
+    options,
+    value,
+    onChange,
+}: {
+    label?: string;
+    options: { value: string; label: string }[];
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    const selected = options.find((option) => option.value === value);
 
-function MonthlyChart({ year }: { year: number }) {
+    return (
+        <>
+            <button
+                onClick={(event) => setAnchor(event.currentTarget)}
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    background: BG_CARD,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 8,
+                    padding: "5px 10px",
+                    color: "#fff",
+                    fontSize: "0.72rem",
+                    cursor: "pointer",
+                    maxWidth: 220,
+                }}
+            >
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {label ? `${label} : ` : ""}{selected?.label ?? "—"}
+                </span>
+                <MdArrowDropDown size={16} />
+            </button>
+            <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} sx={menuSx}>
+                {options.map((option) => (
+                    <MenuItem
+                        key={option.value}
+                        selected={option.value === value}
+                        onClick={() => {
+                            onChange(option.value);
+                            setAnchor(null);
+                        }}
+                    >
+                        {option.label}
+                    </MenuItem>
+                ))}
+            </Menu>
+        </>
+    );
+}
+
+// ─── Monthly Bar Chart ───────────────────────────────────────────────────────
+const CHART_HEIGHT = 240;
+
+function MonthlyChart({ values }: { values: (number | null)[] }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {/* Y-axis labels + bars */}
-            <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 240, position: "relative" }}>
-                {/* Y axis */}
+            <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: CHART_HEIGHT }}>
                 <div
                     style={{
                         display: "flex",
@@ -91,22 +201,6 @@ function MonthlyChart({ year }: { year: number }) {
                         </span>
                     ))}
                 </div>
-                {/* Grid lines
-                <div style={{ position: "absolute", left: 24, right: 0, top: 0, bottom: 0, pointerEvents: "none" }}>
-                    {[0, 20, 40, 60, 80, 100].map((v) => (
-                        <div
-                            key={v}
-                            style={{
-                                position: "absolute",
-                                bottom: `${(v / MAX_VAL) * 100}%`,
-                                left: 0,
-                                right: 0,
-                                borderTop: "1px solid rgba(255,255,255,0.06)",
-                            }}
-                        />
-                    ))}
-                </div> */}
-                {/* Bars */}
                 <div
                     style={{
                         display: "flex",
@@ -117,7 +211,7 @@ function MonthlyChart({ year }: { year: number }) {
                         paddingLeft: 4,
                     }}
                 >
-                    {ATTENDANCE_VALUES.map((val, i) => (
+                    {values.map((val, i) => (
                         <div
                             key={i}
                             style={{
@@ -130,21 +224,24 @@ function MonthlyChart({ year }: { year: number }) {
                                 justifyContent: "flex-end",
                             }}
                         >
-                            <span style={{ fontSize: "0.55rem", color: TEXT_MUTED }}>{val}%</span>
+                            <span style={{ fontSize: "0.55rem", color: TEXT_MUTED }}>
+                                {val === null ? "" : `${val}%`}
+                            </span>
                             <div
                                 style={{
                                     width: "100%",
-                                    height: `${(val / MAX_VAL) * 240}px`,
-                                    background: `linear-gradient(to top, ${TEAL}, #0e7490)`,
+                                    height: val === null ? 2 : `${(val / 100) * CHART_HEIGHT}px`,
+                                    background: val === null
+                                        ? "rgba(255,255,255,0.08)"
+                                        : `linear-gradient(to top, ${TEAL}, #0e7490)`,
                                     borderRadius: "4px 4px 2px 2px",
-                                    minHeight: 4,
+                                    minHeight: 2,
                                 }}
                             />
                         </div>
                     ))}
                 </div>
             </div>
-            {/* X axis month labels */}
             <div style={{ display: "flex", paddingLeft: 28, gap: 4 }}>
                 {MONTHS.map((m) => (
                     <span key={m} style={{ flex: 1, fontSize: "0.58rem", color: TEXT_MUTED, textAlign: "center" }}>
@@ -157,53 +254,41 @@ function MonthlyChart({ year }: { year: number }) {
 }
 
 // ─── Day-Wise Calendar ────────────────────────────────────────────────────────
-type DayStatus = "present" | "absent" | "late" | "none";
+function DayWiseCalendar({
+    year,
+    month,
+    daily,
+}: {
+    year: number;
+    month: number;
+    daily: AttendanceDailyPoint[];
+}) {
+    const statusByDay = useMemo(() => {
+        const map = new Map<number, "present" | "absent">();
+        for (const point of daily) {
+            const [y, m, d] = point.date.split("-").map(Number);
+            if (y !== year || m - 1 !== month) continue;
+            // An absence in any batch that day outweighs a present marking.
+            if (point.status === "absent" || !map.has(d)) map.set(d, point.status);
+        }
+        return map;
+    }, [daily, year, month]);
 
-// 42 items (6 rows × 7 cols). Day 1 lands at FRI column matching the design.
-const CALENDAR_DAYS: { day: number | null; status: DayStatus }[] = [
-    // Row 1 — SUN MON TUE WED THU FRI SAT
-    { day: null, status: "none" }, { day: null, status: "none" }, { day: null, status: "none" },
-    { day: null, status: "none" }, { day: null, status: "none" },
-    { day: 1, status: "present" }, { day: 2, status: "none" },
-    // Row 2
-    { day: 3, status: "none" }, { day: 4, status: "none" },
-    { day: 5, status: "late" }, { day: 6, status: "present" },
-    { day: 7, status: "present" }, { day: 8, status: "present" },
-    { day: 9, status: "none" },
-    // Row 3
-    { day: 10, status: "none" }, { day: 11, status: "none" },
-    { day: 12, status: "present" }, { day: 13, status: "present" },
-    { day: 14, status: "absent" }, { day: 15, status: "present" },
-    { day: 16, status: "none" },
-    // Row 4
-    { day: 17, status: "none" }, { day: 18, status: "none" },
-    { day: 19, status: "present" }, { day: 20, status: "present" },
-    { day: 21, status: "present" }, { day: 22, status: "present" },
-    { day: 23, status: "none" },
-    // Row 5
-    { day: 24, status: "none" }, { day: 25, status: "none" },
-    { day: 26, status: "present" }, { day: 27, status: "absent" },
-    { day: 28, status: "late" }, { day: 29, status: "present" },
-    { day: 30, status: "none" },
-    // Row 6
-    { day: 31, status: "none" },
-    { day: null, status: "none" }, { day: null, status: "none" }, { day: null, status: "none" },
-    { day: null, status: "none" }, { day: null, status: "none" }, { day: null, status: "none" },
-];
+    const cells = useMemo(() => {
+        const offset = new Date(Date.UTC(year, month, 1)).getUTCDay();
+        const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+        const total = Math.ceil((offset + daysInMonth) / 7) * 7;
+        return Array.from({ length: total }, (_, i) => {
+            const day = i - offset + 1;
+            return day >= 1 && day <= daysInMonth ? day : null;
+        });
+    }, [year, month]);
 
-function dayColor(status: DayStatus): string {
-    if (status === "present") return GREEN;
-    if (status === "absent") return RED;
-    if (status === "late") return ORANGE;
-    return "transparent";
-}
-
-function DayWiseCalendar() {
-    const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    const presentCount = [...statusByDay.values()].filter((s) => s === "present").length;
+    const absentCount = [...statusByDay.values()].filter((s) => s === "absent").length;
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {/* Day-of-week header */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 6 }}>
                 {DOW.map((d) => (
                     <span
@@ -215,67 +300,56 @@ function DayWiseCalendar() {
                 ))}
             </div>
 
-            {/* Days grid — large circles for class days, plain text otherwise */}
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(7, 1fr)",
-                    rowGap: 2,
-                    columnGap: 1,
-                }}
-            >
-                {CALENDAR_DAYS.map((item, i) => (
-                    <div
-                        key={i}
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            aspectRatio: "1",
-                        }}
-                    >
-                        {item.day && item.status !== "none" ? (
-                            // Large colored circle for class days
-                            <div
-                                style={{
-                                    width: "100%",
-                                    aspectRatio: "1",
-                                    borderRadius: "50%",
-                                    background: dayColor(item.status),
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: "#fff",
-                                    fontSize: "0.75rem",
-                                    fontWeight: 700,
-                                    boxShadow: `0 2px 8px ${dayColor(item.status)}55`,
-                                }}
-                            >
-                                {item.day}
-                            </div>
-                        ) : (
-                            // Plain text for non-class days
-                            <span
-                                style={{
-                                    fontSize: "0.68rem",
-                                    color: item.day ? TEXT_SUB : "transparent",
-                                    fontWeight: 400,
-                                    userSelect: "none",
-                                }}
-                            >
-                                {item.day ?? "."}
-                            </span>
-                        )}
-                    </div>
-                ))}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: 2, columnGap: 1 }}>
+                {cells.map((day, i) => {
+                    const status = day === null ? undefined : statusByDay.get(day);
+                    return (
+                        <div
+                            key={i}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                aspectRatio: "1",
+                            }}
+                        >
+                            {status ? (
+                                <div
+                                    style={{
+                                        width: "100%",
+                                        aspectRatio: "1",
+                                        borderRadius: "50%",
+                                        background: status === "present" ? GREEN : RED,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        color: "#fff",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 700,
+                                    }}
+                                >
+                                    {day}
+                                </div>
+                            ) : (
+                                <span
+                                    style={{
+                                        fontSize: "0.68rem",
+                                        color: day ? TEXT_SUB : "transparent",
+                                        userSelect: "none",
+                                    }}
+                                >
+                                    {day ?? "."}
+                                </span>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Stats legend */}
             <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                 {[
-                    { label: "PRESENT", count: "13 Days", color: GREEN },
-                    { label: "ABSENT", count: "2 Days", color: RED },
-                    { label: "LATE", count: "2 Days", color: ORANGE },
+                    { label: "PRESENT", count: presentCount, color: GREEN },
+                    { label: "ABSENT", count: absentCount, color: RED },
                 ].map(({ label, count, color }) => (
                     <div
                         key={label}
@@ -292,7 +366,9 @@ function DayWiseCalendar() {
                         <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "#fff", letterSpacing: "0.06em" }}>
                             {label}
                         </span>
-                        <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#fff" }}>{count}</span>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#fff" }}>
+                            {count} {count === 1 ? "Day" : "Days"}
+                        </span>
                     </div>
                 ))}
             </div>
@@ -300,118 +376,142 @@ function DayWiseCalendar() {
     );
 }
 
-// ─── Attendance History Table ─────────────────────────────────────────────────
-type HistoryRow = {
-    date: string;
-    time: string;
-    batch: string;
-    topic: string;
-    trainer: string;
-    checkIn: string;
-    checkOut: string;
-    mode: "OFFLINE" | "ONLINE";
-    duration: string;
-    status: "Present" | "Absent" | "Late";
-};
-
-const HISTORY_ROWS: HistoryRow[] = [
-    {
-        date: "Jul 28",
-        time: "10 AM – 12 PM",
-        batch: "CCNA Batch 12",
-        topic: "Subnetting & VLSM",
-        trainer: "Kushal Korde",
-        checkIn: "10:02:17 AM",
-        checkOut: "12:00:00 PM",
-        mode: "OFFLINE",
-        duration: "1h 58m",
-        status: "Present",
-    },
-    {
-        date: "Jul 26",
-        time: "2 PM – 4 PM",
-        batch: "CCNA Batch 12",
-        topic: "OSI Model Layers",
-        trainer: "Kushal Korde",
-        checkIn: "2:19:04 PM",
-        checkOut: "4:00:00 PM",
-        mode: "OFFLINE",
-        duration: "1h 41m",
-        status: "Late",
-    },
-    {
-        date: "Jul 24",
-        time: "10 AM – 12 PM",
-        batch: "CCNA Batch 12",
-        topic: "IP Addressing",
-        trainer: "Rahul Sharma",
-        checkIn: "–",
-        checkOut: "–",
-        mode: "ONLINE",
-        duration: "–",
-        status: "Absent",
-    },
-    {
-        date: "Jul 22",
-        time: "10 AM – 12 PM",
-        batch: "CCNA Batch 12",
-        topic: "Network Topology",
-        trainer: "Kushal Korde",
-        checkIn: "10:00:52 AM",
-        checkOut: "12:00:00 PM",
-        mode: "ONLINE",
-        duration: "1h 59m",
-        status: "Present",
-    },
-    {
-        date: "Jul 19",
-        time: "2 PM – 4 PM",
-        batch: "CCNA Batch 12",
-        topic: "Router Config Basics",
-        trainer: "Rahul Sharma",
-        checkIn: "2:00:00 PM",
-        checkOut: "4:00:00 PM",
-        mode: "OFFLINE",
-        duration: "2h 00m",
-        status: "Present",
-    },
-    {
-        date: "Jul 17",
-        time: "10 AM – 12 PM",
-        batch: "CCNA Batch 12",
-        topic: "Switch Port Config",
-        trainer: "Kushal Korde",
-        checkIn: "10:07:33 AM",
-        checkOut: "11:58:00 AM",
-        mode: "OFFLINE",
-        duration: "1h 51m",
-        status: "Late",
-    },
-];
-
-function statusStyle(s: HistoryRow["status"]): React.CSSProperties {
-    if (s === "Present") return { background: "#14532d", color: "#4ade80", border: "1px solid rgba(34,197,94,0.5)" };
-    if (s === "Absent") return { background: "#450a0a", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.5)" };
-    return { background: "#431407", color: "#fdba74", border: "1px solid rgba(249,115,22,0.5)" };
+// ─── Batch-wise attendance ───────────────────────────────────────────────────
+function BatchWiseAttendance({
+    rows,
+    onSelect,
+}: {
+    rows: AttendancePerBatch[];
+    onSelect: (batchId: string) => void;
+}) {
+    return (
+        <div
+            style={{
+                background: BG_CARD,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 16,
+                padding: "16px 14px",
+            }}
+        >
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Batch-Wise Attendance</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+                {rows.map((row) => (
+                    <button
+                        key={row.batchId}
+                        onClick={() => onSelect(row.batchId)}
+                        style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                            textAlign: "left",
+                            width: "100%",
+                        }}
+                    >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
+                                    {row.batchName}
+                                </span>
+                                <span style={{ fontSize: "0.64rem", color: TEXT_MUTED }}>
+                                    {row.courseName} &bull; {row.attendedSessions}/{row.totalSessionsHeld} attended
+                                </span>
+                            </div>
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: TEAL }}>
+                                {row.attendancePercentage}%
+                            </span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)" }}>
+                            <div
+                                style={{
+                                    width: `${row.attendancePercentage}%`,
+                                    height: "100%",
+                                    borderRadius: 4,
+                                    background: `linear-gradient(to right, #0e7490, ${TEAL})`,
+                                }}
+                            />
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
 }
 
-function modeBadgeStyle(m: HistoryRow["mode"]): React.CSSProperties {
-    if (m === "OFFLINE") return { background: "rgba(255,255,255,0.07)", color: TEXT_SUB, border: `1px solid ${BORDER}`, borderRadius: 6, padding: "2px 7px" };
-    return { background: "rgba(45,212,191,0.12)", color: TEAL, border: "1px solid rgba(45,212,191,0.3)", borderRadius: 6, padding: "2px 7px" };
+function statusStyle(status: AttendanceHistoryRecord["status"]): React.CSSProperties {
+    if (status === "present") return { background: "#14532d", color: "#4ade80", border: "1px solid rgba(34,197,94,0.5)" };
+    return { background: "#450a0a", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.5)" };
 }
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function AttendancePage() {
-    const [filterOpen, setFilterOpen] = useState(false);
-    const [chartYear] = useState(2025);
+    const { attendance, loadingAttendance, getAttendance } = useStudent();
+    const [scope, setScope] = useState(OVERALL);
+    const [chartYear, setChartYear] = useState<number | null>(null);
+    const [calendarKey, setCalendarKey] = useState<string | null>(null);
+
+    useEffect(() => {
+        getAttendance(scope);
+    }, [scope, getAttendance]);
+
+    const summary = attendance?.summary;
+    const years = useMemo(() => attendance?.years ?? [], [attendance]);
+    const daily = useMemo(() => attendance?.daily ?? [], [attendance]);
+    const history = useMemo(() => attendance?.history ?? [], [attendance]);
+
+    const activeYear = chartYear !== null && years.includes(chartYear)
+        ? chartYear
+        : years[0] ?? new Date().getUTCFullYear();
+
+    // Default the calendar to the most recent month that actually has records.
+    const defaultCalendar = daily[0]
+        ? daily[0].date.slice(0, 7)
+        : `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}`;
+    const activeCalendar = calendarKey ?? defaultCalendar;
+    const [calYear, calMonth] = activeCalendar.split("-").map(Number);
+
+    const monthlyValues = useMemo(() => {
+        const values: (number | null)[] = Array.from({ length: 12 }, () => null);
+        for (const point of attendance?.monthly ?? []) {
+            if (point.year === activeYear) values[point.month] = point.percentage;
+        }
+        return values;
+    }, [attendance, activeYear]);
+
+    const calendarOptions = useMemo(() => {
+        const keys = [...new Set(daily.map((point) => point.date.slice(0, 7)))].sort().reverse();
+        const options = keys.map((key) => {
+            const [y, m] = key.split("-").map(Number);
+            return { value: key, label: `${MONTHS_LONG[m - 1]} ${y}` };
+        });
+        if (options.some((option) => option.value === defaultCalendar)) return options;
+        const [y, m] = defaultCalendar.split("-").map(Number);
+        return [{ value: defaultCalendar, label: `${MONTHS_LONG[m - 1]} ${y}` }, ...options];
+    }, [daily, defaultCalendar]);
+
+    const scopeOptions = useMemo(() => [
+        { value: OVERALL, label: "Overall" },
+        ...(attendance?.batches ?? []).map((batch) => ({ value: batch.batchId, label: batch.batchName })),
+    ], [attendance]);
+
+    function downloadSummary() {
+        const blob = new Blob([toCSV(history)], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `attendance-${scope}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    }
 
     return (
         <StudentLayout
             header={
                 <StudentHeader
-                    title={
-                        <span style={{ fontSize: "1rem", fontWeight: 700, color: "#fff" }}>Attendance</span>
-                    }
+                    title={<span style={{ fontSize: "1rem", fontWeight: 700, color: "#fff" }}>Attendance</span>}
                 />
             }
         >
@@ -421,26 +521,10 @@ export default function AttendancePage() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                     <span style={{ fontSize: "0.78rem", color: TEXT_SUB, fontWeight: 600 }}>Attendance Overview</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {/* Overall filter */}
+                        <Dropdown options={scopeOptions} value={scope} onChange={setScope} />
                         <button
-                            onClick={() => setFilterOpen((p) => !p)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                                background: BG_CARD,
-                                border: `1px solid ${BORDER}`,
-                                borderRadius: 8,
-                                padding: "5px 10px",
-                                color: "#fff",
-                                fontSize: "0.72rem",
-                                cursor: "pointer",
-                            }}
-                        >
-                            Overall <MdArrowDropDown size={16} />
-                        </button>
-                        {/* Download */}
-                        <button
+                            onClick={downloadSummary}
+                            disabled={history.length === 0}
                             style={{
                                 display: "flex",
                                 alignItems: "center",
@@ -449,9 +533,9 @@ export default function AttendancePage() {
                                 border: `1px solid ${BORDER}`,
                                 borderRadius: 8,
                                 padding: "5px 10px",
-                                color: "#fff",
+                                color: history.length === 0 ? TEXT_MUTED : "#fff",
                                 fontSize: "0.72rem",
-                                cursor: "pointer",
+                                cursor: history.length === 0 ? "not-allowed" : "pointer",
                             }}
                         >
                             <MdDownload size={13} /> Download Summary
@@ -459,239 +543,219 @@ export default function AttendancePage() {
                     </div>
                 </div>
 
-                {/* ── Stat Cards ── */}
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <StatCard value="87%" label="Attendance" icon={MdStar} accent="#a78bfa" />
-                    <StatCard value={47} label="Classes Attended" icon={MdCheckCircleOutline} accent={TEAL} />
-                    <StatCard value={3} label="Late Arrivals" icon={MdAccessTime} accent="#60a5fa" />
-                    <StatCard value={7} label="Absent Classes" icon={MdSentimentDissatisfied} accent={RED} />
-                    <StatCard value={9} label="Attendance Streak" icon={MdFavorite} accent="#f472b6" />
-                </div>
-
-                {/* ── Charts Row ── */}
-                <div className="grid grid-cols-1 md:grid-cols-[3fr_1.5fr] gap-5">
-                    {/* Monthly Attendance */}
-                    <div
-                        style={{
-                            background: BG_CARD,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 16,
-                            padding: "16px 14px",
-                        }}
-                    >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Monthly Attendance</span>
-                            <button
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 3,
-                                    background: "rgba(255,255,255,0.06)",
-                                    border: `1px solid ${BORDER}`,
-                                    borderRadius: 7,
-                                    padding: "3px 8px",
-                                    color: TEXT_SUB,
-                                    fontSize: "0.68rem",
-                                    cursor: "pointer",
-                                }}
-                            >
-                                Year : {chartYear} <MdArrowDropDown size={14} />
-                            </button>
+                {loadingAttendance && !attendance ? (
+                    <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}>
+                        <CircularProgress size={24} sx={{ color: TEAL }} />
+                    </div>
+                ) : (
+                    <>
+                        {/* ── Stat Cards ── */}
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            <StatCard value={`${summary?.attendancePercentage ?? 0}%`} label="Attendance" icon={MdStar} accent="#a78bfa" />
+                            <StatCard value={summary?.attendedSessions ?? 0} label="Classes Attended" icon={MdCheckCircleOutline} accent={TEAL} />
+                            <StatCard value={summary?.absentSessions ?? 0} label="Absent Classes" icon={MdSentimentDissatisfied} accent={RED} />
+                            <StatCard value={summary?.upcomingSessions ?? 0} label="Upcoming Classes" icon={MdEventAvailable} accent="#60a5fa" />
+                            <StatCard value={summary?.currentStreak ?? 0} label="Attendance Streak" icon={MdFavorite} accent="#f472b6" />
                         </div>
-                        <MonthlyChart year={chartYear} />
-                        {/* ── Motivational Banner ── */}
-                        <div
-                            style={{
-                                background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%)",
-                                border: `1px solid rgba(139,92,246,0.3)`,
-                                borderRadius: 16,
-                                padding: "16px 18px",
-                                display: "flex",
-                                alignItems: "flex-start",
-                                justifyContent: "space-between",
-                                gap: 12,
-                                position: "relative",
-                                overflow: "hidden",
-                                marginTop: 14,
-                            }}
-                        >
-                            {/* Subtle radial highlight */}
+
+                        {/* ── Charts Row ── */}
+                        <div className="grid grid-cols-1 md:grid-cols-[3fr_1.5fr] gap-5">
+                            {/* Monthly Attendance */}
                             <div
                                 style={{
-                                    position: "absolute",
-                                    top: -40,
-                                    right: -40,
-                                    width: 160,
-                                    height: 160,
-                                    borderRadius: "50%",
-                                    background: "radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%)",
-                                    pointerEvents: "none",
-                                }}
-                            />
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
-                                        You&rsquo;re Doing Great! 🎉
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(196,181,253,0.9)" }}>
-                                    87% Attendance &bull; Certification Eligible
-                                </span>
-                                <span style={{ fontSize: "0.71rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6, maxWidth: 440 }}>
-                                    You&rsquo;re on a 9-session streak! Attend 3 more classes without a miss to push above
-                                    90% and secure your certification eligibility comfortably.
-                                </span>
-                            </div>
-                            <div style={{ flexShrink: 0 }}>
-                                <MdInfoOutline size={16} color="rgba(196,181,253,0.6)" />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Day-Wise Attendance */}
-                    <div
-                        style={{
-                            background: BG_CARD,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 16,
-                            padding: "16px 14px",
-                        }}
-                    >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Day-Wise Attendance</span>
-                            <button
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 3,
-                                    background: "rgba(255,255,255,0.06)",
+                                    background: BG_CARD,
                                     border: `1px solid ${BORDER}`,
-                                    borderRadius: 7,
-                                    padding: "3px 8px",
-                                    color: TEXT_SUB,
-                                    fontSize: "0.68rem",
-                                    cursor: "pointer",
+                                    borderRadius: 16,
+                                    padding: "16px 14px",
                                 }}
                             >
-                                Jan <MdArrowDropDown size={14} />
-                            </button>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 }}>
+                                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Monthly Attendance</span>
+                                    <Dropdown
+                                        label="Year"
+                                        options={(years.length > 0 ? years : [activeYear]).map((year) => ({
+                                            value: String(year),
+                                            label: String(year),
+                                        }))}
+                                        value={String(activeYear)}
+                                        onChange={(value) => setChartYear(Number(value))}
+                                    />
+                                </div>
+                                <MonthlyChart values={monthlyValues} />
+
+                                {/* ── Status Banner ── */}
+                                <div
+                                    style={{
+                                        background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 100%)",
+                                        border: "1px solid rgba(139,92,246,0.3)",
+                                        borderRadius: 16,
+                                        padding: "16px 18px",
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        justifyContent: "space-between",
+                                        gap: 12,
+                                        marginTop: 14,
+                                    }}
+                                >
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+                                        <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
+                                            {(summary?.attendancePercentage ?? 0) >= 75
+                                                ? "You're Doing Great!"
+                                                : "Let's Push Your Attendance Up"}
+                                        </span>
+                                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "rgba(196,181,253,0.9)" }}>
+                                            {summary?.attendancePercentage ?? 0}% Attendance &bull;{" "}
+                                            {(summary?.attendancePercentage ?? 0) >= 75
+                                                ? "Certification Eligible"
+                                                : "Below 75% Eligibility"}
+                                        </span>
+                                        <span style={{ fontSize: "0.71rem", color: "rgba(255,255,255,0.55)", lineHeight: 1.6, maxWidth: 440 }}>
+                                            {summary && summary.totalSessionsHeld > 0
+                                                ? `You have attended ${summary.attendedSessions} of ${summary.totalSessionsHeld} sessions held${summary.currentStreak > 0 ? `, and you are on a ${summary.currentStreak}-session streak` : ""}. ${summary.upcomingSessions} upcoming ${summary.upcomingSessions === 1 ? "session is" : "sessions are"} scheduled.`
+                                                : "No sessions have been held yet. Your attendance will appear here once classes begin."}
+                                        </span>
+                                    </div>
+                                    <MdInfoOutline size={16} color="rgba(196,181,253,0.6)" style={{ flexShrink: 0 }} />
+                                </div>
+                            </div>
+
+                            {/* Day-Wise Attendance */}
+                            <div
+                                style={{
+                                    background: BG_CARD,
+                                    border: `1px solid ${BORDER}`,
+                                    borderRadius: 16,
+                                    padding: "16px 14px",
+                                }}
+                            >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 }}>
+                                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Day-Wise Attendance</span>
+                                    <Dropdown options={calendarOptions} value={activeCalendar} onChange={setCalendarKey} />
+                                </div>
+                                <DayWiseCalendar year={calYear} month={calMonth - 1} daily={daily} />
+                            </div>
                         </div>
-                        <DayWiseCalendar />
-                    </div>
-                </div>
 
+                        {/* ── Batch-Wise Attendance ── */}
+                        {attendance && attendance.perBatch.length > 0 && (
+                            <BatchWiseAttendance rows={attendance.perBatch} onSelect={setScope} />
+                        )}
 
-
-                {/* ── Attendance History ── */}
-                <div
-                    style={{
-                        background: BG_CARD,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: 16,
-                        padding: "16px 14px",
-                    }}
-                >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Attendance History</span>
-                        <button
+                        {/* ── Attendance History ── */}
+                        <div
                             style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                                background: "transparent",
-                                border: "none",
-                                color: TEXT_MUTED,
-                                fontSize: "0.7rem",
-                                cursor: "pointer",
-                                padding: 0,
+                                background: BG_CARD,
+                                border: `1px solid ${BORDER}`,
+                                borderRadius: 16,
+                                padding: "16px 14px",
                             }}
                         >
-                            View All <MdArrowForward size={13} />
-                        </button>
-                    </div>
+                            <div style={{ marginBottom: 14 }}>
+                                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>Attendance History</span>
+                            </div>
 
-                    {/* Table */}
-                    <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem" }}>
-                            <thead>
-                                <tr>
-                                    {["DATE & TIME", "BATCH", "TOPIC", "TRAINER", "CHECK-IN", "CHECK-OUT", "MODE", "DURATION", "STATUS"].map(
-                                        (col) => (
-                                            <th
-                                                key={col}
-                                                style={{
-                                                    textAlign: "left",
-                                                    padding: "6px 10px",
-                                                    color: TEXT_MUTED,
-                                                    fontWeight: 600,
-                                                    fontSize: "0.62rem",
-                                                    letterSpacing: "0.05em",
-                                                    borderBottom: `1px solid ${BORDER}`,
-                                                    whiteSpace: "nowrap",
-                                                }}
-                                            >
-                                                {col}
-                                            </th>
-                                        )
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {HISTORY_ROWS.map((row, i) => (
-                                    <tr
-                                        key={i}
-                                        style={{
-                                            borderBottom: i < HISTORY_ROWS.length - 1 ? `1px solid ${BORDER}` : "none",
-                                        }}
-                                    >
-                                        <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                                            <div style={{ fontWeight: 600, color: "#fff", fontSize: "0.7rem" }}>{row.date}</div>
-                                            <div style={{ color: TEXT_MUTED, fontSize: "0.62rem" }}>{row.time}</div>
-                                        </td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB }}>{row.batch}</td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.topic}</td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.trainer}</td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.checkIn}</td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.checkOut}</td>
-                                        <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
-                                            <span style={{ fontSize: "0.68rem", fontWeight: 600, ...modeBadgeStyle(row.mode) }}>
-                                                {row.mode}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: "9px 10px", color: TEXT_SUB }}>{row.duration}</td>
-                                        <td style={{ padding: "9px 10px" }}>
-                                            <span
-                                                style={{
-                                                    fontSize: "0.62rem",
-                                                    fontWeight: 600,
-                                                    borderRadius: 20,
-                                                    padding: "3px 9px",
-                                                    display: "inline-flex",
-                                                    alignItems: "center",
-                                                    gap: 4,
-                                                    ...statusStyle(row.status),
-                                                }}
-                                            >
-                                                <span
+                            {history.length === 0 ? (
+                                <div style={{ padding: "24px 0", textAlign: "center", color: TEXT_MUTED, fontSize: "0.74rem" }}>
+                                    No attendance records yet.
+                                </div>
+                            ) : (
+                                <div style={{ overflowX: "auto" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.7rem" }}>
+                                        <thead>
+                                            <tr>
+                                                {["DATE & TIME", "BATCH", "COURSE", "TRAINER", "MODE", "DURATION", "STATUS"].map((col) => (
+                                                    <th
+                                                        key={col}
+                                                        style={{
+                                                            textAlign: "left",
+                                                            padding: "6px 10px",
+                                                            color: TEXT_MUTED,
+                                                            fontWeight: 600,
+                                                            fontSize: "0.62rem",
+                                                            letterSpacing: "0.05em",
+                                                            borderBottom: `1px solid ${BORDER}`,
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {col}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {history.map((row, i) => (
+                                                <tr
+                                                    key={row.batchSessionId}
                                                     style={{
-                                                        width: 5,
-                                                        height: 5,
-                                                        borderRadius: "50%",
-                                                        background: "currentColor",
-                                                        display: "inline-block",
-                                                        flexShrink: 0,
+                                                        borderBottom: i < history.length - 1 ? `1px solid ${BORDER}` : "none",
                                                     }}
-                                                />
-                                                {row.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
+                                                >
+                                                    <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
+                                                        <div style={{ fontWeight: 600, color: "#fff", fontSize: "0.7rem" }}>
+                                                            {formatDay(row.sessionDate)}
+                                                        </div>
+                                                        <div style={{ color: TEXT_MUTED, fontSize: "0.62rem" }}>
+                                                            {formatTime(row.sessionTime)}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.batchName}</td>
+                                                    <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.courseName}</td>
+                                                    <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>{row.trainerName ?? "–"}</td>
+                                                    <td style={{ padding: "9px 10px", whiteSpace: "nowrap" }}>
+                                                        <span
+                                                            style={{
+                                                                fontSize: "0.62rem",
+                                                                fontWeight: 600,
+                                                                textTransform: "uppercase",
+                                                                background: "rgba(255,255,255,0.07)",
+                                                                color: TEXT_SUB,
+                                                                border: `1px solid ${BORDER}`,
+                                                                borderRadius: 6,
+                                                                padding: "2px 7px",
+                                                            }}
+                                                        >
+                                                            {row.mode ?? "—"}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: "9px 10px", color: TEXT_SUB, whiteSpace: "nowrap" }}>
+                                                        {formatDuration(row.sessionStartedAt, row.sessionEndedAt)}
+                                                    </td>
+                                                    <td style={{ padding: "9px 10px" }}>
+                                                        <span
+                                                            style={{
+                                                                fontSize: "0.62rem",
+                                                                fontWeight: 600,
+                                                                borderRadius: 20,
+                                                                padding: "3px 9px",
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                gap: 4,
+                                                                textTransform: "capitalize",
+                                                                ...statusStyle(row.status),
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    width: 5,
+                                                                    height: 5,
+                                                                    borderRadius: "50%",
+                                                                    background: "currentColor",
+                                                                    display: "inline-block",
+                                                                    flexShrink: 0,
+                                                                }}
+                                                            />
+                                                            {row.status}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
         </StudentLayout>
     );

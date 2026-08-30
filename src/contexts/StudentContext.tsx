@@ -198,6 +198,15 @@ export interface LMSStudentData {
     studentPayments: StudentPayment[];
 }
 
+/** `GET /student/profile` — the signed-in student's own record with every relation expanded */
+export interface StudentProfile
+    extends Omit<LMSStudentData, "studentCourseAccesses" | "studentPackagesAccesses" | "studentPurchases"> {
+    branch: { branchId: string; branchName: string };
+    studentCourseAccesses: StudentCourseAccessWithCourse[];
+    studentPackagesAccesses: StudentPackagesAccessWithPackage[];
+    studentPurchases: StudentPurchaseDetail[];
+}
+
 /* ------------------------------------------------------------------ */
 /* Student batch types — mirror student.controller.ts responses        */
 /* ------------------------------------------------------------------ */
@@ -324,6 +333,89 @@ export interface CreateStudentBatchQueryInput {
     queryText: string;
 }
 
+/* ------------------------------------------------------------------ */
+/* Attendance types — mirror `GET /student/attendance`                 */
+/* ------------------------------------------------------------------ */
+
+export type AttendanceStatus = "present" | "absent";
+
+/** One enrolled batch, used to build the attendance scope dropdown */
+export interface AttendanceBatchOption {
+    batchId: string;
+    batchName: string;
+    courseName: string;
+    mode: string | null;
+    classTiming: string | null;
+    status: BatchStudentStatus;
+    isAccessActive: boolean;
+}
+
+export interface AttendanceSummary {
+    totalSessionsHeld: number;
+    attendedSessions: number;
+    absentSessions: number;
+    attendancePercentage: number;
+    currentStreak: number;
+    upcomingSessions: number;
+}
+
+export interface AttendancePerBatch {
+    batchId: string;
+    batchName: string;
+    courseName: string;
+    status: BatchStudentStatus;
+    totalSessionsHeld: number;
+    attendedSessions: number;
+    absentSessions: number;
+    attendancePercentage: number;
+}
+
+export interface AttendanceMonthlyPoint {
+    year: number;
+    /** 0-indexed month */
+    month: number;
+    held: number;
+    attended: number;
+    percentage: number;
+}
+
+export interface AttendanceDailyPoint {
+    /** YYYY-MM-DD */
+    date: string;
+    status: AttendanceStatus;
+    batchId: string;
+    batchName: string;
+    sessionTime: string;
+}
+
+export interface AttendanceHistoryRecord {
+    batchSessionId: string;
+    batchId: string;
+    batchName: string;
+    courseName: string;
+    trainerName: string | null;
+    mode: string | null;
+    sessionDate: string;
+    sessionTime: string;
+    sessionStartedAt: string | null;
+    sessionEndedAt: string | null;
+    isRescheduled: boolean;
+    status: AttendanceStatus;
+    markedAt: string | null;
+}
+
+export interface StudentAttendance {
+    /** `"overall"` or the batchId the stats are scoped to */
+    scope: string;
+    batches: AttendanceBatchOption[];
+    summary: AttendanceSummary;
+    perBatch: AttendancePerBatch[];
+    monthly: AttendanceMonthlyPoint[];
+    years: number[];
+    daily: AttendanceDailyPoint[];
+    history: AttendanceHistoryRecord[];
+}
+
 export type { BatchQueryStatus, BatchRequestStatus, BatchStudentStatus };
 
 /* ------------------------------------------------------------------ */
@@ -331,20 +423,25 @@ export type { BatchQueryStatus, BatchRequestStatus, BatchStudentStatus };
 /* ------------------------------------------------------------------ */
 
 interface StudentContextValue {
+    profile: StudentProfile | null;
     availableBatches: AvailableBatch[];
     enrolledBatches: EnrolledBatch[];
     completedBatches: CompletedBatch[];
     batchRequests: StudentBatchRequest[];
     batchQueries: StudentBatchQuery[];
     batchDetail: StudentBatchDetail | null;
+    attendance: StudentAttendance | null;
 
+    loadingProfile: boolean;
     loadingAvailableBatches: boolean;
     loadingEnrolledBatches: boolean;
     loadingCompletedBatches: boolean;
     loadingBatchRequests: boolean;
     loadingBatchQueries: boolean;
     loadingBatchDetail: boolean;
+    loadingAttendance: boolean;
 
+    getProfile: () => Promise<StandardResponse<StudentProfile>>;
     getAvailableBatches: () => Promise<StandardResponse<AvailableBatch[]>>;
     getEnrolledBatches: () => Promise<StandardResponse<EnrolledBatch[]>>;
     getCompletedBatches: () => Promise<StandardResponse<CompletedBatch[]>>;
@@ -353,6 +450,7 @@ interface StudentContextValue {
     getBatchQueries: () => Promise<StandardResponse<StudentBatchQuery[]>>;
     createBatchRequest: (data: CreateStudentBatchRequestInput) => Promise<StandardResponse<BatchRequest>>;
     createBatchQuery: (data: CreateStudentBatchQueryInput) => Promise<StandardResponse<BatchQuery>>;
+    getAttendance: (batchId?: string) => Promise<StandardResponse<StudentAttendance>>;
 }
 
 const StudentContext = createContext<StudentContextValue | null>(null);
@@ -364,19 +462,36 @@ function toMessage(error: unknown, fallback: string): string {
 }
 
 export function StudentProvider({ children }: { children: ReactNode }) {
+    const [profile, setProfile] = useState<StudentProfile | null>(null);
     const [availableBatches, setAvailableBatches] = useState<AvailableBatch[]>([]);
     const [enrolledBatches, setEnrolledBatches] = useState<EnrolledBatch[]>([]);
     const [completedBatches, setCompletedBatches] = useState<CompletedBatch[]>([]);
     const [batchRequests, setBatchRequests] = useState<StudentBatchRequest[]>([]);
     const [batchQueries, setBatchQueries] = useState<StudentBatchQuery[]>([]);
     const [batchDetail, setBatchDetail] = useState<StudentBatchDetail | null>(null);
+    const [attendance, setAttendance] = useState<StudentAttendance | null>(null);
 
+    const [loadingProfile, setLoadingProfile] = useState(false);
     const [loadingAvailableBatches, setLoadingAvailableBatches] = useState(false);
     const [loadingEnrolledBatches, setLoadingEnrolledBatches] = useState(false);
     const [loadingCompletedBatches, setLoadingCompletedBatches] = useState(false);
     const [loadingBatchRequests, setLoadingBatchRequests] = useState(false);
     const [loadingBatchQueries, setLoadingBatchQueries] = useState(false);
     const [loadingBatchDetail, setLoadingBatchDetail] = useState(false);
+    const [loadingAttendance, setLoadingAttendance] = useState(false);
+
+    const getProfile = useCallback(async (): Promise<StandardResponse<StudentProfile>> => {
+        setLoadingProfile(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/profile`, method: "GET" }) as StudentProfile;
+            setProfile(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch profile"), data: null };
+        } finally {
+            setLoadingProfile(false);
+        }
+    }, []);
 
     const getAvailableBatches = useCallback(async (): Promise<StandardResponse<AvailableBatch[]>> => {
         setLoadingAvailableBatches(true);
@@ -492,18 +607,38 @@ export function StudentProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
+    const getAttendance = useCallback(async (batchId?: string): Promise<StandardResponse<StudentAttendance>> => {
+        setLoadingAttendance(true);
+        try {
+            const query = batchId && batchId !== "overall" ? `?batchId=${encodeURIComponent(batchId)}` : "";
+            const res = await axiosHandler({ path: `${BASE}/attendance${query}`, method: "GET" }) as StudentAttendance;
+            setAttendance(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch attendance"), data: null };
+        } finally {
+            setLoadingAttendance(false);
+        }
+    }, []);
+
     const value = useMemo<StudentContextValue>(() => ({
-        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail,
+        profile,
+        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail, attendance,
+        loadingProfile,
         loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
-        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail,
+        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail, loadingAttendance,
+        getProfile,
         getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
-        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery,
+        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery, getAttendance,
     }), [
-        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail,
+        profile,
+        availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail, attendance,
+        loadingProfile,
         loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
-        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail,
+        loadingBatchRequests, loadingBatchQueries, loadingBatchDetail, loadingAttendance,
+        getProfile,
         getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
-        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery,
+        getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery, getAttendance,
     ]);
 
     return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;

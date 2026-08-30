@@ -8,6 +8,8 @@ import { ContentProvider } from "@/contexts/ContentContext";
 import { ERPProvider } from "@/contexts/ERPContext";
 import { BatchProvider } from "@/contexts/BatchContext";
 import { StudentProvider } from "@/contexts/StudentContext";
+import { TrainerProvider } from "@/contexts/TrainerContext";
+import { AssignmentProvider } from "@/contexts/AssignmentContext";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
@@ -37,9 +39,13 @@ export default function RootLayout({
               <ERPProvider>
                 <BatchProvider>
                   <StudentProvider>
+                    <TrainerProvider>
+                      <AssignmentProvider>
             {/* <CyberSecurityProvider> */}
               {children}
             {/* </CyberSecurityProvider> */}
+                      </AssignmentProvider>
+                    </TrainerProvider>
                   </StudentProvider>
                 </BatchProvider>
               </ERPProvider>

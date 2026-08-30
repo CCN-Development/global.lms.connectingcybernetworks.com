@@ -37,14 +37,15 @@ export async function getSignedURLBackend(
 export async function fileUploaderToS3(
     file: File,
     onProgress: (progress: number) => void,
-    onComplete: (fileUrl: string, key: string) => void
+    onComplete: (fileUrl: string, key: string) => void,
+    dirName = 'lms-onboarding/files'
 ) {
 
     try {
         const [presignedUrl, fileUrl] = await getSignedURLBackend(
             file.name,
             file.type,
-            'lms-onboarding/files'
+            dirName
         )
         if (!presignedUrl) {
             throw new Error(
