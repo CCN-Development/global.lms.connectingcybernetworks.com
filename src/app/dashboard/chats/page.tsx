@@ -1,736 +1,595 @@
 "use client";
-import React, { useState, useRef, useEffect } from "react";
-import { Box, Typography, Avatar, InputBase, IconButton, Switch } from "@mui/material";
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Box, Typography } from "@mui/material";
+import { AnimatePresence, motion } from "framer-motion";
+import { MdChat } from "react-icons/md";
+import toast from "react-hot-toast";
+
+import { C } from "@/components/chats/theme";
+import { CHAT_MEDIA, CHATS, MESSAGES, USERS } from "@/components/chats/data";
+import type { Attachment, Chat, MediaItem, Message, MessageMap } from "@/components/chats/types";
 import {
-    MdSearch, MdMoreVert, MdAdd, MdSentimentSatisfiedAlt,
-    MdSend, MdDoneAll, MdDone, MdArrowBack, MdGroups,
-    MdCampaign, MdAccountBalance, MdShield,
-    MdClose, MdContentCopy, MdVideoCall, MdPhone,
-    MdNotificationsNone, MdStar, MdFavoriteBorder,
-    MdBlock, MdFlag, MdDeleteOutline,
-} from "react-icons/md";
-import { motion, AnimatePresence } from "framer-motion";
+    attachmentKind, clockTime, fileExt, formatBytes, isAdmin, isHtmlEmpty, stripHtml, uid,
+} from "@/components/chats/helpers";
+import ChatListPanel from "@/components/chats/ChatListPanel";
+import ChatWindow from "@/components/chats/ChatWindow";
+import InfoPanel from "@/components/chats/InfoPanel";
+import type { BubbleActions } from "@/components/chats/MessageBubble";
+import {
+    AddMembersDialog, DocumentPreviewDialog, ForwardDialog, MediaLightbox,
+    MessageInfoDialog, NewChatDialog, StarredDialog,
+} from "@/components/chats/ChatDialogs";
+import InAppNotifications, { type ChatToast } from "@/components/chats/InAppNotifications";
+import { useChatSimulator } from "@/components/chats/useChatSimulator";
+import {
+    getPermission, playPing, requestPermission, showSystemNotification,
+    type PermissionState,
+} from "@/components/chats/notifications";
 
-// ─── Theme ─────────────────────────────────────────────────────────────────
-const C = {
-    bg: "#080c18",
-    sidebar: "#0d1121",
-    sidebarBorder: "rgba(255,255,255,0.06)",
-    chatBg: "#080c18",
-    activeChat: "rgba(99,102,241,0.13)",
-    activeChatBorder: "rgba(99,102,241,0.4)",
-    hoverChat: "rgba(255,255,255,0.04)",
-    sentBubble: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-    receivedBubble: "#1a2035",
-    inputBg: "#101527",
-    dividerText: "rgba(255,255,255,0.35)",
-    secondaryText: "rgba(255,255,255,0.45)",
-    mutedText: "rgba(255,255,255,0.28)",
-    white: "#ffffff",
-    online: "#22c55e",
-    unreadBadge: "#4f46e5",
-    tabActive: "#4f46e5",
-};
-
-// ─── Types ─────────────────────────────────────────────────────────────────
-type ChatType = "personal" | "group" | "community";
-type MsgStatus = "sent" | "delivered" | "read";
-
-interface Message {
-    id: number;
-    text: string;
-    time: string;
-    isSent: boolean;
-    status?: MsgStatus;
-    isLink?: boolean;
-    linkUrl?: string;
-    date?: string; // used for date separator
-}
-
-interface Chat {
-    id: number;
-    name: string;
-    avatar?: string;
-    type: ChatType;
-    lastMessage: string;
-    time: string;
-    unreadCount: number;
-    isOnline?: boolean;
-    phone?: string;
-    email?: string;
-    media?: string[];
-    messages: Message[];
-}
-
-// ─── Dummy Data ─────────────────────────────────────────────────────────────
-const CHATS: Chat[] = [
-    {
-        id: 1,
-        name: "CCN Community",
-        type: "community",
-        lastMessage: "You have been added to this community",
-        time: "09:40 am",
-        unreadCount: 3,
-        messages: [
-            { id: 1, text: "Welcome to CCN Community! Stay updated with all announcements, news, and learning resources.", time: "09:40 am", isSent: false, date: "24th July, 2026" },
-            { id: 2, text: "You have been added to this community", time: "09:41 am", isSent: false },
-            { id: 3, text: "Check out our latest courses on Ethical Hacking and CCNA!", time: "09:45 am", isSent: false },
-            { id: 4, text: "Thank you! Excited to be here.", time: "10:00 am", isSent: true, status: "read" },
-        ],
-    },
-    {
-        id: 2,
-        name: "CCNA Batch 2025-2026",
-        type: "group",
-        lastMessage: "You have been added to this group",
-        time: "09:40 am",
-        unreadCount: 1,
-        messages: [
-            { id: 1, text: "You have been added to CCNA Batch 2025-2026 group.", time: "09:40 am", isSent: false, date: "24th July, 2026" },
-            { id: 2, text: "Today's session on Subnetting starts at 11:00 AM. Join on time!", time: "09:50 am", isSent: false },
-            { id: 3, text: "Sure, I'll join!", time: "09:52 am", isSent: true, status: "read" },
-        ],
-    },
-    {
-        id: 3,
-        name: "Account Department",
-        type: "group",
-        lastMessage: "You have been added to this group",
-        time: "09:40 am",
-        unreadCount: 0,
-        messages: [
-            { id: 1, text: "You have been added to Account Department group.", time: "09:40 am", isSent: false, date: "24th July, 2026" },
-            { id: 2, text: "Please submit your fee receipts by July 30th.", time: "09:55 am", isSent: false },
-            { id: 3, text: "Received, thank you.", time: "10:05 am", isSent: true, status: "read" },
-        ],
-    },
-    {
-        id: 4,
-        name: "Falguni Pathak",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=47",
-        lastMessage: "https://www.connectingcybernetworks.com/",
-        time: "4:00 pm",
-        unreadCount: 0,
-        isOnline: true,
-        phone: "+91 9876543210",
-        email: "falgunipathak@ccnmail.in",
-        media: [
-            "https://picsum.photos/seed/m1/80/60",
-            "https://picsum.photos/seed/m2/80/60",
-            "https://picsum.photos/seed/m3/80/60",
-            "https://picsum.photos/seed/m4/80/60",
-            "https://picsum.photos/seed/m5/80/60",
-        ],
-        messages: [
-            {
-                id: 1,
-                text: "Connecting Cyber Networks offers various Cyber Security courses, including Ethical Hacking, CCNP Security, CCIE Security, Checkpoint CCSA/CCSE, PALO ALTO PCNSA, Bug Bounty, Penetration Testing, and Cyber Forensic. A career in cybersecurity offers significant scope and possibilities, including high salary growth potential, career advancement opportunities, and regular industry updates.",
-                time: "3:55 pm", isSent: false, date: "24th July, 2026",
-            },
-            {
-                id: 2,
-                text: "Connecting Cyber Networks offers various Cyber Security courses, including Ethical Hacking, CCNP Security, CCIE Security, Checkpoint CCSA/CCSE, PALO ALTO PCNSA, Bug Bounty, Penetration Testing, and Cyber Forensic. A career in cybersecurity offers significant scope and possibilities, including high salary growth potential, career advancement opportunities, and regular industry updates.",
-                time: "4:00 pm", isSent: true, status: "read",
-            },
-            {
-                id: 3,
-                text: "www.connectingcybernetworks.com\nhttps://www.connectingcybernetworks.com/",
-                time: "4:00 pm", isSent: true, status: "read", isLink: true, linkUrl: "https://www.connectingcybernetworks.com/",
-            },
-        ],
-    },
-    {
-        id: 5,
-        name: "Kushal Korde",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=12",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        phone: "+91 9823100012",
-        email: "kushalkorde@ccnmail.in",
-        media: [],
-        messages: [],
-    },
-    {
-        id: 6,
-        name: "Reema Sharma",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=32",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        isOnline: true,
-        phone: "+91 9712233445",
-        email: "reemasharma@ccnmail.in",
-        media: ["https://picsum.photos/seed/r1/80/60", "https://picsum.photos/seed/r2/80/60"],
-        messages: [],
-    },
-    {
-        id: 7,
-        name: "Hazel Desai",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=23",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        phone: "+91 9900112233",
-        email: "hazeldesai@ccnmail.in",
-        media: [],
-        messages: [],
-    },
-    {
-        id: 8,
-        name: "Harsh Rawal",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=8",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        phone: "+91 9988776655",
-        email: "harshrawal@ccnmail.in",
-        media: [],
-        messages: [],
-    },
-    {
-        id: 9,
-        name: "Aniket Pandit",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=15",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        phone: "+91 9765432100",
-        email: "aniketpandit@ccnmail.in",
-        media: [],
-        messages: [],
-    },
-    {
-        id: 10,
-        name: "Kirti Prajapati",
-        type: "personal",
-        avatar: "https://i.pravatar.cc/150?img=44",
-        lastMessage: "No Messages",
-        time: "09:40 am",
-        unreadCount: 0,
-        phone: "+91 9654321089",
-        email: "kirtiprajapati@ccnmail.in",
-        media: [],
-        messages: [],
-    },
-];
-
-const FILTER_TABS = ["All", "Unread", "Communities"];
-
-// ─── Helper: group icon ─────────────────────────────────────────────────────
-function GroupAvatar({ type, size = 36 }: { type: ChatType; size?: number }) {
-    const Icon = type === "community" ? MdShield : type === "group" ? MdGroups : null;
-    const bg =
-        type === "community" ? "linear-gradient(135deg,#4f46e5,#7c3aed)" :
-            type === "group" ? "linear-gradient(135deg,#0ea5e9,#2563eb)" : "transparent";
-    if (!Icon) return null;
-    return (
-        <Box sx={{
-            width: size, height: size, borderRadius: "50%",
-            background: bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-            <Icon size={size * 0.52} color="#fff" />
-        </Box>
-    );
-}
-
-// ─── Helper: message status ticks ──────────────────────────────────────────
-function MsgTick({ status }: { status?: MsgStatus }) {
-    if (!status) return null;
-    if (status === "read") return <MdDoneAll size={14} color="#818cf8" />;
-    if (status === "delivered") return <MdDoneAll size={14} color={C.secondaryText} />;
-    return <MdDone size={14} color={C.secondaryText} />;
-}
-
-// ─── Main Page ──────────────────────────────────────────────────────────────
 export default function ChatsPage() {
-    const [activeTab, setActiveTab] = useState("All");
-    const [activeChatId, setActiveChatId] = useState<number>(4);
-    const [inputText, setInputText] = useState("");
     const [chats, setChats] = useState<Chat[]>(CHATS);
-    const [showSidebar, setShowSidebar] = useState(true); // mobile toggle
-    const [showContactInfo, setShowContactInfo] = useState(false);
-    const [muteNotif, setMuteNotif] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [messages, setMessages] = useState<MessageMap>(MESSAGES);
+    const [media, setMedia] = useState<Record<string, string[]>>(CHAT_MEDIA);
 
-    const activeChat = chats.find((c) => c.id === activeChatId)!;
+    const [activeChatId, setActiveChatId] = useState<string | null>("c4");
+    const [showSidebar, setShowSidebar] = useState(true);
+    const [infoOpen, setInfoOpen] = useState(false);
+    const [unreadAnchorId, setUnreadAnchorId] = useState<string | null>(null);
 
-    const filteredChats = chats.filter((c) => {
-        if (activeTab === "Unread") return c.unreadCount > 0;
-        if (activeTab === "Communities") return c.type === "community";
-        return true;
-    });
+    const [replyTo, setReplyTo] = useState<Message | null>(null);
+    const [pending, setPending] = useState<Attachment[]>([]);
+
+    const [lightbox, setLightbox] = useState<{ items: MediaItem[]; index: number }>({ items: [], index: -1 });
+    const [previewDoc, setPreviewDoc] = useState<Attachment | null>(null);
+    const [infoMessage, setInfoMessage] = useState<Message | null>(null);
+    const [forwardMessage, setForwardMessage] = useState<Message | null>(null);
+    const [newChatType, setNewChatType] = useState<"personal" | "group" | "community" | null>(null);
+    const [addMembersChat, setAddMembersChat] = useState<Chat | null>(null);
+    const [starredOpen, setStarredOpen] = useState(false);
+
+    const [permission, setPermission] = useState<PermissionState>("default");
+    const [soundOn, setSoundOn] = useState(true);
+    const [liveOn, setLiveOn] = useState(true);
+    const [toasts, setToasts] = useState<ChatToast[]>([]);
+
+    const objectUrls = useRef<string[]>([]);
+    const activeChatIdRef = useRef<string | null>(activeChatId);
+    const soundOnRef = useRef(soundOn);
+
+    useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
+    useEffect(() => { soundOnRef.current = soundOn; }, [soundOn]);
+    useEffect(() => { setPermission(getPermission()); }, []);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [activeChatId, activeChat?.messages.length]);
+        const urls = objectUrls.current;
+        return () => urls.forEach((url) => URL.revokeObjectURL(url));
+    }, []);
 
-    const handleSend = () => {
-        if (!inputText.trim()) return;
-        const now = new Date();
-        const time = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-        const newMsg: Message = { id: Date.now(), text: inputText.trim(), time, isSent: true, status: "sent" };
-        setChats((prev) =>
-            prev.map((c) =>
-                c.id === activeChatId
-                    ? { ...c, lastMessage: inputText.trim(), time, messages: [...c.messages, newMsg] }
-                    : c
-            )
-        );
-        setInputText("");
-    };
+    const activeChat = chats.find((c) => c.id === activeChatId) ?? null;
+    const activeMessages = useMemo(
+        () => (activeChatId ? messages[activeChatId] ?? [] : []),
+        [messages, activeChatId],
+    );
+    const canSend = activeChat ? !activeChat.announcementOnly || isAdmin(activeChat, "me") : false;
+    const unreadTotal = chats.reduce((n, c) => n + c.unreadCount, 0);
 
-    const handleSelectChat = (id: number) => {
-        setActiveChatId(id);
+    /* Mirror the unread count in the browser tab. */
+    useEffect(() => {
+        const base = "CCN Chat | Connecting Cyber Networks";
+        document.title = unreadTotal > 0 ? `(${unreadTotal}) ${base}` : base;
+    }, [unreadTotal]);
+
+    /* ── selection ──────────────────────────────────────────────── */
+    const handleSelect = useCallback((chatId: string) => {
+        setActiveChatId(chatId);
         setShowSidebar(false);
-        setShowContactInfo(false);
-        setChats((prev) => prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)));
+        setReplyTo(null);
+        setPending([]);
+        setChats((prev) => {
+            const chat = prev.find((c) => c.id === chatId);
+            if (chat && chat.unreadCount > 0) {
+                const list = messages[chatId] ?? [];
+                setUnreadAnchorId(list[Math.max(0, list.length - chat.unreadCount)]?.id ?? null);
+            } else {
+                setUnreadAnchorId(null);
+            }
+            return prev.map((c) => (c.id === chatId ? { ...c, unreadCount: 0 } : c));
+        });
+    }, [messages]);
+
+    /* ── notifications ──────────────────────────────────────────── */
+    const handleSelectRef = useRef(handleSelect);
+    useEffect(() => { handleSelectRef.current = handleSelect; }, [handleSelect]);
+
+    const handleTyping = useCallback((chatId: string, userId?: string) => {
+        setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, typingUserId: userId } : c)));
+    }, []);
+
+    const handleIncoming = useCallback((message: Message, chat: Chat) => {
+        setMessages((prev) => ({ ...prev, [chat.id]: [...(prev[chat.id] ?? []), message] }));
+
+        const isOpenAndVisible = activeChatIdRef.current === chat.id && !document.hidden;
+        if (isOpenAndVisible) return;
+
+        setChats((prev) => prev.map((c) => (c.id === chat.id ? { ...c, unreadCount: c.unreadCount + 1 } : c)));
+        if (chat.muted) return;
+
+        const sender = USERS[message.senderId];
+        const preview = stripHtml(message.html);
+        if (soundOnRef.current) playPing();
+
+        setToasts((prev) => [
+            {
+                id: message.id,
+                chatId: chat.id,
+                chatName: chat.name,
+                chatType: chat.type,
+                senderName: sender?.name ?? "Someone",
+                avatar: chat.avatar ?? sender?.avatar,
+                preview,
+                time: message.time,
+            },
+            ...prev,
+        ].slice(0, 4));
+
+        showSystemNotification({
+            title: chat.type === "personal" ? chat.name : `${sender?.name ?? "Someone"} · ${chat.name}`,
+            body: preview,
+            icon: chat.avatar ?? sender?.avatar,
+            tag: chat.id,
+            onClick: () => handleSelectRef.current(chat.id),
+        });
+    }, []);
+
+    useChatSimulator({ chats, enabled: liveOn, onTyping: handleTyping, onIncoming: handleIncoming });
+
+    const handleEnableNotifications = async () => {
+        const result = await requestPermission();
+        setPermission(result);
+        if (result === "granted") {
+            playPing();
+            toast.success("Desktop notifications enabled");
+        } else if (result === "denied") {
+            toast.error("Notifications are blocked in your browser settings");
+        } else if (result === "unsupported") {
+            toast.error("This browser does not support notifications");
+        }
     };
+
+    const dismissToast = useCallback((toastId: string) => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+    }, []);
+
+    const openFromToast = (chatId: string, toastId: string) => {
+        handleSelect(chatId);
+        dismissToast(toastId);
+    };
+
+    /* ── attachments ────────────────────────────────────────────── */
+    const handleAddFiles = useCallback((files: FileList | File[]) => {
+        const next: Attachment[] = Array.from(files).slice(0, 10).map((file) => {
+            const url = URL.createObjectURL(file);
+            objectUrls.current.push(url);
+            return {
+                id: uid("att"),
+                kind: attachmentKind(file),
+                name: file.name,
+                url,
+                size: formatBytes(file.size),
+                ext: fileExt(file.name),
+                mime: file.type || undefined,
+            };
+        });
+        setPending((p) => [...p, ...next]);
+    }, []);
+
+    const handleAddVoiceNote = useCallback((seconds: number, url: string) => {
+        objectUrls.current.push(url);
+        setPending((p) => [
+            ...p,
+            { id: uid("att"), kind: "audio", name: `voice-note-${p.length + 1}.webm`, url, duration: seconds },
+        ]);
+    }, []);
+
+    const handleRemoveAttachment = useCallback((id: string) => {
+        setPending((p) => p.filter((a) => a.id !== id));
+    }, []);
+
+    /* ── sending ────────────────────────────────────────────────── */
+    const handleSend = useCallback((html: string) => {
+        if (!activeChat) return;
+        if (isHtmlEmpty(html) && pending.length === 0) return;
+
+        const chatId = activeChat.id;
+        const message: Message = {
+            id: uid("m"),
+            chatId,
+            senderId: "me",
+            html: isHtmlEmpty(html) ? "" : html,
+            time: clockTime(),
+            dayKey: "Today",
+            status: "sending",
+            attachments: pending.length > 0 ? pending : undefined,
+            replyTo: replyTo
+                ? {
+                    messageId: replyTo.id,
+                    senderId: replyTo.senderId,
+                    preview: stripHtml(replyTo.html) || replyTo.attachments?.[0]?.name || "Attachment",
+                    kind: replyTo.attachments?.[0]?.kind,
+                }
+                : undefined,
+        };
+
+        setMessages((prev) => ({ ...prev, [chatId]: [...(prev[chatId] ?? []), message] }));
+
+        const images = pending.filter((a) => a.kind === "image").map((a) => a.url);
+        if (images.length > 0) setMedia((prev) => ({ ...prev, [chatId]: [...images, ...(prev[chatId] ?? [])] }));
+
+        setPending([]);
+        setReplyTo(null);
+        setUnreadAnchorId(null);
+
+        const others = activeChat.members.filter((m) => m.userId !== "me").map((m) => m.userId);
+        const bump = (status: Message["status"], patch?: Partial<Message>) =>
+            setMessages((prev) => ({
+                ...prev,
+                [chatId]: (prev[chatId] ?? []).map((m) => (m.id === message.id ? { ...m, status, ...patch } : m)),
+            }));
+
+        window.setTimeout(() => bump("sent"), 400);
+        window.setTimeout(
+            () => bump("delivered", { deliveredTo: others.map((userId) => ({ userId, at: `Today ${clockTime()}` })) }),
+            1200,
+        );
+        window.setTimeout(
+            () => bump("read", {
+                readBy: others.slice(0, Math.max(1, others.length - 1)).map((userId) => ({ userId, at: `Today ${clockTime()}` })),
+            }),
+            2600,
+        );
+    }, [activeChat, pending, replyTo]);
+
+    /* ── message actions ────────────────────────────────────────── */
+    const patchMessage = useCallback((chatId: string, messageId: string, patch: (m: Message) => Message) => {
+        setMessages((prev) => ({
+            ...prev,
+            [chatId]: (prev[chatId] ?? []).map((m) => (m.id === messageId ? patch(m) : m)),
+        }));
+    }, []);
+
+    const actions: BubbleActions = useMemo(() => ({
+        onReact: (messageId, emoji) => {
+            if (!activeChatId) return;
+            patchMessage(activeChatId, messageId, (m) => {
+                const reactions = [...(m.reactions ?? [])];
+                const idx = reactions.findIndex((r) => r.emoji === emoji);
+                if (idx === -1) return { ...m, reactions: [...reactions, { emoji, userIds: ["me"] }] };
+                const mine = reactions[idx].userIds.includes("me");
+                const userIds = mine
+                    ? reactions[idx].userIds.filter((u) => u !== "me")
+                    : [...reactions[idx].userIds, "me"];
+                if (userIds.length === 0) reactions.splice(idx, 1);
+                else reactions[idx] = { ...reactions[idx], userIds };
+                return { ...m, reactions };
+            });
+        },
+        onReply: (message) => setReplyTo(message),
+        onForward: (message) => setForwardMessage(message),
+        onStar: (messageId) => {
+            if (!activeChatId) return;
+            patchMessage(activeChatId, messageId, (m) => ({ ...m, starred: !m.starred }));
+        },
+        onPin: (messageId) => {
+            if (!activeChatId) return;
+            patchMessage(activeChatId, messageId, (m) => ({ ...m, pinned: !m.pinned }));
+        },
+        onCopy: async (message) => {
+            try {
+                await navigator.clipboard.writeText(stripHtml(message.html));
+                toast.success("Message copied");
+            } catch {
+                toast.error("Could not copy message");
+            }
+        },
+        onInfo: (message) => setInfoMessage(message),
+        onDelete: (messageId) => {
+            if (!activeChatId) return;
+            patchMessage(activeChatId, messageId, (m) => ({
+                ...m, deleted: true, html: "", attachments: undefined, reactions: [], pinned: false,
+            }));
+        },
+        onJumpTo: () => { /* replaced by ChatWindow's scroll handler */ },
+        onOpenMedia: (items, index) => setLightbox({ items, index }),
+        onOpenDocument: (att) => setPreviewDoc(att),
+    }), [activeChatId, patchMessage]);
+
+    /* ── chat actions ───────────────────────────────────────────── */
+    const patchChat = (chatId: string, patch: (c: Chat) => Chat) =>
+        setChats((prev) => prev.map((c) => (c.id === chatId ? patch(c) : c)));
+
+    const handleForward = (chatIds: string[]) => {
+        if (!forwardMessage) return;
+        setMessages((prev) => {
+            const next = { ...prev };
+            chatIds.forEach((chatId) => {
+                next[chatId] = [
+                    ...(next[chatId] ?? []),
+                    {
+                        ...forwardMessage,
+                        id: uid("m"),
+                        chatId,
+                        senderId: "me",
+                        forwarded: true,
+                        pinned: false,
+                        starred: false,
+                        reactions: [],
+                        replyTo: undefined,
+                        readBy: [],
+                        deliveredTo: [],
+                        status: "sent" as const,
+                        time: clockTime(),
+                        dayKey: "Today",
+                    },
+                ];
+            });
+            return next;
+        });
+        setForwardMessage(null);
+        toast.success(`Forwarded to ${chatIds.length} chat${chatIds.length > 1 ? "s" : ""}`);
+    };
+
+    const handleCreateChat = ({ type, name, description, memberIds }: {
+        type: "personal" | "group" | "community";
+        name: string;
+        description: string;
+        memberIds: string[];
+    }) => {
+        const existing = type === "personal"
+            ? chats.find((c) => c.type === "personal" && c.members.some((m) => m.userId === memberIds[0]))
+            : undefined;
+        if (existing) {
+            handleSelect(existing.id);
+            return;
+        }
+
+        const id = uid("c");
+        const chat: Chat = {
+            id,
+            type,
+            name,
+            avatar: type === "personal" ? USERS[memberIds[0]]?.avatar : undefined,
+            description: description || undefined,
+            createdBy: "me",
+            createdOn: "Today",
+            members: [
+                { userId: "me", role: type === "personal" ? "member" : "owner", joinedOn: "Today" },
+                ...memberIds.map((userId) => ({ userId, role: "member" as const, joinedOn: "Today" })),
+            ],
+            unreadCount: 0,
+            muted: false,
+            pinned: false,
+        };
+
+        setChats((prev) => [chat, ...prev]);
+        setMessages((prev) => ({
+            ...prev,
+            [id]: type === "personal" ? [] : [{
+                id: uid("m"),
+                chatId: id,
+                senderId: "me",
+                html: `<p>You created ${type === "group" ? "group" : "community"} <strong>${name}</strong></p>`,
+                time: clockTime(),
+                dayKey: "Today",
+                status: "read" as const,
+                system: true,
+            }],
+        }));
+        handleSelect(id);
+        toast.success(`${type === "personal" ? "Chat" : type === "group" ? "Group" : "Community"} created`);
+    };
+
+    const handleClearChat = (chatId: string) => {
+        setMessages((prev) => ({ ...prev, [chatId]: [] }));
+        toast.success("Chat cleared");
+    };
+
+    const handleExitChat = (chatId: string) => {
+        patchChat(chatId, (c) => ({ ...c, members: c.members.filter((m) => m.userId !== "me") }));
+        setInfoOpen(false);
+        toast.success("You left the chat");
+    };
+
+    const handleMessageMember = (userId: string) => {
+        const existing = chats.find((c) => c.type === "personal" && c.members.some((m) => m.userId === userId));
+        if (existing) {
+            handleSelect(existing.id);
+            setInfoOpen(false);
+        } else {
+            handleCreateChat({ type: "personal", name: USERS[userId]?.name ?? "Chat", description: "", memberIds: [userId] });
+        }
+    };
+
+    const handleJumpToStarred = (chatId: string, messageId: string) => {
+        handleSelect(chatId);
+        window.setTimeout(() => {
+            document.getElementById(`msg-${messageId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 260);
+    };
+
+    const toggleMute = (id: string) => patchChat(id, (c) => ({ ...c, muted: !c.muted }));
 
     return (
-
-        <Box sx={{
-            display: "flex", height: "100%", overflow: "hidden",
-            borderRadius: "16px", border: `1px solid ${C.sidebarBorder}`,
-            // background: C.bg,
-            minHeight: "100vh",
-        }}>
-
-            {/* ── Left: Chat List ─────────────────────────────────────────── */}
-            <Box sx={{
-                width: { xs: showSidebar ? "100%" : "0", md: "270px" },
-                minWidth: { xs: showSidebar ? "100%" : "0", md: "270px" },
-                display: { xs: showSidebar ? "flex" : "none", md: "flex" },
-                flexDirection: "column",
-                // background: C.sidebar,
-                borderRight: `1px solid ${C.sidebarBorder}`,
-                overflow: "hidden",
-                transition: "width 0.2s",
-            }}>
-                {/* Header */}
-                <Box sx={{ px: 2, pt: 1.8, pb: 1.2, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: "1rem", color: C.white }}>Chats</Typography>
-                    <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                        <MdMoreVert size={18} />
-                    </IconButton>
+        <Box sx={{ height: "100vh", p: { xs: 0, md: 1.5 }, overflow: "hidden" }}>
+            <Box
+                sx={{
+                    display: "flex", height: "100%", overflow: "hidden",
+                    borderRadius: { xs: 0, md: "14px" },
+                    border: `1px solid ${C.border}`,
+                    boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
+                }}
+            >
+                {/* Chat list */}
+                <Box
+                    sx={{
+                        width: { xs: showSidebar ? "100%" : 0, md: 296 },
+                        minWidth: { xs: showSidebar ? "100%" : 0, md: 296 },
+                        display: { xs: showSidebar ? "flex" : "none", md: "flex" },
+                        flexDirection: "column",
+                        borderRight: `1px solid ${C.border}`,
+                        overflow: "hidden",
+                    }}
+                >
+                    <ChatListPanel
+                        chats={chats}
+                        users={USERS}
+                        messages={messages}
+                        activeChatId={activeChatId}
+                        onSelect={handleSelect}
+                        onTogglePin={(id) => patchChat(id, (c) => ({ ...c, pinned: !c.pinned }))}
+                        onToggleMute={toggleMute}
+                        onMarkUnread={(id) => patchChat(id, (c) => ({ ...c, unreadCount: Math.max(1, c.unreadCount) }))}
+                        onDeleteChat={handleClearChat}
+                        onNewChat={(type) => setNewChatType(type)}
+                        onOpenStarred={() => setStarredOpen(true)}
+                        permission={permission}
+                        soundOn={soundOn}
+                        liveOn={liveOn}
+                        onEnableNotifications={() => void handleEnableNotifications()}
+                        onToggleSound={() => setSoundOn((v) => !v)}
+                        onToggleLive={() => setLiveOn((v) => !v)}
+                    />
                 </Box>
 
-                {/* Search */}
-                <Box sx={{ px: 1.5, pb: 1 }}>
-                    <Box sx={{
-                        display: "flex", alignItems: "center", gap: 1,
-                        background: C.inputBg, borderRadius: "10px",
-                        px: 1.5, py: 0.6, border: `1px solid ${C.sidebarBorder}`,
-                    }}>
-                        <MdSearch size={16} color={C.secondaryText} />
-                        <InputBase
-                            placeholder="Search or start a new chat"
-                            sx={{ fontSize: "0.75rem", color: C.white, flex: 1, "& ::placeholder": { color: C.secondaryText } }}
+                {/* Conversation */}
+                {activeChat ? (
+                    <Box sx={{ flex: 1, minWidth: 0, display: { xs: showSidebar ? "none" : "flex", md: "flex" } }}>
+                        <ChatWindow
+                            chat={activeChat}
+                            users={USERS}
+                            messages={activeMessages}
+                            canSend={canSend}
+                            infoOpen={infoOpen}
+                            unreadAnchorId={unreadAnchorId}
+                            replyTo={replyTo}
+                            attachments={pending}
+                            actions={actions}
+                            onBack={() => setShowSidebar(true)}
+                            onToggleInfo={() => setInfoOpen((v) => !v)}
+                            onToggleMute={toggleMute}
+                            onDeleteChat={handleClearChat}
+                            onOpenStarred={() => setStarredOpen(true)}
+                            onCancelReply={() => setReplyTo(null)}
+                            onAddFiles={handleAddFiles}
+                            onAddVoiceNote={handleAddVoiceNote}
+                            onRemoveAttachment={handleRemoveAttachment}
+                            onSend={handleSend}
                         />
                     </Box>
-                </Box>
-
-                {/* Tabs */}
-                <Box sx={{ display: "flex", gap: 0.5, px: 1.5, pb: 1 }}>
-                    {FILTER_TABS.map((tab) => (
-                        <Box
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            sx={{
-                                px: 1.2, py: 0.35, borderRadius: "20px", cursor: "pointer",
-                                fontSize: "0.7rem", fontWeight: 600,
-                                background: activeTab === tab ? C.tabActive : "rgba(255,255,255,0.07)",
-                                color: activeTab === tab ? C.white : C.secondaryText,
-                                transition: "all 0.2s",
-                                "&:hover": { background: activeTab === tab ? C.tabActive : "rgba(255,255,255,0.1)" },
-                            }}
-                        >{tab}</Box>
-                    ))}
-                </Box>
-
-                {/* Chat Items */}
-                <Box sx={{ flex: 1, overflowY: "auto", "&::-webkit-scrollbar": { width: "3px" }, "&::-webkit-scrollbar-thumb": { background: "rgba(255,255,255,0.1)", borderRadius: "4px" } }}>
-                    {filteredChats.map((chat) => (
-                        <motion.div key={chat.id} whileHover={{ x: 2 }} transition={{ duration: 0.15 }}>
-                            <Box
-                                onClick={() => handleSelectChat(chat.id)}
-                                sx={{
-                                    display: "flex", alignItems: "center", gap: 1.2,
-                                    px: 1.5, py: 1,
-                                    cursor: "pointer",
-                                    background: activeChatId === chat.id ? C.activeChat : "transparent",
-                                    borderLeft: activeChatId === chat.id ? `3px solid ${C.activeChatBorder}` : "3px solid transparent",
-                                    "&:hover": { background: activeChatId === chat.id ? C.activeChat : C.hoverChat },
-                                    transition: "background 0.15s",
-                                }}
-                            >
-                                {/* Avatar */}
-                                <Box sx={{ position: "relative", flexShrink: 0 }}>
-                                    {chat.type !== "personal" ? (
-                                        <GroupAvatar type={chat.type} size={38} />
-                                    ) : (
-                                        <Avatar src={chat.avatar} sx={{ width: 38, height: 38, fontSize: "0.85rem" }}>
-                                            {chat.name[0]}
-                                        </Avatar>
-                                    )}
-                                    {chat.isOnline && (
-                                        <Box sx={{
-                                            position: "absolute", bottom: 1, right: 1,
-                                            width: 9, height: 9, borderRadius: "50%",
-                                            background: C.online, border: `2px solid ${C.sidebar}`,
-                                        }} />
-                                    )}
-                                </Box>
-
-                                {/* Info */}
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.2 }}>
-                                        <Typography sx={{ fontWeight: 600, fontSize: "0.78rem", color: C.white, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "140px" }}>
-                                            {chat.name}
-                                        </Typography>
-                                        <Typography sx={{ fontSize: "0.65rem", color: chat.unreadCount > 0 ? "#818cf8" : C.mutedText, flexShrink: 0, ml: 0.5 }}>
-                                            {chat.time}
-                                        </Typography>
-                                    </Box>
-                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                        <Typography sx={{ fontSize: "0.7rem", color: C.secondaryText, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "150px" }}>
-                                            {chat.lastMessage}
-                                        </Typography>
-                                        {chat.unreadCount > 0 && (
-                                            <Box sx={{
-                                                minWidth: 18, height: 18, borderRadius: "9px",
-                                                background: C.unreadBadge, display: "flex", alignItems: "center", justifyContent: "center",
-                                                fontSize: "0.6rem", fontWeight: 700, color: C.white, px: 0.5, flexShrink: 0, ml: 0.5,
-                                            }}>
-                                                {chat.unreadCount}
-                                            </Box>
-                                        )}
-                                    </Box>
-                                </Box>
-                            </Box>
-                        </motion.div>
-                    ))}
-                </Box>
-            </Box>
-
-            {/* ── Right: Active Chat ──────────────────────────────────────── */}
-            <Box sx={{
-                flex: 1, display: { xs: !showSidebar ? "flex" : "none", md: "flex" },
-                flexDirection: "column", overflow: "hidden",
-                // background: C.chatBg,
-                backgroundImage: "radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
-            }}>
-                {activeChat ? (
-                    <>
-                        {/* Chat Header */}
-                        <Box sx={{
-                            display: "flex", alignItems: "center", gap: 1.2,
-                            px: 2, py: 1.2,
-                            borderBottom: `1px solid ${C.sidebarBorder}`,
-                        }}>
-                            {/* Mobile back button */}
-                            <IconButton size="small" onClick={() => setShowSidebar(true)} sx={{ display: { md: "none" }, color: C.secondaryText, mr: 0.5 }}>
-                                <MdArrowBack size={18} />
-                            </IconButton>
-
-                            {/* Clickable profile area */}
-                            <Box
-                                onClick={() => setShowContactInfo((v) => !v)}
-                                sx={{ display: "flex", alignItems: "center", gap: 1.2, flex: 1, cursor: "pointer", borderRadius: "10px", py: 0.3, px: 0.5, "&:hover": { background: "rgba(255,255,255,0.04)" }, transition: "background 0.15s" }}
-                            >
-                                <Box sx={{ position: "relative" }}>
-                                    {activeChat.type !== "personal" ? (
-                                        <GroupAvatar type={activeChat.type} size={36} />
-                                    ) : (
-                                        <Avatar src={activeChat.avatar} sx={{ width: 36, height: 36, fontSize: "0.8rem" }}>
-                                            {activeChat.name[0]}
-                                        </Avatar>
-                                    )}
-                                    {activeChat.isOnline && (
-                                        <Box sx={{
-                                            position: "absolute", bottom: 1, right: 1,
-                                            width: 8, height: 8, borderRadius: "50%",
-                                            background: C.online, border: `2px solid ${C.sidebar}`,
-                                        }} />
-                                    )}
-                                </Box>
-                                <Box>
-                                    <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", color: C.white }}>
-                                        {activeChat.name}
-                                    </Typography>
-                                    <Typography sx={{ fontSize: "0.65rem", color: activeChat.isOnline ? C.online : C.secondaryText }}>
-                                        {activeChat.isOnline ? "online" : activeChat.type !== "personal" ? `${activeChat.messages.length} members` : "offline"}
-                                    </Typography>
-                                </Box>
-                            </Box>
-
-                            <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                <MdSearch size={18} />
-                            </IconButton>
-                            <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                <MdMoreVert size={18} />
-                            </IconButton>
-                        </Box>
-
-                        {/* Messages */}
-                        <Box sx={{ flex: 1, maxHeight: "calc(100vh - 120px)", overflowY: "auto", px: { xs: 1.5, md: 2.5 }, py: 1.5, display: "flex", flexDirection: "column", gap: 0.5, "&::-webkit-scrollbar": { width: "3px" }, "&::-webkit-scrollbar-thumb": { background: "rgba(255,255,255,0.1)", borderRadius: "4px" } }}>
-                            {activeChat.messages.length === 0 ? (
-                                <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <Typography sx={{ fontSize: "0.75rem", color: C.secondaryText }}>No messages yet. Say hi! 👋</Typography>
-                                </Box>
-                            ) : (
-                                activeChat.messages.map((msg, idx) => (
-                                    <React.Fragment key={msg.id}>
-                                        {/* Date separator */}
-                                        {msg.date && (
-                                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", my: 1 }}>
-                                                <Box sx={{ px: 1.5, py: 0.3, borderRadius: "10px", background: "rgba(255,255,255,0.07)", border: `1px solid rgba(255,255,255,0.08)` }}>
-                                                    <Typography sx={{ fontSize: "0.65rem", color: C.dividerText, fontWeight: 500 }}>{msg.date}</Typography>
-                                                </Box>
-                                            </Box>
-                                        )}
-
-                                        {/* Message Bubble */}
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 6 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            transition={{ duration: 0.18 }}
-                                            style={{ display: "flex", justifyContent: msg.isSent ? "flex-end" : "flex-start" }}
-                                        >
-                                            <Box sx={{
-                                                maxWidth: { xs: "85%", md: "60%" },
-                                                px: 1.5, py: 1,
-                                                borderRadius: msg.isSent ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
-                                                background: msg.isSent ? C.sentBubble : C.receivedBubble,
-                                                boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-                                            }}>
-                                                {msg.isLink ? (
-                                                    <Box>
-                                                        <Box sx={{ background: "rgba(0,0,0,0.25)", borderRadius: "8px", p: 1, mb: 0.5 }}>
-                                                            <Typography sx={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.55)", mb: 0.3 }}>
-                                                                {msg.linkUrl}
-                                                            </Typography>
-                                                            <Typography
-                                                                component="a"
-                                                                href={msg.linkUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                sx={{ fontSize: "0.7rem", color: "#93c5fd", wordBreak: "break-all", textDecoration: "underline", display: "block" }}
-                                                            >
-                                                                {msg.linkUrl}
-                                                            </Typography>
-                                                        </Box>
-                                                    </Box>
-                                                ) : (
-                                                    <Typography sx={{ fontSize: "0.75rem", color: C.white, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                                                        {msg.text}
-                                                    </Typography>
-                                                )}
-                                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.4, mt: 0.4 }}>
-                                                    <Typography sx={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)" }}>{msg.time}</Typography>
-                                                    {msg.isSent && <MsgTick status={msg.status} />}
-                                                </Box>
-                                            </Box>
-                                        </motion.div>
-                                    </React.Fragment>
-                                ))
-                            )}
-                            <div ref={messagesEndRef} />
-                        </Box>
-
-                        {/* Input Bar */}
-                        <Box sx={{
-                            display: "flex", alignItems: "center", gap: 1,
-                            px: 1.5, py: 1,
-                            // background: C.sidebar,
-                            borderTop: `1px solid ${C.sidebarBorder}`,
-                        }}>
-                            <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                <MdAdd size={20} />
-                            </IconButton>
-                            <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                <MdSentimentSatisfiedAlt size={20} />
-                            </IconButton>
-
-                            <Box sx={{
-                                flex: 1, display: "flex", alignItems: "center", borderRadius: "24px",
-                                px: 1.8, py: 0.6,
-                                border: `1px solid ${C.sidebarBorder}`,
-                            }}>
-                                <InputBase
-                                    value={inputText}
-                                    onChange={(e) => setInputText(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                                    placeholder="Type a message"
-                                    multiline
-                                    maxRows={3}
-                                    sx={{ flex: 1, fontSize: "0.78rem", color: C.white, "& ::placeholder": { color: C.secondaryText } }}
-                                />
-                            </Box>
-
-                            <IconButton
-                                onClick={handleSend}
-                                size="small"
-                                sx={{
-                                    width: 36, height: 36, borderRadius: "50%",
-                                    background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-                                    color: C.white, flexShrink: 0,
-                                    "&:hover": { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", transform: "scale(1.05)" },
-                                    transition: "all 0.15s",
-                                }}
-                            >
-                                <MdSend size={16} />
-                            </IconButton>
-                        </Box>
-                    </>
                 ) : (
-                    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Typography sx={{ fontSize: "0.8rem", color: C.secondaryText }}>Select a chat to start messaging</Typography>
+                    <Box
+                        sx={{
+                            flex: 1, display: { xs: showSidebar ? "none" : "flex", md: "flex" },
+                            flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                        }}
+                    >
+                        <MdChat size={44} color={C.textMuted} />
+                        <Typography sx={{ fontSize: "0.85rem", color: C.text, fontWeight: 600 }}>CCN Chat</Typography>
+                        <Typography sx={{ fontSize: "0.74rem", color: C.textMuted }}>
+                            Select a conversation to start messaging
+                        </Typography>
                     </Box>
                 )}
+
+                {/* Info panel */}
+                <AnimatePresence>
+                    {infoOpen && activeChat && (
+                        <motion.div
+                            key={`info-${activeChat.id}`}
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: 296, opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: "easeInOut" }}
+                            style={{ overflow: "hidden", flexShrink: 0 }}
+                        >
+                            <Box sx={{ width: 296, height: "100%" }}>
+                                <InfoPanel
+                                    chat={activeChat}
+                                    chats={chats}
+                                    users={USERS}
+                                    messages={activeMessages}
+                                    media={media[activeChat.id] ?? []}
+                                    onClose={() => setInfoOpen(false)}
+                                    onToggleMute={toggleMute}
+                                    onToggleFavorite={(id) => patchChat(id, (c) => ({ ...c, favorite: !c.favorite }))}
+                                    onDeleteChat={handleClearChat}
+                                    onOpenChat={handleSelect}
+                                    onOpenMedia={(items, index) => setLightbox({ items, index })}
+                                    onOpenDocument={(att) => setPreviewDoc(att)}
+                                    onPromoteMember={(chatId, userId) =>
+                                        patchChat(chatId, (c) => ({
+                                            ...c,
+                                            members: c.members.map((m) =>
+                                                m.userId === userId ? { ...m, role: m.role === "member" ? "admin" : "member" } : m,
+                                            ),
+                                        }))
+                                    }
+                                    onRemoveMember={(chatId, userId) =>
+                                        patchChat(chatId, (c) => ({ ...c, members: c.members.filter((m) => m.userId !== userId) }))
+                                    }
+                                    onMessageMember={handleMessageMember}
+                                    onAddMembers={(chatId) => setAddMembersChat(chats.find((c) => c.id === chatId) ?? null)}
+                                    onExitChat={handleExitChat}
+                                />
+                            </Box>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </Box>
 
-            {/* ── Right: Contact Info Panel ─────────────────────────── */}
-            <AnimatePresence>
-                {showContactInfo && activeChat && (
-                    <motion.div
-                        key="contact-info"
-                        initial={{ width: 0, opacity: 0 }}
-                        animate={{ width: 230, opacity: 1 }}
-                        exit={{ width: 0, opacity: 0 }}
-                        transition={{ duration: 0.22, ease: "easeInOut" }}
-                        style={{ overflow: "hidden", flexShrink: 0 }}
-                    >
-                        <Box sx={{
-                            width: 230, height: "100%", display: "flex", flexDirection: "column",
-                            borderLeft: `1px solid ${C.sidebarBorder}`,
-                            overflowY: "auto",
-                            "&::-webkit-scrollbar": { width: "3px" },
-                            "&::-webkit-scrollbar-thumb": { background: "rgba(255,255,255,0.1)", borderRadius: "4px" },
-                        }}>
-                            {/* Header */}
-                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 1.8, py: 1.3, borderBottom: `1px solid ${C.sidebarBorder}` }}>
-                                <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", color: C.white }}>Contact Info</Typography>
-                                <IconButton size="small" onClick={() => setShowContactInfo(false)} sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                    <MdClose size={16} />
-                                </IconButton>
-                            </Box>
-
-                            {/* Avatar + Name */}
-                            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", pt: 2.5, pb: 1.5, gap: 0.8 }}>
-                                <Box sx={{ position: "relative" }}>
-                                    {activeChat.type !== "personal" ? (
-                                        <GroupAvatar type={activeChat.type} size={72} />
-                                    ) : (
-                                        <Avatar src={activeChat.avatar} sx={{ width: 72, height: 72, fontSize: "1.4rem", border: `2px solid rgba(99,102,241,0.4)` }}>
-                                            {activeChat.name[0]}
-                                        </Avatar>
-                                    )}
-                                    {activeChat.isOnline && (
-                                        <Box sx={{ position: "absolute", bottom: 3, right: 3, width: 12, height: 12, borderRadius: "50%", background: C.online, border: `2px solid ${C.sidebar}` }} />
-                                    )}
-                                </Box>
-                                <Typography sx={{ fontWeight: 700, fontSize: "0.85rem", color: C.white }}>{activeChat.name}</Typography>
-                            </Box>
-
-                            {/* Phone & Email */}
-                            {activeChat.phone && (
-                                <Box sx={{ px: 1.8, py: 0.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                                        <MdPhone size={14} color={C.secondaryText} />
-                                        <Typography sx={{ fontSize: "0.72rem", color: C.white }}>{activeChat.phone}</Typography>
-                                    </Box>
-                                    <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                        <MdContentCopy size={13} />
-                                    </IconButton>
-                                </Box>
-                            )}
-                            {activeChat.email && (
-                                <Box sx={{ px: 1.8, py: 0.5, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                    <Typography sx={{ fontSize: "0.7rem", color: C.white, wordBreak: "break-all" }}>{activeChat.email}</Typography>
-                                    <IconButton size="small" sx={{ color: C.secondaryText, "&:hover": { color: C.white } }}>
-                                        <MdContentCopy size={13} />
-                                    </IconButton>
-                                </Box>
-                            )}
-
-                            {/* Call Buttons */}
-                            {activeChat.type === "personal" && (
-                                <Box sx={{ display: "flex", gap: 1, px: 1.8, py: 1.2 }}>
-                                    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, py: 0.6, borderRadius: "8px", border: `1px solid ${C.sidebarBorder}`, cursor: "pointer", "&:hover": { background: "rgba(255,255,255,0.05)" } }}>
-                                        <MdVideoCall size={15} color={C.secondaryText} />
-                                        <Typography sx={{ fontSize: "0.68rem", color: C.secondaryText }}>Video Call</Typography>
-                                    </Box>
-                                    <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 0.5, py: 0.6, borderRadius: "8px", border: `1px solid ${C.sidebarBorder}`, cursor: "pointer", "&:hover": { background: "rgba(255,255,255,0.05)" } }}>
-                                        <MdPhone size={14} color={C.secondaryText} />
-                                        <Typography sx={{ fontSize: "0.68rem", color: C.secondaryText }}>Phone Call</Typography>
-                                    </Box>
-                                </Box>
-                            )}
-
-                            {/* Media */}
-                            {activeChat.media && activeChat.media.length > 0 && (
-                                <Box sx={{ px: 1.8, pb: 1.2 }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                                        <Typography sx={{ fontSize: "0.7rem", fontWeight: 700, color: C.white, letterSpacing: "0.05em", textTransform: "uppercase" }}>Media</Typography>
-                                        <Box sx={{ px: 0.8, py: 0.15, borderRadius: "8px", background: C.unreadBadge }}>
-                                            <Typography sx={{ fontSize: "0.6rem", color: C.white, fontWeight: 700 }}>{activeChat.media.length}</Typography>
-                                        </Box>
-                                    </Box>
-                                    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0.5 }}>
-                                        {activeChat.media.slice(0, 3).map((src, i) => (
-                                            <Box key={i} component="img" src={src} sx={{ width: "100%", aspectRatio: "4/3", borderRadius: "6px", objectFit: "cover", border: `1px solid ${C.sidebarBorder}` }} />
-                                        ))}
-                                    </Box>
-                                </Box>
-                            )}
-
-                            <Box sx={{ borderTop: `1px solid ${C.sidebarBorder}`, mt: 0.5 }} />
-
-                            {/* Action rows */}
-                            {[
-                                { icon: <MdNotificationsNone size={16} />, label: "Mute Notification", toggle: true },
-                                { icon: <MdStar size={16} />, label: "Starred Messages" },
-                                { icon: <MdFavoriteBorder size={16} />, label: "Add to Favorites" },
-                            ].map((item) => (
-                                <Box key={item.label} sx={{ display: "flex", alignItems: "center", px: 1.8, py: 0.9, cursor: "pointer", "&:hover": { background: C.hoverChat }, transition: "background 0.15s" }}>
-                                    <Box sx={{ color: C.secondaryText, mr: 1.2, display: "flex" }}>{item.icon}</Box>
-                                    <Typography sx={{ flex: 1, fontSize: "0.73rem", color: C.white }}>{item.label}</Typography>
-                                    {item.toggle && (
-                                        <Switch
-                                            checked={muteNotif}
-                                            onChange={(e) => setMuteNotif(e.target.checked)}
-                                            size="small"
-                                            sx={{ "& .MuiSwitch-thumb": { width: 12, height: 12 }, "& .MuiSwitch-track": { borderRadius: 6 } }}
-                                        />
-                                    )}
-                                </Box>
-                            ))}
-
-                            <Box sx={{ borderTop: `1px solid ${C.sidebarBorder}`, mt: 0.5 }} />
-
-                            {/* Danger rows */}
-                            {[
-                                { icon: <MdBlock size={16} />, label: `Block ${activeChat.name}` },
-                                { icon: <MdFlag size={16} />, label: `Report ${activeChat.name}` },
-                                { icon: <MdDeleteOutline size={16} />, label: "Delete Chats" },
-                            ].map((item) => (
-                                <Box key={item.label} sx={{ display: "flex", alignItems: "center", px: 1.8, py: 0.9, cursor: "pointer", "&:hover": { background: "rgba(239,68,68,0.07)" }, transition: "background 0.15s" }}>
-                                    <Box sx={{ color: "#ef4444", mr: 1.2, display: "flex" }}>{item.icon}</Box>
-                                    <Typography sx={{ fontSize: "0.73rem", color: "#ef4444" }}>{item.label}</Typography>
-                                </Box>
-                            ))}
-                        </Box>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Overlays */}
+            <InAppNotifications toasts={toasts} onOpen={openFromToast} onDismiss={dismissToast} />
+            <MediaLightbox
+                items={lightbox.items}
+                index={lightbox.index}
+                onClose={() => setLightbox({ items: [], index: -1 })}
+                onNavigate={(index) => setLightbox((l) => ({ ...l, index }))}
+            />
+            <MessageInfoDialog message={infoMessage} users={USERS} onClose={() => setInfoMessage(null)} />
+            <DocumentPreviewDialog attachment={previewDoc} onClose={() => setPreviewDoc(null)} />
+            <ForwardDialog
+                open={Boolean(forwardMessage)}
+                chats={chats}
+                users={USERS}
+                onClose={() => setForwardMessage(null)}
+                onForward={handleForward}
+            />
+            <NewChatDialog
+                type={newChatType}
+                users={USERS}
+                existingChats={chats}
+                onClose={() => setNewChatType(null)}
+                onCreate={handleCreateChat}
+            />
+            <AddMembersDialog
+                chat={addMembersChat}
+                users={USERS}
+                onClose={() => setAddMembersChat(null)}
+                onAdd={(chatId, userIds) =>
+                    patchChat(chatId, (c) => ({
+                        ...c,
+                        members: [...c.members, ...userIds.map((userId) => ({ userId, role: "member" as const, joinedOn: "Today" }))],
+                    }))
+                }
+            />
+            <StarredDialog
+                open={starredOpen}
+                chats={chats}
+                messages={messages}
+                users={USERS}
+                onClose={() => setStarredOpen(false)}
+                onJump={handleJumpToStarred}
+            />
         </Box>
     );
 }

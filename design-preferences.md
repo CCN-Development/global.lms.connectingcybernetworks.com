@@ -16,13 +16,12 @@
 | Purpose | Hex |
 |---------|-----|
 | **Primary / CTA** | `#009DFF` (hover: `#007fd4`) |
-| Violet / accent | `#7c3aed` (hover: `#6d28d9`) |
 | Sky / Info | `#0284c7` (dark: `#0369a1`) |
 | Cyan | `#06b6d4` |
-| Emerald / Success | `#10b981` (dark: `#059669`) |
-| Orange / Warning | `#f97316` (dark: `#ea6e0b`) |
+| Emerald | `#10b981` (dark: `#059669`) |
+| Orange | `#f97316` (dark: `#ea6e0b`) |
 | Amber | `#f59e0b` (dark: `#d97706`) |
-| Rose / Error | `#f43f5e` |
+| Rose | `#f43f5e` |
 
 
 Always prefer MUI design first
