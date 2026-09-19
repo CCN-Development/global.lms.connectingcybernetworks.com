@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Box, Typography } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import { MdChat } from "react-icons/md";
@@ -21,13 +22,16 @@ import {
     MessageInfoDialog, NewChatDialog, StarredDialog,
 } from "@/components/chats/ChatDialogs";
 import InAppNotifications, { type ChatToast } from "@/components/chats/InAppNotifications";
+import CallOverlay, { type CallSummary, type CallTarget } from "@/components/chats/CallOverlay";
 import { useChatSimulator } from "@/components/chats/useChatSimulator";
 import {
     getPermission, playPing, requestPermission, showSystemNotification,
     type PermissionState,
 } from "@/components/chats/notifications";
+import { createRoomId, meetInviteHtml, meetPath, meetUrl } from "@/components/meet/meetHelpers";
 
 export default function ChatsPage() {
+    const router = useRouter();
     const [chats, setChats] = useState<Chat[]>(CHATS);
     const [messages, setMessages] = useState<MessageMap>(MESSAGES);
     const [media, setMedia] = useState<Record<string, string[]>>(CHAT_MEDIA);
@@ -47,6 +51,7 @@ export default function ChatsPage() {
     const [newChatType, setNewChatType] = useState<"personal" | "group" | "community" | null>(null);
     const [addMembersChat, setAddMembersChat] = useState<Chat | null>(null);
     const [starredOpen, setStarredOpen] = useState(false);
+    const [callTarget, setCallTarget] = useState<CallTarget | null>(null);
 
     const [permission, setPermission] = useState<PermissionState>("default");
     const [soundOn, setSoundOn] = useState(true);
@@ -419,8 +424,68 @@ export default function ChatsPage() {
 
     const toggleMute = (id: string) => patchChat(id, (c) => ({ ...c, muted: !c.muted }));
 
+    /* ── calls & meetings ───────────────────────────────────────── */
+    const appendSystemMessage = (chatId: string, html: string) => {
+        setMessages((prev) => ({
+            ...prev,
+            [chatId]: [...(prev[chatId] ?? []), {
+                id: uid("m"),
+                chatId,
+                senderId: "me",
+                html,
+                time: clockTime(),
+                dayKey: "Today",
+                status: "read" as const,
+                system: true,
+            }],
+        }));
+    };
+
+    const handleStartCall = (chatId: string) => {
+        const chat = chats.find((c) => c.id === chatId);
+        if (!chat || chat.type !== "personal") return;
+        const other = chat.members.find((m) => m.userId !== "me");
+        setCallTarget({
+            chatId,
+            name: chat.name,
+            avatar: chat.avatar ?? (other ? USERS[other.userId]?.avatar : undefined),
+            type: chat.type,
+            subtitle: other ? USERS[other.userId]?.designation : undefined,
+        });
+    };
+
+    const handleCallEnded = (summary: CallSummary) => {
+        setCallTarget(null);
+        const label = summary.outcome === "completed" && summary.seconds > 0
+            ? `Voice call ended · ${Math.floor(summary.seconds / 60)}m ${summary.seconds % 60}s`
+            : "Voice call cancelled";
+        appendSystemMessage(summary.chatId, `<p>${label}</p>`);
+    };
+
+    const handleStartMeeting = (chatId: string) => {
+        const chat = chats.find((c) => c.id === chatId);
+        if (!chat) return;
+
+        const roomId = createRoomId();
+        const invitees = chat.members.filter((m) => m.userId !== "me").map((m) => m.userId);
+
+        appendSystemMessage(
+            chatId,
+            meetInviteHtml({
+                hostName: "You",
+                chatName: chat.name,
+                url: meetUrl(roomId),
+                code: roomId,
+            }),
+        );
+
+        toast.success("CCN Meet started — invite shared in the chat");
+        const invite = invitees.slice(0, 6).join(",");
+        router.push(`${meetPath(roomId)}?from=chat${invite ? `&invite=${invite}` : ""}`);
+    };
+
     return (
-        <Box sx={{ height: "100vh", p: { xs: 0, md: 1.5 }, overflow: "hidden" }}>
+        <Box sx={{ height: "100vh", p: { xs: 0, md: 0.5}, overflow: "hidden" }}>
             <Box
                 sx={{
                     display: "flex", height: "100%", overflow: "hidden",
@@ -484,6 +549,8 @@ export default function ChatsPage() {
                             onAddVoiceNote={handleAddVoiceNote}
                             onRemoveAttachment={handleRemoveAttachment}
                             onSend={handleSend}
+                            onStartCall={handleStartCall}
+                            onStartMeeting={handleStartMeeting}
                         />
                     </Box>
                 ) : (
@@ -540,6 +607,8 @@ export default function ChatsPage() {
                                     onMessageMember={handleMessageMember}
                                     onAddMembers={(chatId) => setAddMembersChat(chats.find((c) => c.id === chatId) ?? null)}
                                     onExitChat={handleExitChat}
+                                    onStartCall={handleStartCall}
+                                    onStartMeeting={handleStartMeeting}
                                 />
                             </Box>
                         </motion.div>
@@ -549,6 +618,11 @@ export default function ChatsPage() {
 
             {/* Overlays */}
             <InAppNotifications toasts={toasts} onOpen={openFromToast} onDismiss={dismissToast} />
+            <CallOverlay
+                target={callTarget}
+                onClose={handleCallEnded}
+                onSwitchToVideo={(chatId) => handleStartMeeting(chatId)}
+            />
             <MediaLightbox
                 items={lightbox.items}
                 index={lightbox.index}

@@ -35,6 +35,8 @@ type Props = {
     onAddVoiceNote: (seconds: number, url: string) => void;
     onRemoveAttachment: (id: string) => void;
     onSend: (html: string) => void;
+    onStartCall: (chatId: string) => void;
+    onStartMeeting: (chatId: string) => void;
 };
 
 function TypingBubble({ name }: { name?: string }) {
@@ -65,6 +67,7 @@ export default function ChatWindow({
     chat, users, messages, canSend, infoOpen, unreadAnchorId, replyTo, attachments, actions,
     onBack, onToggleInfo, onToggleMute, onDeleteChat, onOpenStarred,
     onCancelReply, onAddFiles, onAddVoiceNote, onRemoveAttachment, onSend,
+    onStartCall, onStartMeeting,
 }: Props) {
     const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -173,15 +176,25 @@ export default function ChatWindow({
                     </Box>
                 </Box>
 
+                <Tooltip title={chat.type === "personal" ? "Start CCN Meet video call" : "Start CCN Meet for this group"} arrow>
+                    <IconButton
+                        size="small"
+                        onClick={() => onStartMeeting(chat.id)}
+                        sx={{ color: C.textSoft, "&:hover": { color: C.text } }}
+                    >
+                        <MdVideoCall size={19} />
+                    </IconButton>
+                </Tooltip>
                 {chat.type === "personal" && (
-                    <>
-                        <Tooltip title="Video call" arrow>
-                            <IconButton size="small" sx={{ color: C.textSoft, "&:hover": { color: C.text } }}><MdVideoCall size={19} /></IconButton>
-                        </Tooltip>
-                        <Tooltip title="Voice call" arrow>
-                            <IconButton size="small" sx={{ color: C.textSoft, "&:hover": { color: C.text } }}><MdPhone size={17} /></IconButton>
-                        </Tooltip>
-                    </>
+                    <Tooltip title="Voice call" arrow>
+                        <IconButton
+                            size="small"
+                            onClick={() => onStartCall(chat.id)}
+                            sx={{ color: C.textSoft, "&:hover": { color: C.text } }}
+                        >
+                            <MdPhone size={17} />
+                        </IconButton>
+                    </Tooltip>
                 )}
                 <Tooltip title="Search in chat" arrow>
                     <IconButton

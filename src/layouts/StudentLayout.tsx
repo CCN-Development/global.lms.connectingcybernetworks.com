@@ -16,6 +16,7 @@ import {
     MdOutlineCampaign,
     MdOutlineShield,
     MdOutlineSettings,
+    MdOutlineScience,
     MdChevronLeft,
     MdChevronRight,
     MdMenu,
@@ -31,10 +32,11 @@ interface StudentLayoutProps {
 // ─── Nav Items ─────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
     { label: "Home", icon: MdOutlineHome, href: "/dashboard/student/overview" },
-    // { label: "My Courses", icon: MdOutlineMenuBook, href: "/dashboard/student/my-courses" },
+    { label: "My Courses", icon: MdOutlineMenuBook, href: "/dashboard/student/my-courses" },
     { label: "My Batches", icon: MdOutlineBook, href: "/dashboard/student/batches" },
     { label: "Attendance", icon: MdOutlineCalendarToday, href: "/dashboard/student/attendance" },
-    // { label: "Exam", icon: MdOutlineAssignment, href: "/dashboard/student/exams" },
+    { label: "Practice Labs", icon: MdOutlineScience, href: "/dashboard/student/practice-labs" },
+    { label: "Exam", icon: MdOutlineAssignment, href: "/dashboard/student/exams" },
     // { label: "Placement", icon: MdOutlineBusinessCenter, href: "/dashboard/student/placement" },
     { label: "My Requests", icon: MdOutlineSend, href: "/dashboard/student/requests" },
     { label: "Chats", icon: MdOutlineChat, href: "/dashboard/chats" },

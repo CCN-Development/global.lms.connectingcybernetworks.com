@@ -36,6 +36,8 @@ type Props = {
     onMessageMember: (userId: string) => void;
     onAddMembers: (chatId: string) => void;
     onExitChat: (chatId: string) => void;
+    onStartCall: (chatId: string) => void;
+    onStartMeeting: (chatId: string) => void;
 };
 
 const RoleChip = ({ role }: { role: "owner" | "admin" | "member" }) => {
@@ -89,7 +91,7 @@ function ActionRow({
 export default function InfoPanel({
     chat, chats, users, messages, media, onClose, onToggleMute, onToggleFavorite,
     onDeleteChat, onOpenChat, onOpenMedia, onOpenDocument, onPromoteMember, onRemoveMember,
-    onMessageMember, onAddMembers, onExitChat,
+    onMessageMember, onAddMembers, onExitChat, onStartCall, onStartMeeting,
 }: Props) {
     const [tab, setTab] = useState(0);
     const [memberQuery, setMemberQuery] = useState("");
@@ -206,12 +208,13 @@ export default function InfoPanel({
 
                                 <Box sx={{ display: "flex", gap: 1, px: 1.6, py: 1.4 }}>
                                     {[
-                                        { icon: <MdVideoCall size={16} />, label: "Video" },
-                                        { icon: <MdPhone size={15} />, label: "Voice" },
-                                        { icon: <MdSearch size={15} />, label: "Search" },
+                                        { icon: <MdVideoCall size={16} />, label: "Video", run: () => onStartMeeting(chat.id) },
+                                        { icon: <MdPhone size={15} />, label: "Voice", run: () => onStartCall(chat.id) },
+                                        { icon: <MdSearch size={15} />, label: "Search", run: undefined },
                                     ].map((b) => (
                                         <Box
                                             key={b.label}
+                                            onClick={b.run}
                                             sx={{
                                                 flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 0.2,
                                                 py: 0.8, borderRadius: "8px", cursor: "pointer",
@@ -261,6 +264,21 @@ export default function InfoPanel({
                                     <Typography sx={{ fontSize: "0.74rem", color: C.text, mt: 0.3, lineHeight: 1.6 }}>
                                         {chat.description ?? "No description added."}
                                     </Typography>
+                                </Box>
+
+                                <Box sx={{ px: 1.6, pt: 1.4 }}>
+                                    <Box
+                                        onClick={() => onStartMeeting(chat.id)}
+                                        sx={{
+                                            display: "flex", alignItems: "center", justifyContent: "center", gap: 0.8,
+                                            py: 0.9, borderRadius: "8px", cursor: "pointer",
+                                            background: C.accentDark, border: `1px solid ${C.accentSoft}`, color: C.text,
+                                            "&:hover": { filter: "brightness(1.12)" },
+                                        }}
+                                    >
+                                        <MdVideoCall size={17} />
+                                        <Typography sx={{ fontSize: "0.74rem", fontWeight: 700 }}>Start CCN Meet</Typography>
+                                    </Box>
                                 </Box>
 
                                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.6, pt: 1.2 }}>

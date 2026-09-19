@@ -102,6 +102,9 @@ export async function proxy(request: NextRequest) {
         if (pathname.startsWith("/dashboard/chats")) {
             return NextResponse.next();
         }
+        if (pathname.startsWith("/dashboard/meet")) {
+            return NextResponse.next();
+        }
 
         // Redirect to their role's dashboard
         return redirectTo(rolePath + "/overview", request);
