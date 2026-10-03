@@ -41,9 +41,9 @@ export default function RootLayout({
                   <StudentProvider>
                     <TrainerProvider>
                       <AssignmentProvider>
-            {/* <CyberSecurityProvider> */}
-              {children}
-            {/* </CyberSecurityProvider> */}
+                        {/* <CyberSecurityProvider> */}
+                        {children}
+                        {/* </CyberSecurityProvider> */}
                       </AssignmentProvider>
                     </TrainerProvider>
                   </StudentProvider>

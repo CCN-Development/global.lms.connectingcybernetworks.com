@@ -37,7 +37,7 @@ const NAV_ITEMS = [
     { label: "Attendance", icon: MdOutlineCalendarToday, href: "/dashboard/student/attendance" },
     { label: "Practice Labs", icon: MdOutlineScience, href: "/dashboard/student/practice-labs" },
     { label: "Exam", icon: MdOutlineAssignment, href: "/dashboard/student/exams" },
-    // { label: "Placement", icon: MdOutlineBusinessCenter, href: "/dashboard/student/placement" },
+    { label: "Placement", icon: MdOutlineBusinessCenter, href: "/dashboard/student/placement" },
     { label: "My Requests", icon: MdOutlineSend, href: "/dashboard/student/requests" },
     { label: "Chats", icon: MdOutlineChat, href: "/dashboard/chats" },
     { label: "News & Updates", icon: MdOutlineCampaign, href: "/dashboard/student/updates" },
