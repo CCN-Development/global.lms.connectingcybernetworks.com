@@ -15,11 +15,7 @@ type Props = {}
 export default function page({ }: Props) {
     return (
         <StudentLayout
-            header={<StudentHeader title={
-                <div className='text-lg text-gray-300'>
-                    Hi, <span className='font-semibold'>Shivkumar Chauhan</span>
-                </div>
-            } />}
+            header={<StudentHeader />}
         >
             <div
                 className='grid grid-cols-[1fr_1fr] md:grid-cols-[2fr_3fr_2fr] lg:grid-cols-[2fr_4fr_2fr] xl:grid-cols-[2fr_4fr_2fr] gap-4 justify-start'

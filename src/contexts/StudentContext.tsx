@@ -208,6 +208,69 @@ export interface StudentProfile
 }
 
 /* ------------------------------------------------------------------ */
+/* Profile completion                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface ProfileCompletionCheck {
+    key: string;
+    label: string;
+    isComplete: (profile: StudentProfile) => boolean;
+}
+
+function hasText(value: string | null | undefined): boolean {
+    return typeof value === "string" && value.trim().length > 0;
+}
+
+/** Fields the student is expected to fill in; each one is worth an equal share of the score. */
+export const PROFILE_COMPLETION_CHECKS: ProfileCompletionCheck[] = [
+    { key: "studentName", label: "Full name", isComplete: (p) => hasText(p.studentName) },
+    { key: "phoneNumber", label: "Phone number", isComplete: (p) => hasText(p.phoneNumber) },
+    { key: "email", label: "Email address", isComplete: (p) => hasText(p.email) },
+    { key: "dateOfBirth", label: "Date of birth", isComplete: (p) => hasText(p.dateOfBirth) },
+    { key: "gender", label: "Gender", isComplete: (p) => hasText(p.gender) },
+    { key: "studentPhoto", label: "Profile photo", isComplete: (p) => hasText(p.studentPhoto) },
+    { key: "studentAlternatePhoneNumber", label: "Alternate phone number", isComplete: (p) => hasText(p.studentAlternatePhoneNumber) },
+    { key: "highestEducation", label: "Highest education", isComplete: (p) => hasText(p.highestEducation) },
+    { key: "highestEducationInstitute", label: "Education institute", isComplete: (p) => hasText(p.highestEducationInstitute) },
+    {
+        key: "parentDetails",
+        label: "Parent / guardian details",
+        isComplete: (p) => (p.parentDetails ?? []).some((d) => hasText(d.parentName) && hasText(d.parentPhoneNumber)),
+    },
+    {
+        key: "studentAddresses",
+        label: "Address",
+        isComplete: (p) => (p.studentAddresses ?? []).some((a) => hasText(a.addressLine) && hasText(a.city)),
+    },
+    {
+        key: "studentDocuments",
+        label: "Documents",
+        isComplete: (p) => (p.studentDocuments ?? []).length > 0,
+    },
+    {
+        key: "studentAdhaarDatas",
+        label: "Aadhaar verification",
+        isComplete: (p) => (p.studentAdhaarDatas ?? []).some((a) => a.isVerified),
+    },
+];
+
+export interface ProfileCompletion {
+    percentage: number;
+    completed: number;
+    total: number;
+    missing: ProfileCompletionCheck[];
+}
+
+export function getProfileCompletion(profile: StudentProfile | null): ProfileCompletion {
+    const total = PROFILE_COMPLETION_CHECKS.length;
+    if (!profile) return { percentage: 0, completed: 0, total, missing: PROFILE_COMPLETION_CHECKS };
+
+    const missing = PROFILE_COMPLETION_CHECKS.filter((check) => !check.isComplete(profile));
+    const completed = total - missing.length;
+    return { percentage: Math.round((completed / total) * 100), completed, total, missing };
+}
+
+/* ------------------------------------------------------------------ */
 /* Student batch types — mirror student.controller.ts responses        */
 /* ------------------------------------------------------------------ */
 

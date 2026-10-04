@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Lato, Inter } from "next/font/google";
+import { Lato, Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CyberSecurityProvider } from "@/contexts/CyberSecurityProvider";
@@ -20,6 +20,12 @@ const lato = Lato({
   subsets: ["latin"],
 });
 
+const poppins = Poppins({
+  variable: "--font-poppins",
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "LMS | Connecting Cyber Networks",
   description: "LMS platform for Connecting Cyber Networks.",
@@ -31,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("h-full", "antialiased", lato.variable, "font-sans", inter.variable)}>
+    <html lang="en" className={cn("h-full", "antialiased", lato.variable, "font-sans", inter.variable, poppins.variable)}>
       <body className="min-h-full">
         <AuthProvider>
           <RMProvider>
