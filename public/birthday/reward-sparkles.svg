@@ -1,17 +1,4 @@
 <svg width="138" height="89" viewBox="0 0 138 89" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="138" height="89" fill="#2A2A2A"/>
-<g id="LMS - Student Dashboard">
-<path d="M-8241 -588C-8241 -589.105 -8240.1 -590 -8239 -590H48357C48358.1 -590 48359 -589.105 48359 -588V25557C48359 25558.1 48358.1 25559 48357 25559H-8239C-8240.1 25559 -8241 25558.1 -8241 25557V-588Z" fill="#212121"/>
-<g id="LMS - Student Dashboard - HomePage">
-<path d="M-8141 -488C-8141 -489.105 -8140.1 -490 -8139 -490H3805C3806.1 -490 3807 -489.105 3807 -488V790C3807 791.104 3806.1 792 3805 792H-8139C-8140.1 792 -8141 791.105 -8141 790V-488Z" fill="#1B1B1B"/>
-<g id="LMS- Student Dashboard - HomePage - Birthday - Reward Overlay">
-<rect width="1440" height="1080" transform="translate(-641 -389)" fill="black"/>
-<foreignObject x="-323" y="-300" width="804" height="903"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(50px);clip-path:url(#bgblur_0_833_314206_clip_path);height:100%;width:100%"></div></foreignObject><g id="Birthday Reward" data-figma-bg-blur-radius="100">
-<mask id="path-3-inside-1_833_314206" fill="white">
-<path d="M-223 -176C-223 -189.255 -212.255 -200 -199 -200H357C370.255 -200 381 -189.255 381 -176V479C381 492.255 370.255 503 357 503H-199C-212.255 503 -223 492.255 -223 479V-176Z"/>
-</mask>
-<path d="M-223 -176C-223 -189.255 -212.255 -200 -199 -200H357C370.255 -200 381 -189.255 381 -176V479C381 492.255 370.255 503 357 503H-199C-212.255 503 -223 492.255 -223 479V-176Z" fill="black"/>
-<path d="M-223 -176C-223 -190.083 -211.583 -201.5 -197.5 -201.5H357C371.083 -201.5 382.5 -190.083 382.5 -176H379.5C379.5 -188.426 369.426 -198.5 357 -198.5H-199C-212.255 -198.5 -223 -188.426 -223 -176ZM-223 -176M381 503H-223H381M381 503M-223 503V-200V503M357 -201.5C371.083 -201.5 382.5 -190.083 382.5 -176V477.5C382.5 491.583 371.083 503 357 503C369.426 503 379.5 492.255 379.5 479V-176C379.5 -188.426 369.426 -198.5 357 -198.5V-201.5Z" fill="url(#paint0_linear_833_314206)" mask="url(#path-3-inside-1_833_314206)"/>
 <g id="Group">
 <g id="Group_2">
 <path id="Vector" d="M126 8.60101L126.527 8.53101L126.569 8L126.799 8.47998L127.317 8.35498L126.931 8.72198L127.21 9.17499L126.741 8.92297L126.396 9.32898L126.492 8.80499L126 8.60101Z" fill="white"/>
@@ -38,15 +25,4 @@
 <path id="Vector_8" d="M104 72.345L108.236 73.832L110.573 70L110.468 74.488L114.834 75.526L110.534 76.812L110.897 81.286L108.344 77.593L104.201 79.321L106.924 75.7531L104 72.345Z" fill="white"/>
 </g>
 </g>
-</g>
-</g>
-</g>
-</g>
-<defs>
-<clipPath id="bgblur_0_833_314206_clip_path" transform="translate(323 300)"><path d="M-223 -176C-223 -189.255 -212.255 -200 -199 -200H357C370.255 -200 381 -189.255 381 -176V479C381 492.255 370.255 503 357 503H-199C-212.255 503 -223 492.255 -223 479V-176Z"/>
-</clipPath><linearGradient id="paint0_linear_833_314206" x1="381" y1="-200" x2="212.869" y2="-28.7896" gradientUnits="userSpaceOnUse">
-<stop stop-color="#508AF2"/>
-<stop offset="1" stop-color="#508AF2" stop-opacity="0"/>
-</linearGradient>
-</defs>
 </svg>

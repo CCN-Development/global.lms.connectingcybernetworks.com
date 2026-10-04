@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="685" height="685" viewBox="0 0 685 685" fill="none" xmlns="http://www.w3.org/2000/svg">
+<circle id="Ellipse 2060" cx="342.5" cy="342.5" r="342.5" fill="url(#paint0_radial_0_48)"/>
+<defs>
+<radialGradient id="paint0_radial_0_48" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(342 274.5) rotate(90) scale(245)">
+<stop/>
+<stop offset="0.432447" stop-color="#080109" stop-opacity="0.5"/>
+<stop offset="0.747228" stop-color="#391156"/>
+<stop offset="1" stop-color="#A755B5"/>
+</radialGradient>
+</defs>
+</svg>

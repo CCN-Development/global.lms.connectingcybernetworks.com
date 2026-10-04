@@ -1,0 +1,152 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #05070f; font-family: Inter, Arial, sans-serif; padding: 24px; }
+  .wrap { max-width: 1088px; margin: 0 auto; }
+
+  /* ---------- banner ---------- */
+  .card { position: relative; display: flex; align-items: center; width: 100%; min-height: 200px;
+          overflow: hidden; border-radius: 24px;
+          background: #0c0e1d; padding: 32px; }
+  .cardborder { position: absolute; inset: 0; z-index: 30; border-radius: inherit; padding: 1px;
+                background-image: linear-gradient(176deg, rgba(255,255,255,0.44) 0%, rgba(255,255,255,0) 20%, rgba(255,255,255,0) 74%, rgba(255,255,255,0.44) 100%);
+                -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+                -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+  .card .bg { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+  .content { position: relative; z-index: 10; display: flex; width: 100%; flex-direction: column;
+             align-items: flex-start; gap: 24px; padding-right: 230px; }
+  .titles { display: flex; flex-direction: column; gap: 4px; color: #fff; width: 100%; }
+  h2 { font-size: 28px; line-height: 42px; font-weight: 600; }
+  .sub { font-size: 16px; line-height: 24px; font-weight: 500; }
+  .btn { position: relative; display: flex; height: 40px; align-items: center; justify-content: center;
+         gap: 12px; overflow: hidden; border-radius: 10px; border: 2px solid rgba(227,233,248,0.24);
+         padding: 16px 12px; box-shadow: 0 0 8px rgba(255,255,255,0.12);
+         background-image: linear-gradient(90deg, rgb(212,17,128) 0%, rgb(180,17,150) 26.234%, rgb(147,16,173) 52.469%, rgb(90,16,195) 76.234%, rgb(33,16,218) 100%); }
+  .btn .ico { position: relative; z-index: 10; width: 18px; height: 18px; flex: none; }
+  .btn .ico img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+  .btn span { position: relative; z-index: 10; white-space: nowrap; font-size: 14px; line-height: 21px;
+              font-weight: 500; color: #f2f2f2; }
+  .g1 { position: absolute; left: 50%; top: calc(50% + 60.5px); width: 41px; height: 41px;
+        transform: translate(-50%, -50%); pointer-events: none; }
+  .g1 img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+  .g2 { position: absolute; left: -32px; top: 0; height: 3px; width: 286px; pointer-events: none; }
+  .g2 > div { position: absolute; inset: -266.67% -2.8%; }
+  .g3 { position: absolute; left: -5px; top: -55px; display: flex; height: 144px; width: 6px;
+        align-items: center; justify-content: center; pointer-events: none; }
+  .g3 .rot { flex: none; transform: rotate(90deg); }
+  .g3 .inner { position: relative; height: 6px; width: 144px; }
+  .g3 .inner > div { position: absolute; inset: -133.33% -5.56%; }
+  .g4 { position: absolute; left: -3px; top: 43px; height: 6px; width: 231px; pointer-events: none; }
+  .g4 > div { position: absolute; inset: -133.33% -3.46%; }
+  .g2 img, .g3 img, .g4 img { display: block; width: 100%; height: 100%; max-width: none; }
+  .confetti { position: absolute; inset: 0; z-index: 20; width: 100%; height: 100%; max-width: none;
+              pointer-events: none; }
+  .gifts { position: absolute; top: 0; bottom: 0; right: 5.97%; z-index: 20; height: 100%; width: auto;
+           max-width: none; pointer-events: none; mix-blend-mode: screen; }
+  .insetshadow { position: absolute; inset: 0; z-index: 30; border-radius: inherit;
+                 box-shadow: inset 0 3px 6px rgba(255,255,255,0.16); pointer-events: none; }
+
+  /* ---------- dialog ---------- */
+  .dlg { position: relative; margin: 40px auto 0; width: 604px; background: #000; border-radius: 24px;
+         overflow: hidden; }
+  .dlgborder { position: absolute; inset: 0; z-index: 30; border-radius: inherit; padding: 1.5px;
+               background-image: linear-gradient(225deg, #508AF2 0%, rgba(80,138,242,0) 26%);
+               -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+               -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; }
+  .glowwrap { position: absolute; left: -23.16%; top: -40.18%; width: 161.9%; height: 162.2%;
+              display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .glowwrap .rot { flex: none; transform: rotate(-40.17deg); }
+  .glowwrap .inner { position: relative; height: 1433.31px; width: 69.794px; }
+  .glowwrap .inner > div { position: absolute; inset: -6.98% -143.28%; }
+  .glowwrap img { display: block; width: 100%; height: 100%; max-width: none; }
+  .swoosh { position: absolute; top: -32.57%; right: -22.02%; bottom: 27.47%; left: -34.93%; pointer-events: none; }
+  .swoosh img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+  .dlgbody { position: relative; z-index: 10; display: flex; flex-direction: column; align-items: center; padding: 32px; }
+  .giftwrap { position: relative; width: 310px; margin-bottom: -47px; flex: none; }
+  .giftwrap > img { position: relative; display: block; width: 100%; height: auto; max-width: none; }
+  .beam { position: absolute; left: 26.8%; top: 35.3%; width: 46.1%; height: 26.9%; }
+  .beam img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+  .spark { position: absolute; left: 24.5%; top: 39.5%; width: 44.2%; height: 20.7%; }
+  .spark img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+  .dlgcol { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 32px; }
+  .dlgtop { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 16px; }
+  .dlgtitle { width: 100%; text-align: center; font-size: 28px; line-height: 42px; font-weight: 700; color: #fff; }
+  .dlgtext { width: 100%; text-align: center; font-size: 16px; line-height: 24px; color: #d9d9d9; }
+  .chip { display: flex; height: 63px; align-items: center; gap: 12px; border-radius: 12px;
+          background: #15151b; padding: 12px; }
+  .chip .xpico { position: relative; width: 28px; height: 28px; flex: none; }
+  .chip .xpico > div { position: absolute; inset: -15.91% -95.45% -175% -95.45%; }
+  .chip .xpico img { display: block; width: 100%; height: 100%; max-width: none; }
+  .chip .xp { font-size: 18px; line-height: 27px; font-weight: 600; white-space: nowrap;
+              background: linear-gradient(to right, #f1c40e, #ff6000); -webkit-background-clip: text;
+              background-clip: text; color: transparent; }
+  .claim { position: relative; display: flex; height: 44px; width: 100%; align-items: center;
+           justify-content: center; gap: 12px; overflow: hidden; border-radius: 10px; padding: 16px;
+           font-size: 14px; line-height: 21px; font-weight: 500; color: #fff; border: 0;
+           background-image: linear-gradient(90deg, rgb(0,39,172) 0%, rgb(11,34,172) 12.5%, rgb(22,29,172) 25%, rgb(44,20,172) 43.572%, rgb(70,8,172) 65.007%, rgb(79,4,172) 82.544%, rgb(89,0,172) 100%);
+           filter: drop-shadow(0 0 4px rgba(255,255,255,0.12)); }
+  .claim .l { position: absolute; left: calc(50% + 0.5px); top: 9px; height: 0; width: 136px;
+              transform: translateX(-50%); pointer-events: none; }
+  .claim .l > div { position: absolute; inset: -12px -8.09% -11px -8.09%; }
+  .claim img { display: block; width: 100%; height: 100%; max-width: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <img class="bg" src="./birthday/banner-bg.png" alt="" />
+    <div class="content">
+      <div class="titles">
+        <h2>It&rsquo;s Your Special Day</h2>
+        <p class="sub">To celebrate you, we have a special reward for you</p>
+      </div>
+      <button class="btn">
+        <div class="ico"><img src="./birthday/icon-gift.svg" alt="" /></div>
+        <span>Open Birthday Reward</span>
+        <div class="g1"><img src="./birthday/btn-glow.svg" alt="" /></div>
+        <div class="g2"><div><img src="./birthday/btn-line-top.svg" alt="" /></div></div>
+        <div class="g3"><div class="rot"><div class="inner"><div><img src="./birthday/btn-line-left.svg" alt="" /></div></div></div></div>
+        <div class="g4"><div><img src="./birthday/btn-line-bottom.svg" alt="" /></div></div>
+      </button>
+    </div>
+    <img class="confetti" src="./birthday/banner-confetti.svg" alt="" />
+    <img class="gifts" src="./birthday/banner-gifts.png" alt="" />
+    <div class="insetshadow"></div>
+    <div class="cardborder"></div>
+  </div>
+
+  <div class="dlg">
+    <div class="glowwrap"><div class="rot"><div class="inner"><div><img src="./birthday/reward-glow.svg" alt="" /></div></div></div></div>
+    <div class="swoosh"><img src="./birthday/reward-swoosh.svg" alt="" /></div>
+    <div class="dlgbody">
+      <div class="giftwrap">
+        <div class="beam"><img src="./birthday/reward-beam.svg" alt="" /></div>
+        <img src="./birthday/reward-gift.png" alt="" />
+        <div class="spark"><img src="./birthday/reward-sparkles.svg" alt="" /></div>
+      </div>
+      <div class="dlgcol">
+        <div class="dlgtop">
+          <p class="dlgtitle">Birthday Reward</p>
+          <div class="dlgtext">
+            <p>Happy Birthday, Aanchal!</p>
+            <p>Today comes with a little bonus just for you.</p>
+          </div>
+          <div class="chip">
+            <div class="xpico"><div><img src="./birthday/icon-xp.svg" alt="" /></div></div>
+            <span class="xp">+100</span>
+          </div>
+        </div>
+        <button class="claim">
+          <span style="position:relative;z-index:10">Claim +100 XP</span>
+          <div class="l"><div><img src="./birthday/reward-btn-line.svg" alt="" /></div></div>
+        </button>
+      </div>
+    </div>
+    <div class="dlgborder"></div>
+  </div>
+</div>
+</body>
+</html>
