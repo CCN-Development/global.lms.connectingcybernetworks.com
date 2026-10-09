@@ -8,13 +8,18 @@ export const COLORS = {
     neutral100: "#D9D9D9",
     neutral200: "#BFBFBF",
     neutral300: "#A6A6A6",
+    neutral400: "#8C8C8C",
     neutral500: "#737373",
+    primary75: "#E3E9F8",
     purple: "#8C24FF",
     milestoneBorder: "#2F53AD",
     milestoneFill: "rgba(47,83,173,0.08)",
     tileBorder: "rgba(64,64,64,0.5)",
     tileFill: "rgba(255,255,255,0.01)",
     buttonBorder: "rgba(227,233,248,0.32)",
+    outlineButton: "#5A5A5A",
+    levelDone: "#3EBDBC",
+    lessonDone: "#2EC4B6",
 } as const;
 
 export const FONTS = {
@@ -25,12 +30,22 @@ export const FONTS = {
 
 /** Figma text styles, ready to spread into `sx`. */
 export const TYPE = {
+    displayBold52: { fontFamily: FONTS.poppins, fontWeight: 700, fontSize: "52px", lineHeight: "78px" },
+    displayBold44: { fontFamily: FONTS.poppins, fontWeight: 700, fontSize: "44px", lineHeight: "66px" },
+    displayReg44: { fontFamily: FONTS.poppins, fontWeight: 400, fontSize: "44px", lineHeight: "66px" },
     headingMed20: { fontFamily: FONTS.poppins, fontWeight: 500, fontSize: "20px", lineHeight: "30px" },
+    headingSemibold28: { fontFamily: FONTS.poppins, fontWeight: 600, fontSize: "28px", lineHeight: "42px" },
+    headingSemibold20: { fontFamily: FONTS.poppins, fontWeight: 600, fontSize: "20px", lineHeight: "30px" },
+    interReg16: { fontFamily: FONTS.inter, fontWeight: 400, fontSize: "16px", lineHeight: "24px" },
+    mediumBold16: { fontFamily: FONTS.lato, fontWeight: 700, fontSize: "16px", lineHeight: "24px" },
+    mediumReg16: { fontFamily: FONTS.lato, fontWeight: 400, fontSize: "16px", lineHeight: "24px" },
     headingSemibold24: { fontFamily: FONTS.poppins, fontWeight: 600, fontSize: "24px", lineHeight: "36px" },
     missionTitle24: { fontFamily: FONTS.poppins, fontWeight: 600, fontStyle: "italic", fontSize: "24px", lineHeight: "36px" },
     missionTitle20: { fontFamily: FONTS.poppins, fontWeight: 600, fontStyle: "italic", fontSize: "20px", lineHeight: "30px" },
     buttonMed14: { fontFamily: FONTS.inter, fontWeight: 500, fontSize: "14px", lineHeight: "21px" },
     largeSemibold18: { fontFamily: FONTS.lato, fontWeight: 600, fontSize: "18px", lineHeight: "27px" },
+    largeMed18: { fontFamily: FONTS.lato, fontWeight: 500, fontSize: "18px", lineHeight: "27px" },
+    mediumSemibold16: { fontFamily: FONTS.lato, fontWeight: 600, fontSize: "16px", lineHeight: "24px" },
     mediumMed16: { fontFamily: FONTS.lato, fontWeight: 500, fontSize: "16px", lineHeight: "24px" },
     smallMed14: { fontFamily: FONTS.lato, fontWeight: 500, fontSize: "14px", lineHeight: "21px" },
     smallSemibold14: { fontFamily: FONTS.lato, fontWeight: 600, fontSize: "14px", lineHeight: "21px" },
@@ -57,6 +72,37 @@ export const ACTIVE_PILL_FILL =
     "linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(204,204,204,0.08) 50%, rgba(153,153,153,0) 100%)";
 
 export const STAT_ROW_FILL = "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(153,153,153,0) 100%)";
+
+/** Figma "Student-Input" tile: a 6%-opacity radial sheen spanning the whole tile. */
+export const SHEEN_TILE_FILL =
+    "radial-gradient(50% 50% at 50% 50%, rgba(255,255,255,0.03) 0%, rgba(204,204,204,0.06) 50%, rgba(153,153,153,0.06) 100%)";
+
+export const TRAILER_BUTTON_FILL =
+    "linear-gradient(158.23deg, rgba(140,36,255,0.08) 9.0161%, rgba(14,25,52,0.08) 89.867%)";
+
+export const ACTIVE_TAB_FILL = "linear-gradient(180deg, rgba(187,201,237,0.44) 0%, rgba(106,114,135,0.26) 100%)";
+
+export const BACK_BUTTON_FILL = "linear-gradient(180deg, rgba(227,233,248,0.08) 0%, rgba(134,137,146,0.04) 100%)";
+
+/** Square "Icon Certificate" chip behind the course content icons. */
+export const CONTENT_ICON_FILL =
+    "linear-gradient(180deg, rgba(79,46,211,0.5) 0%, rgba(79,46,211,0.01) 99.99%, rgba(138,80,230,0) 100%)";
+
+/** Levels tab: the per-level "Preference Card" and the lesson rows inside it. */
+export const LEVEL_CARD_FILL = "linear-gradient(180deg, rgba(147,169,226,0.08) 0%, rgba(80,93,124,0.04) 100%)";
+
+export const LESSON_CARD_FILL =
+    "linear-gradient(177.1deg, rgba(0,0,0,0.44) 1.3382%, rgba(10,9,9,0.24) 48.715%, rgba(102,102,102,0.24) 96.091%)";
+
+/** Figma "Gradients 4" — gold → orange text used for XP and goal hints. */
+export const GOLD_GRADIENT = "linear-gradient(90deg, #F1C40E 0%, #FF6000 100%)";
+
+export const gradientText = (gradient: string) => ({
+    backgroundImage: gradient,
+    backgroundClip: "text",
+    WebkitBackgroundClip: "text",
+    color: "transparent",
+});
 
 // ─── Course themes ─────────────────────────────────────────────────────────
 
@@ -113,4 +159,9 @@ export const UI_ICONS = {
     lock16: `${MY_COURSES_ASSETS}/ui/icon-lock-16.svg`,
     play18: `${MY_COURSES_ASSETS}/ui/icon-play-18.svg`,
     chevronDown16: `${MY_COURSES_ASSETS}/ui/icon-chevron-down-16.svg`,
+    arrowBack24: `${MY_COURSES_ASSETS}/leaderboard/icon-arrow-back.svg`,
+    buttonHighlight: `${MY_COURSES_ASSETS}/ui/button-highlight.svg`,
 } as const;
+
+/** Assets for the course detail ("dedicated course") page. */
+export const COURSE_ASSETS = `${MY_COURSES_ASSETS}/course`;

@@ -1,17 +1,92 @@
 "use client";
 
 import React from "react";
-import { Box, Button, Typography } from "@mui/material";
-import { MdOutlineVideoLibrary, MdOutlineDescription, MdOutlineScience, MdLocalFireDepartment } from "react-icons/md";
-import LevelShield from "./LevelShield";
-import { ProgressBar, SectionLabel } from "./course-ui";
+import Image from "next/image";
+import { Box, ButtonBase, Typography } from "@mui/material";
 import type { Course, CourseContentBreakdown, LearnerRank } from "./course-data";
+import { COLORS, CONTENT_ICON_FILL, COURSE_ASSETS, GOLD_GRADIENT, TYPE, gradientText } from "./my-courses-theme";
+import { FadeDivider, ProgressTrack, framedPanelSx } from "./my-courses-ui";
+import { COURSE_PANEL_STARS, RankCrest, RankHood, RankLevelHeading, RankStarField } from "./RankCrest";
 
-const CONTENT_META: Record<CourseContentBreakdown["kind"], { icon: React.ReactNode; accent: string }> = {
-    video: { icon: <MdOutlineVideoLibrary size={14} />, accent: "#7c3aed" },
-    test: { icon: <MdOutlineDescription size={14} />, accent: "#0284c7" },
-    lab: { icon: <MdOutlineScience size={14} />, accent: "#10b981" },
+const CONTENT_ICONS: Record<CourseContentBreakdown["kind"], string> = {
+    video: `${COURSE_ASSETS}/content-video.svg`,
+    test: `${COURSE_ASSETS}/content-test.svg`,
+    lab: `${COURSE_ASSETS}/content-lab.svg`,
 };
+
+/** Flame layers relative to a 37.7 × 51 box (Figma group 40002340:166370); two copies offset by 1px. */
+const FLAME_LAYERS: { src: string; left: number; top: number; width: number; height: number }[] = [
+    { src: "streak-shadow", left: -6, top: 41.43, width: 49.684, height: 15.5618 },
+    { src: "streak-flame", left: 0.73, top: 1, width: 36.2115, height: 48.208 },
+    { src: "streak-flame-inner", left: 5.14, top: 22.62, width: 26.8125, height: 26.0093 },
+    { src: "streak-flame-core", left: 10.71, top: 38.61, width: 15.6714, height: 9.20368 },
+    { src: "streak-shadow", left: -6, top: 40.43, width: 49.684, height: 15.5618 },
+    { src: "streak-flame", left: 0.73, top: 0, width: 36.2115, height: 48.208 },
+    { src: "streak-flame-inner", left: 5.14, top: 21.62, width: 26.8125, height: 26.0093 },
+    { src: "streak-flame-core", left: 10.71, top: 37.61, width: 15.6714, height: 9.20368 },
+];
+
+function StreakFlame() {
+    return (
+        <Box aria-hidden sx={{ position: "relative", width: 37.684, height: 51, flexShrink: 0 }}>
+            {FLAME_LAYERS.map((layer, i) => (
+                <Box key={`${layer.src}-${i}`} sx={{ position: "absolute", left: layer.left, top: layer.top, lineHeight: 0 }}>
+                    <Image
+                        src={`${COURSE_ASSETS}/${layer.src}.svg`}
+                        alt=""
+                        width={layer.width}
+                        height={layer.height}
+                        style={{ maxWidth: "none" }}
+                    />
+                </Box>
+            ))}
+        </Box>
+    );
+}
+
+function ContentRow({ item }: { item: CourseContentBreakdown }) {
+    return (
+        <Box
+            sx={{
+                ...framedPanelSx({ angle: "175.93deg", radius: 12, highlight: "none" }),
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "12px",
+                p: "12px",
+            }}
+        >
+            <Box
+                sx={{
+                    position: "relative",
+                    width: 40,
+                    height: 40,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    borderRadius: "4px",
+                    border: `1px solid ${COLORS.white}`,
+                    backgroundImage: CONTENT_ICON_FILL,
+                    boxShadow: "0px 14px 30.545px -16.545px #8A50E6",
+                }}
+            >
+                <Image src={CONTENT_ICONS[item.kind]} alt="" width={20} height={20} />
+            </Box>
+            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px", flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                    <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral75 }}>
+                        {item.label}
+                    </Typography>
+                    <Typography sx={{ ...TYPE.smallMed14, ...gradientText(GOLD_GRADIENT), flexShrink: 0 }}>
+                        +{item.xp}XP
+                    </Typography>
+                </Box>
+                <ProgressTrack value={item.progress} fill={COLORS.purple} minFill={3} />
+            </Box>
+        </Box>
+    );
+}
 
 interface Props {
     course: Course;
@@ -21,98 +96,84 @@ interface Props {
 
 export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
-            <Box sx={{ p: 1.25, borderRadius: "14px", border: "1px solid #1c1c26", bgcolor: "#07070d" }}>
-                <LevelShield level={rank.level} title={rank.title} />
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            <Box
+                component="aside"
+                sx={{
+                    ...framedPanelSx({ angle: "150.01deg", highlight: "inset 0px 0px 6px 0px rgba(255,255,255,0.16)" }),
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "16px",
+                    pt: "16px",
+                    px: { xs: "16px", sm: "24px" },
+                    pb: "24px",
+                }}
+            >
+                <RankHood />
+                <RankStarField layout={COURSE_PANEL_STARS} />
 
-                <Box sx={{ mt: 1.25 }}>
-                    <SectionLabel>CONTENT</SectionLabel>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                        {course.content.map((item) => {
-                            const meta = CONTENT_META[item.kind];
-                            return (
-                                <Box
-                                    key={item.label}
-                                    sx={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: 1,
-                                        px: 1,
-                                        py: 0.9,
-                                        borderRadius: "10px",
-                                        border: "1px solid #1c1c26",
-                                        bgcolor: "#0b0b12",
-                                        transition: "border-color .18s ease",
-                                        "&:hover": { borderColor: meta.accent },
-                                    }}
-                                >
-                                    <Box
-                                        sx={{
-                                            width: 28,
-                                            height: 28,
-                                            flexShrink: 0,
-                                            borderRadius: "8px",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            background: `linear-gradient(145deg, ${meta.accent} 0%, #1e1b3a 100%)`,
-                                            color: "#fff",
-                                        }}
-                                    >
-                                        {meta.icon}
-                                    </Box>
-                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.6 }}>
-                                            <Typography noWrap sx={{ flex: 1, color: "#e4e4ec", fontSize: "0.72rem", fontWeight: 600 }}>
-                                                {item.label}
-                                            </Typography>
-                                            <Typography sx={{ flexShrink: 0, color: "#fbbf24", fontSize: "0.68rem", fontWeight: 700 }}>
-                                                +{item.xp}XP
-                                            </Typography>
-                                        </Box>
-                                        <ProgressBar value={item.progress} from={meta.accent} to="#009DFF" height={4} />
-                                    </Box>
-                                </Box>
-                            );
-                        })}
+                <RankCrest />
+
+                <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
+                    <RankLevelHeading level={rank.level} title={rank.title} />
+
+                    <FadeDivider variant="rank" />
+
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral300, textTransform: "uppercase" }}>
+                            Content
+                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            {course.content.map((item) => (
+                                <ContentRow key={item.label} item={item} />
+                            ))}
+                        </Box>
                     </Box>
                 </Box>
             </Box>
 
             <Box
                 sx={{
-                    p: 1.5,
-                    borderRadius: "14px",
-                    border: "1px solid #78350f",
-                    background: "linear-gradient(160deg, #1d1206 0%, #0a0a12 65%)",
-                    textAlign: "center",
+                    ...framedPanelSx({ angle: "164.5deg" }),
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "24px",
+                    p: "24px",
                 }}
             >
-                <MdLocalFireDepartment size={34} color="#f97316" />
-                <Typography sx={{ mt: 0.4, color: "#fff", fontSize: "0.95rem", fontWeight: 700 }}>
-                    Start your Streak
-                </Typography>
-                <Typography sx={{ mt: 0.5, color: "#9a9aab", fontSize: "0.68rem", lineHeight: 1.5 }}>
-                    Complete your first learning activity today and start building your streak.
-                </Typography>
-                <Button
-                    fullWidth
+                <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
+                    <StreakFlame />
+                    <Typography sx={{ ...TYPE.largeSemibold18, color: COLORS.white, textAlign: "center" }}>Start your Streak</Typography>
+                    <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral75, textAlign: "center", width: "100%" }}>
+                        Complete your first learning activity today and start building your streak.
+                    </Typography>
+                </Box>
+
+                <Box sx={{ position: "relative" }}>
+                    <FadeDivider variant="rank" />
+                </Box>
+
+                <ButtonBase
                     onClick={onSetGoal}
                     sx={{
-                        mt: 1.25,
-                        py: 0.7,
-                        borderRadius: "8px",
-                        border: "1px solid #2b2b38",
-                        bgcolor: "#12121c",
-                        color: "#e4e4ec",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        textTransform: "none",
-                        "&:hover": { borderColor: "#f97316", bgcolor: "#1d1d28" },
+                        position: "relative",
+                        width: "100%",
+                        height: 44,
+                        p: "16px",
+                        borderRadius: "10px",
+                        border: "2px solid #161DAC",
+                        boxShadow: "0px 0px 8px 0px rgba(255,255,255,0.12)",
+                        transition: "border-color .18s ease, box-shadow .18s ease",
+                        "&:hover": { borderColor: "#4608AC", boxShadow: "0px 0px 12px 0px rgba(140,36,255,0.35)" },
+                        "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
                     }}
                 >
-                    Set Learning Goal
-                </Button>
+                    <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
+                        Set Learning Goal
+                    </Typography>
+                </ButtonBase>
             </Box>
         </Box>
     );

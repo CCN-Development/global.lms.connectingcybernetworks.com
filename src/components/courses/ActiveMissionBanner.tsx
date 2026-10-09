@@ -2,20 +2,18 @@
 
 import React from "react";
 import Image from "next/image";
-import { Box, ButtonBase, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { courseStatusBadge, type Course } from "./course-data";
 import {
-    ACTIVE_PILL_FILL,
     COLORS,
     COURSE_THEMES,
     INSET_HIGHLIGHT,
     MY_COURSES_ASSETS,
-    PRIMARY_BUTTON_FILL,
     TYPE,
     UI_ICONS,
     glassFill,
 } from "./my-courses-theme";
-import { FadeDivider, ProgressTrack, StatChip, missionStats } from "./my-courses-ui";
+import { FadeDivider, PrimaryButton, ProgressTrack, StatChip, StatusPill, missionStats } from "./my-courses-ui";
 
 interface Props {
     course: Course;
@@ -70,21 +68,7 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                 }}
             >
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
-                    <Box
-                        sx={{
-                            display: "inline-flex",
-                            px: "12px",
-                            py: "4px",
-                            borderRadius: "32px",
-                            border: `1px solid ${COLORS.white}`,
-                            backgroundImage: ACTIVE_PILL_FILL,
-                            backdropFilter: "blur(4px)",
-                        }}
-                    >
-                        <Typography sx={{ ...TYPE.xsMed12, color: COLORS.white, whiteSpace: "nowrap" }}>
-                            {courseStatusBadge(course.status).label}
-                        </Typography>
-                    </Box>
+                    <StatusPill label={courseStatusBadge(course.status).label} />
 
                     <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", width: "100%", minWidth: 0 }}>
                         <Typography
@@ -184,48 +168,16 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                         </Box>
                     </Box>
 
-                    <ButtonBase
+                    <PrimaryButton
+                        height={40}
+                        icon={UI_ICONS.play18}
                         onClick={(e) => {
                             e.stopPropagation();
                             onStart();
                         }}
-                        sx={{
-                            position: "relative",
-                            flexShrink: 0,
-                            height: 40,
-                            gap: "12px",
-                            p: "16px",
-                            borderRadius: "10px",
-                            backgroundImage: PRIMARY_BUTTON_FILL,
-                            filter: "drop-shadow(0px 0px 4px rgba(255,255,255,0.12))",
-                            transition: "filter .18s ease",
-                            "&:hover": { filter: "drop-shadow(0px 0px 10px rgba(140,36,255,0.55))" },
-                            "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
-                        }}
                     >
-                        <Image src={UI_ICONS.play18} alt="" width={18} height={18} />
-                        <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
-                            {course.progress > 0 ? "Continue Learning" : "Start Learning"}
-                        </Typography>
-                        <Box
-                            sx={{
-                                position: "absolute",
-                                top: "-3px",
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                lineHeight: 0,
-                                pointerEvents: "none",
-                            }}
-                        >
-                            <Image
-                                src={`${MY_COURSES_ASSETS}/ui/button-highlight.svg`}
-                                alt=""
-                                width={158}
-                                height={23}
-                                style={{ maxWidth: "none" }}
-                            />
-                        </Box>
-                    </ButtonBase>
+                        {course.progress > 0 ? "Continue Learning" : "Start Learning"}
+                    </PrimaryButton>
                 </Box>
             </Box>
         </Box>

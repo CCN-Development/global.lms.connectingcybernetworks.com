@@ -6,7 +6,7 @@ import { Box, Typography } from "@mui/material";
 import type { LearnerRank } from "./course-data";
 import { COLORS, MY_COURSES_ASSETS, STAT_ROW_FILL, TYPE, glassFill } from "./my-courses-theme";
 import { FadeDivider, ProgressTrack } from "./my-courses-ui";
-import { RankCrest, RankStarField } from "./RankCrest";
+import { RankCrest, RankHood, RankLevelHeading, RankStarField } from "./RankCrest";
 
 const RANK = `${MY_COURSES_ASSETS}/rank`;
 
@@ -127,40 +127,13 @@ export default function RankPanel({ rank }: { rank: LearnerRank }) {
                 },
             }}
         >
-            {/* Backdrop hood behind the crest */}
-            <Box
-                aria-hidden
-                sx={{
-                    position: "absolute",
-                    top: "-1px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    width: 360,
-                    height: 111,
-                    overflow: "hidden",
-                    opacity: 0.44,
-                    pointerEvents: "none",
-                }}
-            >
-                <Image
-                    src={`${RANK}/hood.png`}
-                    alt=""
-                    width={1264}
-                    height={563}
-                    sizes="360px"
-                    style={{ position: "absolute", left: 0, top: "-38.63%", width: "100%", height: "144.46%", maxWidth: "none" }}
-                />
-            </Box>
+            <RankHood />
             <RankStarField />
 
             <RankCrest />
 
             <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", textAlign: "center" }}>
-                    <Typography sx={{ ...TYPE.xsReg12, color: COLORS.neutral500 }}>YOU&rsquo;RE AT</Typography>
-                    <Typography sx={{ ...TYPE.headingSemibold24, color: COLORS.white }}>Level {rank.level}</Typography>
-                    <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral200 }}>{rank.title}</Typography>
-                </Box>
+                <RankLevelHeading level={rank.level} title={rank.title} />
 
                 <FadeDivider variant="rank" />
 

@@ -19,10 +19,13 @@ export interface CourseLesson {
     tasks: number;
     duration: string;
     xp: number;
-    instructor: string;
+    /** Lead instructor; omitted when the lesson card shouldn't credit anyone. */
+    instructor?: string;
     extraInstructors: number;
     completed: boolean;
-    /** Index into THUMB_ART. */
+    /** 0 - 100 playback progress; when set, the thumbnail shows a watch bar instead of a play button. */
+    watched?: number;
+    /** Index into LESSON_THUMBS. */
     art: number;
 }
 
@@ -46,6 +49,8 @@ export interface CourseContentBreakdown {
 export interface Course {
     courseId: string;
     title: string;
+    /** Compact name for tight spaces such as goal cards ("CCNA"); falls back to `title`. */
+    shortTitle?: string;
     /** Trailing words rendered in the accent colour on the detail page. */
     titleAccent: string;
     tagline: string;
@@ -77,14 +82,26 @@ export interface Course {
     levels: CourseLevel[];
 }
 
-/** Card artwork — layered gradients standing in for the mission key art. */
-export const THUMB_ART: string[] = [
-    "radial-gradient(70% 120% at 20% 10%, #a855f7 0%, rgba(168,85,247,0) 60%), linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #0f0a1f 100%)",
-    "radial-gradient(70% 120% at 80% 15%, #22c55e 0%, rgba(34,197,94,0) 60%), linear-gradient(135deg, #052e16 0%, #166534 50%, #061410 100%)",
-    "radial-gradient(70% 120% at 30% 80%, #38bdf8 0%, rgba(56,189,248,0) 60%), linear-gradient(135deg, #082f49 0%, #0369a1 50%, #04131f 100%)",
-    "radial-gradient(70% 120% at 70% 20%, #f43f5e 0%, rgba(244,63,94,0) 60%), linear-gradient(135deg, #4c0519 0%, #9f1239 50%, #1a0209 100%)",
-    "radial-gradient(70% 120% at 25% 25%, #f59e0b 0%, rgba(245,158,11,0) 60%), linear-gradient(135deg, #451a03 0%, #b45309 50%, #1a0c02 100%)",
-    "radial-gradient(70% 120% at 75% 75%, #06b6d4 0%, rgba(6,182,212,0) 60%), linear-gradient(135deg, #083344 0%, #0e7490 50%, #041419 100%)",
+export interface LessonThumb {
+    src: string;
+    /** Scrim painted over the artwork (Figma bakes a different one per thumbnail). */
+    overlay: string;
+}
+
+const THUMBS = "/my-courses/course/levels/thumbs";
+const FLAT_SCRIM = "rgba(0,0,0,0.2)";
+const TOP_SCRIM = "linear-gradient(180deg, rgba(0,0,0,0.44) 0%, rgba(102,102,102,0) 100%)";
+
+/** Lesson thumbnail artwork, cycled by `CourseLesson.art`. */
+export const LESSON_THUMBS: LessonThumb[] = [
+    { src: `${THUMBS}/lesson-1.webp`, overlay: "linear-gradient(180deg, rgba(0,0,0,0) 14.024%, rgba(0,0,0,0.64) 86.585%)" },
+    { src: `${THUMBS}/lesson-2.webp`, overlay: "linear-gradient(180deg, rgba(0,0,0,0.44) 0%, rgba(102,102,102,0) 179.27%)" },
+    { src: `${THUMBS}/lesson-3.webp`, overlay: FLAT_SCRIM },
+    { src: `${THUMBS}/lesson-4.webp`, overlay: TOP_SCRIM },
+    { src: `${THUMBS}/lesson-5.webp`, overlay: FLAT_SCRIM },
+    { src: `${THUMBS}/lesson-6.webp`, overlay: FLAT_SCRIM },
+    { src: `${THUMBS}/lesson-7.webp`, overlay: FLAT_SCRIM },
+    { src: `${THUMBS}/lesson-8.webp`, overlay: TOP_SCRIM },
 ];
 
 const INSTRUCTORS: CourseInstructor[] = [
@@ -107,8 +124,7 @@ function lesson(
         tasks: 4,
         duration: "2h 12min",
         xp: 80,
-        instructor: "Kushal Korde",
-        extraInstructors: 2,
+        extraInstructors: 0,
         completed: false,
         art,
         ...opts,
@@ -126,8 +142,8 @@ const CCNA_LEVELS: CourseLevel[] = [
                 tasks: 0,
                 duration: "2min",
                 xp: 8,
-                extraInstructors: 0,
                 completed: true,
+                watched: 100,
             }),
         ],
     },
@@ -141,14 +157,14 @@ const CCNA_LEVELS: CourseLevel[] = [
                 tasks: 0,
                 duration: "2min",
                 xp: 12,
-                extraInstructors: 0,
                 completed: true,
             }),
             lesson("ls-2-2", "Explain Computer Hardware", 2),
             lesson("ls-2-3", "Computer Memory - Internal and External", 3),
             lesson("ls-2-4", "Network Interface Card (NIC)", 4),
             lesson("ls-2-5", "CPU and types of CPU - Manufacture (Intel and AMD)", 5),
-            lesson("ls-2-6", "GPU and types of GPU - Manufacture (Intel and NVIDIA)", 0),
+            lesson("ls-2-6", "GPU and types of GPU - Manufacture (Intel and NVIDIA)", 6),
+            lesson("ls-2-7", "Motherboard Architecture", 7, { instructor: "Kushal Korde", extraInstructors: 2 }),
         ],
     },
     {
@@ -184,21 +200,22 @@ function makeLevels(seed: string, count: number): CourseLevel[] {
         title: `Module ${i + 1} - Core Concepts`,
         progress: 0,
         lessons: Array.from({ length: 4 }, (_, j) =>
-            lesson(`${seed}-ls-${i + 1}-${j + 1}`, `Lesson ${j + 1} - Foundations`, (i + j) % THUMB_ART.length),
+            lesson(`${seed}-ls-${i + 1}-${j + 1}`, `Lesson ${j + 1} - Foundations`, (i + j) % LESSON_THUMBS.length),
         ),
     }));
 }
 
 const DEFAULT_CONTENT: CourseContentBreakdown[] = [
-    { label: "Video", xp: 100, progress: 8, kind: "video" },
-    { label: "Knowledge Test", xp: 150, progress: 4, kind: "test" },
-    { label: "Labs", xp: 200, progress: 2, kind: "lab" },
+    { label: "Video", xp: 100, progress: 2.4, kind: "video" },
+    { label: "Knowledge Test", xp: 150, progress: 1.2, kind: "test" },
+    { label: "Labs", xp: 200, progress: 1.6, kind: "lab" },
 ];
 
 export const COURSES: Course[] = [
     {
         courseId: "ccna",
         title: "Cisco Certified Network Associate",
+        shortTitle: "CCNA",
         titleAccent: "Network Associate",
         tagline: "Master real world offensive security",
         description: [

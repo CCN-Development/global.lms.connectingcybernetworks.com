@@ -48,8 +48,8 @@ export default function MyCoursesPage() {
                 <MyCoursesHeader
                     title="My Courses"
                     actions={[
-                        { label: "Set Goal" },
-                        { label: "My Leaderboard", onClick: () => router.push("/dashboard/student/community") },
+                        { label: "Set Goal", onClick: () => router.push("/dashboard/student/my-courses/set-goal") },
+                        { label: "My Leaderboard", onClick: () => router.push("/dashboard/student/my-courses/leaderboard") },
                     ]}
                 />
             }

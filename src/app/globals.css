@@ -362,6 +362,62 @@ button {
 	color: #6b7490;
 }
 
+/* ---------- CCN Community (dark editor + rendered threads) ---------- */
+.community-rich.rich-text {
+	font-family: var(--font-lato), Arial, Helvetica, sans-serif;
+	font-weight: 500;
+	font-size: 16px;
+	line-height: 24px;
+	color: #bfbfbf;
+}
+
+.community-rich--sm.rich-text {
+	font-size: 14px;
+	line-height: 21px;
+}
+
+.community-rich.rich-text p {
+	margin: 0;
+}
+
+.community-rich.rich-text strong {
+	color: #f2f2f2;
+}
+
+.community-rich.rich-text ul,
+.community-rich.rich-text ol {
+	margin: 0;
+}
+
+.community-rich.rich-text a {
+	color: #2f53ad;
+	text-decoration: none;
+}
+
+.community-rich.rich-text a:hover {
+	text-decoration: underline;
+}
+
+.community-rich .mention {
+	color: #2f53ad;
+	padding: 0 2px;
+}
+
+.community-editor.rich-text {
+	min-height: 24px;
+}
+
+.community-editor.rich-text a {
+	text-decoration: underline;
+}
+
+.community-editor.rich-text p.is-editor-empty:first-child::before {
+	color: #737373;
+	font-size: 14px;
+	line-height: 24px;
+	white-space: pre-line;
+}
+
 @keyframes chat-typing-dot {
 	0%, 60%, 100% { transform: translateY(0); opacity: 0.45; }
 	30% { transform: translateY(-4px); opacity: 1; }

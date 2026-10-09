@@ -2,9 +2,229 @@
 
 import React from "react";
 import Image from "next/image";
-import { Box, Typography } from "@mui/material";
-import { COLORS, MY_COURSES_ASSETS, TYPE, UI_ICONS } from "./my-courses-theme";
+import { Box, ButtonBase, Typography, type SxProps, type Theme } from "@mui/material";
+import {
+    ACTIVE_PILL_FILL,
+    ACTIVE_TAB_FILL,
+    BACK_BUTTON_FILL,
+    COLORS,
+    MY_COURSES_ASSETS,
+    PRIMARY_BUTTON_FILL,
+    TYPE,
+    UI_ICONS,
+    glassFill,
+} from "./my-courses-theme";
 import type { Course } from "./course-data";
+
+const focusRing = { "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" } } as const;
+
+/**
+ * Frosted "Detail Card" frame: 0.88 white stroke, dark glass and an inner top highlight.
+ * Glass and highlight live on pseudo-elements so children (e.g. color-dodge stars) blend with the page;
+ * in-flow children therefore need `position: relative` to paint above the glass.
+ */
+export function framedPanelSx({
+    angle,
+    radius = 24,
+    highlight = "inset 0px 3px 6px 0px rgba(255,255,255,0.16)",
+    fill,
+}: {
+    angle: string;
+    radius?: number;
+    highlight?: string;
+    /** Overrides the default dark glass (`angle` is then ignored). */
+    fill?: string;
+}) {
+    return {
+        position: "relative",
+        borderRadius: `${radius}px`,
+        border: "1px solid rgba(255,255,255,0.88)",
+        "&::before": {
+            content: '""',
+            position: "absolute",
+            inset: 0,
+            borderRadius: "inherit",
+            backgroundImage: fill ?? glassFill(angle),
+            backdropFilter: "blur(12px)",
+            pointerEvents: "none",
+        },
+        "&::after": {
+            content: '""',
+            position: "absolute",
+            inset: 0,
+            borderRadius: "inherit",
+            boxShadow: highlight,
+            pointerEvents: "none",
+        },
+    } as const;
+}
+
+/** Segmented pill switch ("Overview / Levels", "Batch / Global"). */
+export function PillTabs<K extends string>({
+    options,
+    value,
+    onChange,
+    ariaLabel,
+}: {
+    options: readonly { key: K; label: string }[];
+    value: K;
+    onChange: (key: K) => void;
+    ariaLabel: string;
+}) {
+    return (
+        <Box
+            role="tablist"
+            aria-label={ariaLabel}
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                p: "4px",
+                borderRadius: "99px",
+                border: "1px solid rgba(191,191,191,0.25)",
+                bgcolor: "rgba(255,255,255,0.04)",
+                backdropFilter: "blur(4px)",
+                opacity: 0.8,
+                flexShrink: 0,
+            }}
+        >
+            {options.map((option) => {
+                const active = option.key === value;
+                return (
+                    <ButtonBase
+                        key={option.key}
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => onChange(option.key)}
+                        sx={{
+                            height: 44,
+                            px: active ? "16px" : "20px",
+                            py: "8px",
+                            borderRadius: active ? "99px" : "8px",
+                            border: active ? `1px solid ${COLORS.primary75}` : "1px solid transparent",
+                            backgroundImage: active ? ACTIVE_TAB_FILL : "none",
+                            backdropFilter: active ? "blur(12px)" : "none",
+                            "&:hover p": active ? {} : { color: COLORS.neutral100 },
+                            ...focusRing,
+                        }}
+                    >
+                        <Typography
+                            sx={{
+                                ...TYPE.mediumMed16,
+                                color: active ? COLORS.white : COLORS.neutral400,
+                                whiteSpace: "nowrap",
+                                transition: "color .18s ease",
+                            }}
+                        >
+                            {option.label}
+                        </Typography>
+                    </ButtonBase>
+                );
+            })}
+        </Box>
+    );
+}
+
+/** 44px frosted circular back button. */
+export function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
+    return (
+        <ButtonBase
+            aria-label={label}
+            onClick={onClick}
+            sx={{
+                width: 44,
+                height: 44,
+                flexShrink: 0,
+                borderRadius: "50px",
+                border: "1px solid rgba(255,255,255,0.08)",
+                backgroundImage: BACK_BUTTON_FILL,
+                backdropFilter: "blur(25px)",
+                "&:hover": { borderColor: "rgba(255,255,255,0.24)" },
+                ...focusRing,
+            }}
+        >
+            <Image src={UI_ICONS.arrowBack24} alt="" width={24} height={24} />
+        </ButtonBase>
+    );
+}
+
+/** White-outlined frosted capsule ("Active Mission"). */
+export function StatusPill({ label, size = "sm" }: { label: string; size?: "sm" | "md" }) {
+    return (
+        <Box
+            sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                flexShrink: 0,
+                overflow: "hidden",
+                px: "12px",
+                py: "4px",
+                borderRadius: "32px",
+                border: `1px solid ${COLORS.white}`,
+                backgroundImage: ACTIVE_PILL_FILL,
+                backdropFilter: "blur(4px)",
+            }}
+        >
+            <Typography sx={{ ...(size === "md" ? TYPE.smallMed14 : TYPE.xsMed12), color: COLORS.white, whiteSpace: "nowrap" }}>
+                {label}
+            </Typography>
+        </Box>
+    );
+}
+
+/** Figma "LMS Button" (primary): blue → violet fill with a soft white glare along the top edge. */
+export function PrimaryButton({
+    children,
+    onClick,
+    icon,
+    height = 44,
+    sx,
+}: {
+    children: React.ReactNode;
+    onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+    icon?: string;
+    height?: number;
+    sx?: SxProps<Theme>;
+}) {
+    return (
+        <ButtonBase
+            onClick={onClick}
+            sx={[
+                {
+                    position: "relative",
+                    flexShrink: 0,
+                    height,
+                    gap: "12px",
+                    p: "16px",
+                    borderRadius: "10px",
+                    backgroundImage: PRIMARY_BUTTON_FILL,
+                    filter: "drop-shadow(0px 0px 4px rgba(255,255,255,0.12))",
+                    transition: "filter .18s ease",
+                    "&:hover": { filter: "drop-shadow(0px 0px 10px rgba(140,36,255,0.55))" },
+                    ...focusRing,
+                },
+                ...(Array.isArray(sx) ? sx : [sx]),
+            ]}
+        >
+            {icon && <Image src={icon} alt="" width={18} height={18} />}
+            <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
+                {children}
+            </Typography>
+            <Box
+                sx={{
+                    position: "absolute",
+                    top: "-3px",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    lineHeight: 0,
+                    pointerEvents: "none",
+                }}
+            >
+                <Image src={UI_ICONS.buttonHighlight} alt="" width={158} height={23} style={{ maxWidth: "none" }} />
+            </Box>
+        </ButtonBase>
+    );
+}
 
 export interface MissionStat {
     key: "levels" | "badges" | "duration" | "xp";

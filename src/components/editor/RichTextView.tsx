@@ -6,10 +6,19 @@ const ALLOWED_TAGS = [
 ];
 
 /** Renders editor HTML after sanitising it (never trust stored markup). */
-export default function RichTextView({ html, className = "" }: { html: string; className?: string }) {
+export default function RichTextView({
+    html,
+    className = "",
+    allowClassAttr = false,
+}: {
+    html: string;
+    className?: string;
+    /** Keeps `class` attributes (e.g. community @mention spans). */
+    allowClassAttr?: boolean;
+}) {
     const clean = DOMPurify.sanitize(html, {
         ALLOWED_TAGS,
-        ALLOWED_ATTR: ["href", "target", "rel"],
+        ALLOWED_ATTR: allowClassAttr ? ["href", "target", "rel", "class"] : ["href", "target", "rel"],
         ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|#|\/)/i,
     });
 
