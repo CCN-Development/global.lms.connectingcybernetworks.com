@@ -1,5 +1,7 @@
 // Mock data source — swap for a CourseContext once the courses API exists.
 
+import type { CourseThemeKey } from "./my-courses-theme";
+
 export type CourseStatus = "Active" | "Locked" | "Completed";
 export type LessonKind = "video" | "reading" | "lab" | "quiz";
 
@@ -54,6 +56,10 @@ export interface Course {
     accent: string;
     accentDark: string;
     art: string;
+    /** Key-art theme used by the My Courses banner and mission cards. */
+    theme: CourseThemeKey;
+    /** Hexagonal mission emblem image (URL or /public path). */
+    emblem: string;
     totalLevels: number;
     totalBadges: number;
     totalXp: number;
@@ -204,8 +210,10 @@ export const COURSES: Course[] = [
         accent: "#7c3aed",
         accentDark: "#4c1d95",
         art: "radial-gradient(80% 140% at 85% 10%, #a855f7 0%, rgba(168,85,247,0) 58%), linear-gradient(115deg, #4c1d95 0%, #6d28d9 45%, #2e1065 100%)",
-        totalLevels: 102,
-        totalBadges: 12,
+        theme: "violet",
+        emblem: "/my-courses/emblems/ccna.png",
+        totalLevels: 44,
+        totalBadges: 24,
         totalXp: 5000,
         earnedXp: 0,
         totalLabs: 103,
@@ -234,6 +242,8 @@ export const COURSES: Course[] = [
         accent: "#f43f5e",
         accentDark: "#881337",
         art: "radial-gradient(80% 140% at 85% 10%, #fb7185 0%, rgba(251,113,133,0) 58%), linear-gradient(115deg, #7f1d1d 0%, #b91c1c 45%, #2a0509 100%)",
+        theme: "crimson",
+        emblem: "/my-courses/emblems/bug-bounty.png",
         totalLevels: 44,
         totalBadges: 24,
         totalXp: 5000,
@@ -264,6 +274,8 @@ export const COURSES: Course[] = [
         accent: "#f59e0b",
         accentDark: "#78350f",
         art: "radial-gradient(80% 140% at 85% 10%, #fbbf24 0%, rgba(251,191,36,0) 58%), linear-gradient(115deg, #78350f 0%, #c2410c 45%, #200e02 100%)",
+        theme: "amber",
+        emblem: "/my-courses/emblems/soft-skill.png",
         totalLevels: 44,
         totalBadges: 24,
         totalXp: 5000,
@@ -294,6 +306,8 @@ export const COURSES: Course[] = [
         accent: "#8b5cf6",
         accentDark: "#3730a3",
         art: "radial-gradient(80% 140% at 85% 10%, #818cf8 0%, rgba(129,140,248,0) 58%), linear-gradient(115deg, #312e81 0%, #6d28d9 45%, #140d33 100%)",
+        theme: "indigo",
+        emblem: "/my-courses/emblems/ethical-hacking.png",
         totalLevels: 44,
         totalBadges: 24,
         totalXp: 5000,
@@ -324,6 +338,8 @@ export const COURSES: Course[] = [
         accent: "#06b6d4",
         accentDark: "#155e75",
         art: "radial-gradient(80% 140% at 85% 10%, #22d3ee 0%, rgba(34,211,238,0) 58%), linear-gradient(115deg, #134e4a 0%, #0e7490 45%, #04171a 100%)",
+        theme: "teal",
+        emblem: "/my-courses/emblems/cloud-security.png",
         totalLevels: 44,
         totalBadges: 24,
         totalXp: 5000,
@@ -354,6 +370,8 @@ export const COURSES: Course[] = [
         accent: "#10b981",
         accentDark: "#065f46",
         art: "radial-gradient(80% 140% at 85% 10%, #34d399 0%, rgba(52,211,153,0) 58%), linear-gradient(115deg, #064e3b 0%, #047857 45%, #03120d 100%)",
+        theme: "crimson",
+        emblem: "/my-courses/emblems/bug-bounty.png",
         totalLevels: 44,
         totalBadges: 24,
         totalXp: 5000,
@@ -385,7 +403,7 @@ export interface LearnerRank {
     levelsTotal: number;
     labsCompleted: number;
     labsTotal: number;
-    nextMilestone: { title: string; description: string };
+    nextMilestone: { title: string; description: string; /** Illustration URL or /public path. */ icon: string };
 }
 
 export const LEARNER_RANK: LearnerRank = {
@@ -403,7 +421,8 @@ export const LEARNER_RANK: LearnerRank = {
     labsTotal: 6000,
     nextMilestone: {
         title: "Reach Level 5",
-        description: "Unlock exciting badges and earn points. Unlock exciting badges and earn points. Unlock exciting badges and earn points.",
+        description: "Unlock exciting badges and earn points.Unlock exciting badges and earn points. Unlock exciting badges and earn points.",
+        icon: "/my-courses/rank/milestone-level.png",
     },
 };
 

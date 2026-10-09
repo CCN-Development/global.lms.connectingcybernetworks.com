@@ -1,0 +1,19 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="368" height="75.7284" viewBox="0 0 368 75.7284" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<foreignObject x="-32" y="-32" width="432" height="139.728"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(16px);clip-path:url(#bgblur_0_0_64_clip_path);height:100%;width:100%"></div></foreignObject><g id="Rectangle 1430106903" data-figma-bg-blur-radius="32">
+<use xlink:href="#stroke0_0_64" fill="#0D0D0D" fill-opacity="0.44"/>
+<mask id="stroke1_0_64" maskUnits="userSpaceOnUse" x="0" y="-0.271597" width="368" height="76" fill="black">
+<rect fill="white" y="-0.271597" width="368" height="76"/>
+<use xlink:href="#stroke0_0_64"/>
+</mask>
+<path d="M367 74.7284V13.0001C367 6.26751 361.462 0.852383 354.731 1.00308L194.102 4.5993C193.404 4.61492 192.723 4.81285 192.125 5.17342L185.033 9.45236C184.398 9.83577 183.602 9.83578 182.967 9.45236L175.875 5.17342C175.277 4.81285 174.596 4.61492 173.898 4.5993L13.2686 1.00308C6.53772 0.852383 1 6.26751 1 13.0001V74.7284H367Z" stroke-width="2" stroke="url(#paint0_linear_0_64)" stroke-opacity="0.88" mask="url(#stroke1_0_64)"/>
+</g>
+<defs>
+<clipPath id="bgblur_0_0_64_clip_path" transform="translate(32 32)"><path d="M1 13.0001C1 6.26751 6.53772 0.852383 13.2686 1.00308L173.898 4.5993C174.596 4.61492 175.277 4.81285 175.875 5.17342L182.967 9.45236C183.602 9.83578 184.398 9.83577 185.033 9.45236L192.125 5.17342C192.723 4.81285 193.404 4.61492 194.102 4.5993L354.731 1.00308C361.462 0.852383 367 6.26751 367 13.0001V74.7284H1V13.0001Z"/>
+</clipPath><linearGradient id="paint0_linear_0_64" x1="72.7315" y1="0.728403" x2="296.398" y2="0.728403" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.505501" stop-color="#CBCBCB"/>
+<stop offset="1" stop-color="#999999" stop-opacity="0"/>
+</linearGradient>
+<path id="stroke0_0_64" d="M1 13.0001C1 6.26751 6.53772 0.852383 13.2686 1.00308L173.898 4.5993C174.596 4.61492 175.277 4.81285 175.875 5.17342L182.967 9.45236C183.602 9.83578 184.398 9.83577 185.033 9.45236L192.125 5.17342C192.723 4.81285 193.404 4.61492 194.102 4.5993L354.731 1.00308C361.462 0.852383 367 6.26751 367 13.0001V74.7284H1V13.0001Z"/>
+</defs>
+</svg>

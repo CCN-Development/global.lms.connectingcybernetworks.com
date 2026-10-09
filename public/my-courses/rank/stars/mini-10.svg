@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="21.0661" height="7.9323" viewBox="0 0 21.0661 7.9323" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Mini Stars / 10" style="mix-blend-mode:color-dodge">
+<rect width="21.0661" height="7.9323" fill="black"/>
+<ellipse id="Ellipse 1" cx="10.5331" cy="3.96615" rx="10.5331" ry="3.96615" fill="url(#paint0_radial_0_330)"/>
+</g>
+<defs>
+<radialGradient id="paint0_radial_0_330" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(10.5331 3.96615) rotate(90) scale(3.96615 10.5331)">
+<stop offset="0.145833" stop-color="white"/>
+<stop offset="1" stop-color="#FF5E5E" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

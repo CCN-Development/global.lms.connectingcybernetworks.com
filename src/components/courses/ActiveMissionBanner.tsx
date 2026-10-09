@@ -1,11 +1,21 @@
 "use client";
 
 import React from "react";
-import { Box, Button, Typography } from "@mui/material";
-import { MdLayers, MdStarBorder, MdBolt, MdPlayArrow } from "react-icons/md";
-import MissionHex from "./MissionHex";
-import { MissionChip, ProgressBar } from "./course-ui";
-import type { Course } from "./course-data";
+import Image from "next/image";
+import { Box, ButtonBase, Typography } from "@mui/material";
+import { courseStatusBadge, type Course } from "./course-data";
+import {
+    ACTIVE_PILL_FILL,
+    COLORS,
+    COURSE_THEMES,
+    INSET_HIGHLIGHT,
+    MY_COURSES_ASSETS,
+    PRIMARY_BUTTON_FILL,
+    TYPE,
+    UI_ICONS,
+    glassFill,
+} from "./my-courses-theme";
+import { FadeDivider, ProgressTrack, StatChip, missionStats } from "./my-courses-ui";
 
 interface Props {
     course: Course;
@@ -14,135 +24,209 @@ interface Props {
 }
 
 export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) {
+    const theme = COURSE_THEMES[course.theme];
+    const stats = missionStats(course, "banner");
+
     return (
         <Box
+            onClick={onOpen}
             sx={{
                 position: "relative",
                 overflow: "hidden",
-                borderRadius: "14px",
-                border: `1px solid ${course.accent}`,
-                bgcolor: "#07070d",
+                display: "flex",
+                flexDirection: "column",
+                pt: "12px",
+                px: "8px",
+                pb: "8px",
+                borderRadius: "20px",
+                border: `1px solid ${theme.border}`,
+                backgroundImage: glassFill("171.63deg"),
+                backdropFilter: "blur(12px)",
                 cursor: "pointer",
-                transition: "transform .18s ease, box-shadow .18s ease",
-                "&:hover": { transform: "translateY(-2px)", boxShadow: `0 18px 40px -20px ${course.accent}` },
+                "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: "inherit",
+                    boxShadow: INSET_HIGHLIGHT,
+                    pointerEvents: "none",
+                    zIndex: 3,
+                },
             }}
-            onClick={onOpen}
         >
-            {/* Key art */}
-            <Box sx={{ position: "relative", background: course.art, p: { xs: 1.5, sm: 2 }, pb: { xs: 2, sm: 2.5 } }}>
-                <Box
-                    sx={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: 1.5,
-                    }}
-                >
-                    <Box sx={{ minWidth: 0 }}>
-                        <Box
-                            component="span"
-                            sx={{
-                                display: "inline-block",
-                                px: 1.1,
-                                py: 0.3,
-                                mb: 1.25,
-                                borderRadius: "999px",
-                                bgcolor: "#0d0d18",
-                                color: "#e4e4ec",
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                            }}
-                        >
-                            Active Mission
-                        </Box>
+            {/* Hero key art */}
+            <Box
+                sx={{
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "16px",
+                    minHeight: 306,
+                    p: { xs: "16px", sm: "24px" },
+                    pb: { xs: "96px", sm: "87px" },
+                    borderRadius: "16px",
+                    background: `url(${theme.art}) center / 100% 100% no-repeat, ${theme.fallback}`,
+                }}
+            >
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
+                    <Box
+                        sx={{
+                            display: "inline-flex",
+                            px: "12px",
+                            py: "4px",
+                            borderRadius: "32px",
+                            border: `1px solid ${COLORS.white}`,
+                            backgroundImage: ACTIVE_PILL_FILL,
+                            backdropFilter: "blur(4px)",
+                        }}
+                    >
+                        <Typography sx={{ ...TYPE.xsMed12, color: COLORS.white, whiteSpace: "nowrap" }}>
+                            {courseStatusBadge(course.status).label}
+                        </Typography>
+                    </Box>
 
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", width: "100%", minWidth: 0 }}>
                         <Typography
+                            component="h2"
                             sx={{
-                                color: "#fff",
-                                fontSize: { xs: "1.05rem", sm: "1.35rem" },
-                                fontWeight: 800,
-                                fontStyle: "italic",
-                                lineHeight: 1.2,
-                                letterSpacing: "-0.01em",
+                                ...TYPE.missionTitle24,
+                                fontSize: { xs: "20px", sm: "24px" },
+                                color: COLORS.white,
+                                maxWidth: { sm: "calc(100% - 200px)" },
                             }}
                         >
                             {course.title}
                         </Typography>
-                        <Typography sx={{ mt: 0.4, color: "#d8d8e4", fontSize: "0.72rem" }}>{course.tagline}</Typography>
-
-                        <Typography sx={{ mt: 1.5, mb: 0.6, color: "#d8d8e4", fontSize: "0.65rem", fontWeight: 600 }}>
-                            Quick Insights :
+                        <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral200 }}>
+                            {course.tagline}
                         </Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                            <MissionChip icon={<MdLayers size={13} color="#c4b5fd" />} label={`${course.totalLevels} levels`} />
-                            <MissionChip icon={<MdStarBorder size={13} color="#fbbf24" />} label={`${course.totalBadges} badges`} />
-                            <MissionChip icon={<MdBolt size={13} color="#38bdf8" />} label={`${course.totalXp} XP`} />
-                        </Box>
                     </Box>
+                </Box>
 
-                    <Box sx={{ display: { xs: "none", sm: "block" } }}>
-                        <MissionHex accent="#c4b5fd" accentDark={course.accentDark} size={124} />
+                <FadeDivider variant="banner" />
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral300 }}>
+                        Quick Insights :
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        {stats.map((stat) => (
+                            <StatChip key={stat.key} stat={stat} size="md" />
+                        ))}
                     </Box>
                 </Box>
             </Box>
 
-            {/* Continue strip */}
+            {/* Mission emblem */}
             <Box
                 sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.25,
-                    p: 1.25,
-                    bgcolor: "#0a0a12",
-                    borderTop: "1px solid #1c1c26",
-                    flexWrap: { xs: "wrap", sm: "nowrap" },
+                    position: "absolute",
+                    top: "5px",
+                    right: "32px",
+                    width: 182,
+                    height: 201,
+                    display: { xs: "none", sm: "block" },
+                    filter: "drop-shadow(0px 4px 24px rgba(0,0,0,0.5))",
+                    pointerEvents: "none",
+                    zIndex: 2,
                 }}
             >
+                <Image src={course.emblem} alt="" fill sizes="182px" style={{ objectFit: "cover" }} priority />
+            </Box>
+
+            {/* Continue strip */}
+            <Box sx={{ position: "absolute", left: "8px", right: "8px", bottom: "-1px", height: 81, zIndex: 1 }}>
+                <Box sx={{ position: "absolute", left: "-1px", top: "-0.87px", width: "calc(100% + 2px)", lineHeight: 0 }}>
+                    <Image
+                        src={`${MY_COURSES_ASSETS}/ui/strip-banner.svg`}
+                        alt=""
+                        width={793}
+                        height={82.8632}
+                        style={{ width: "100%", height: 82.8632 }}
+                    />
+                </Box>
+
                 <Box
                     sx={{
-                        width: 30,
-                        height: 30,
-                        flexShrink: 0,
-                        borderRadius: "8px",
+                        position: "absolute",
+                        top: "19px",
+                        left: { xs: "16px", sm: "24px" },
+                        right: { xs: "16px", sm: "24px" },
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        bgcolor: "#16162a",
-                        border: "1px solid #2b2b38",
-                        color: "#c4b5fd",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: "16px",
                     }}
                 >
-                    <MdLayers size={15} />
-                </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: "12px", mt: "1px", minWidth: 0 }}>
+                        <Box
+                            sx={{
+                                width: 40,
+                                height: 40,
+                                flexShrink: 0,
+                                display: { xs: "none", sm: "flex" },
+                                alignItems: "center",
+                                justifyContent: "center",
+                                borderRadius: "6px",
+                                border: `1px solid ${COLORS.neutral200}`,
+                                bgcolor: "rgba(0,0,0,0.12)",
+                                backdropFilter: "blur(15px)",
+                            }}
+                        >
+                            <Image src={UI_ICONS.layers20} alt="" width={20} height={20} />
+                        </Box>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
+                            <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral75 }}>
+                                {course.currentLevelLabel}
+                            </Typography>
+                            <ProgressTrack value={course.progress} fill={COLORS.neutral200} minFill={3} width={284} />
+                        </Box>
+                    </Box>
 
-                <Box sx={{ flex: 1, minWidth: 140 }}>
-                    <Typography noWrap sx={{ color: "#e4e4ec", fontSize: "0.72rem", fontWeight: 600, mb: 0.6 }}>
-                        {course.currentLevelLabel}
-                    </Typography>
-                    <ProgressBar value={course.progress} from="#009DFF" to={course.accent} />
+                    <ButtonBase
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onStart();
+                        }}
+                        sx={{
+                            position: "relative",
+                            flexShrink: 0,
+                            height: 40,
+                            gap: "12px",
+                            p: "16px",
+                            borderRadius: "10px",
+                            backgroundImage: PRIMARY_BUTTON_FILL,
+                            filter: "drop-shadow(0px 0px 4px rgba(255,255,255,0.12))",
+                            transition: "filter .18s ease",
+                            "&:hover": { filter: "drop-shadow(0px 0px 10px rgba(140,36,255,0.55))" },
+                            "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
+                        }}
+                    >
+                        <Image src={UI_ICONS.play18} alt="" width={18} height={18} />
+                        <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
+                            {course.progress > 0 ? "Continue Learning" : "Start Learning"}
+                        </Typography>
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                top: "-3px",
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                lineHeight: 0,
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <Image
+                                src={`${MY_COURSES_ASSETS}/ui/button-highlight.svg`}
+                                alt=""
+                                width={158}
+                                height={23}
+                                style={{ maxWidth: "none" }}
+                            />
+                        </Box>
+                    </ButtonBase>
                 </Box>
-
-                <Button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onStart();
-                    }}
-                    startIcon={<MdPlayArrow size={16} />}
-                    sx={{
-                        flexShrink: 0,
-                        px: 1.5,
-                        py: 0.6,
-                        borderRadius: "8px",
-                        bgcolor: "#009DFF",
-                        color: "#fff",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        textTransform: "none",
-                        "&:hover": { bgcolor: "#007fd4" },
-                    }}
-                >
-                    Start Learning
-                </Button>
             </Box>
         </Box>
     );

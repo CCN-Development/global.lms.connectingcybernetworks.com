@@ -1,11 +1,20 @@
 "use client";
 
 import React from "react";
-import { Box, Button, Typography } from "@mui/material";
-import { MdLayers, MdStarBorder, MdSchedule, MdBolt, MdLock, MdPlayArrow } from "react-icons/md";
-import MissionHex from "./MissionHex";
-import { MissionChip } from "./course-ui";
+import Image from "next/image";
+import { Box, ButtonBase, Typography } from "@mui/material";
 import type { Course } from "./course-data";
+import {
+    COLORS,
+    COURSE_THEMES,
+    INSET_HIGHLIGHT,
+    LOCKED_BUTTON_FILL,
+    MY_COURSES_ASSETS,
+    TYPE,
+    UI_ICONS,
+    glassFill,
+} from "./my-courses-theme";
+import { FadeDivider, StatChip, missionStats } from "./my-courses-ui";
 
 interface Props {
     course: Course;
@@ -13,95 +22,148 @@ interface Props {
 }
 
 export default function CourseCard({ course, onClick }: Props) {
+    const theme = COURSE_THEMES[course.theme];
     const locked = course.status === "Locked";
+    const stats = missionStats(course, "card");
 
     return (
         <Box
-            role="button"
-            tabIndex={0}
             onClick={onClick}
-            onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") onClick();
-            }}
             sx={{
                 position: "relative",
+                overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
-                overflow: "hidden",
-                borderRadius: "14px",
-                border: `1px solid ${course.accent}`,
-                bgcolor: "#07070d",
+                minWidth: 0,
+                pt: "12px",
+                px: "8px",
+                pb: "8px",
+                borderRadius: "20px",
+                border: `1px solid ${theme.border}`,
+                backgroundImage: glassFill("165.69deg"),
+                backdropFilter: "blur(12px)",
                 cursor: "pointer",
                 transition: "transform .18s ease, box-shadow .18s ease",
-                "&:hover": { transform: "translateY(-3px)", boxShadow: `0 16px 36px -18px ${course.accent}` },
-                "&:focus-visible": { outline: "2px solid #009DFF", outlineOffset: "2px" },
+                "&:hover": { transform: "translateY(-2px)", boxShadow: `0 16px 36px -20px ${theme.border}` },
+                "&::after": {
+                    content: '""',
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: "inherit",
+                    boxShadow: INSET_HIGHLIGHT,
+                    pointerEvents: "none",
+                    zIndex: 3,
+                },
             }}
         >
-            <Box sx={{ position: "relative", background: course.art, p: 1.5, pb: 2 }}>
-                <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography
-                            noWrap
-                            sx={{
-                                color: "#fff",
-                                fontSize: "1.05rem",
-                                fontWeight: 800,
-                                fontStyle: "italic",
-                                lineHeight: 1.2,
-                                letterSpacing: "-0.01em",
-                            }}
-                        >
-                            {course.title}
-                        </Typography>
-                        <Typography noWrap sx={{ mt: 0.3, color: "#d8d8e4", fontSize: "0.68rem" }}>
-                            {course.tagline}
-                        </Typography>
-                    </Box>
-
-                    <MissionHex accent={course.accent} accentDark={course.accentDark} size={74} locked={locked} />
+            {/* Hero key art */}
+            <Box
+                sx={{
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    pt: "16px",
+                    px: "16px",
+                    pb: "76px",
+                    borderRadius: "16px",
+                    background: `url(${theme.art}) center / 100% 100% no-repeat, ${theme.fallback}`,
+                }}
+            >
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", width: "100%", minWidth: 0 }}>
+                    <Typography component="h3" noWrap sx={{ ...TYPE.missionTitle20, color: COLORS.white }}>
+                        {course.title}
+                    </Typography>
+                    <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral200, maxWidth: "calc(100% - 64px)" }}>
+                        {course.tagline}
+                    </Typography>
                 </Box>
 
-                <Typography sx={{ mt: 1.4, mb: 0.6, color: "#d8d8e4", fontSize: "0.62rem", fontWeight: 600 }}>
-                    Mission Includes :
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
-                    <MissionChip icon={<MdLayers size={12} color="#c4b5fd" />} label={`${course.totalLevels} Levels`} />
-                    <MissionChip icon={<MdStarBorder size={12} color="#fbbf24" />} label={`${course.totalBadges} Badges`} />
-                    <MissionChip icon={<MdSchedule size={12} color="#34d399" />} label={course.weeks} />
-                    <MissionChip icon={<MdBolt size={12} color="#38bdf8" />} label={`${course.totalXp} XP`} />
+                <FadeDivider variant="card" />
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <Typography noWrap sx={{ ...TYPE.xxsReg11, color: COLORS.neutral300 }}>
+                        Mission Includes :
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        {stats.map((stat) => (
+                            <StatChip key={stat.key} stat={stat} size="sm" />
+                        ))}
+                    </Box>
                 </Box>
             </Box>
 
+            {/* Mission emblem */}
             <Box
                 sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    p: 1.1,
-                    bgcolor: "#0a0a12",
-                    borderTop: "1px solid #1c1c26",
+                    position: "absolute",
+                    top: "7px",
+                    right: "15.75px",
+                    width: 87,
+                    height: 96,
+                    pointerEvents: "none",
+                    zIndex: 2,
                 }}
             >
-                <Button
-                    disableRipple={locked}
-                    startIcon={locked ? <MdLock size={14} /> : <MdPlayArrow size={16} />}
+                <Image src={course.emblem} alt="" fill sizes="87px" style={{ objectFit: "cover" }} />
+            </Box>
+
+            {/* Action strip */}
+            <Box sx={{ position: "absolute", left: "8px", right: "8px", bottom: "-1px", height: 74, zIndex: 1 }}>
+                <Box sx={{ position: "absolute", left: "-1px", top: "-0.725px", width: "calc(100% + 2px)", lineHeight: 0 }}>
+                    <Image
+                        src={`${MY_COURSES_ASSETS}/ui/strip-card.svg`}
+                        alt=""
+                        width={368}
+                        height={75.7284}
+                        style={{ width: "100%", height: 75.7284 }}
+                    />
+                </Box>
+
+                <ButtonBase
+                    aria-disabled={locked}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClick();
+                    }}
                     sx={{
-                        px: 1.75,
-                        py: 0.5,
+                        position: "absolute",
+                        top: "22px",
+                        left: "calc(50% - 0.5px)",
+                        transform: "translateX(-50%)",
+                        height: 36,
+                        gap: "12px",
+                        px: "17px",
+                        py: "1px",
                         borderRadius: "8px",
-                        border: "1px solid #2b2b38",
-                        bgcolor: locked ? "#15151d" : "#009DFF",
-                        color: locked ? "#9a9aab" : "#fff",
-                        fontSize: "0.72rem",
-                        fontWeight: 600,
-                        textTransform: "none",
-                        "&:hover": locked
-                            ? { borderColor: course.accent, bgcolor: "#1d1d28" }
-                            : { bgcolor: "#007fd4" },
+                        border: "1px solid rgba(255,255,255,0.88)",
+                        backdropFilter: "blur(12px)",
+                        boxShadow: INSET_HIGHLIGHT,
+                        overflow: "hidden",
+                        transition: "border-color .18s ease",
+                        "&::before": {
+                            content: '""',
+                            position: "absolute",
+                            inset: 0,
+                            backgroundImage: LOCKED_BUTTON_FILL,
+                            opacity: 0.44,
+                            pointerEvents: "none",
+                        },
+                        "&:hover": { borderColor: COLORS.white },
+                        "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
                     }}
                 >
-                    {locked ? "Mission Locked" : "Continue Mission"}
-                </Button>
+                    <Box sx={{ position: "relative", width: 16, height: 16, flexShrink: 0, lineHeight: 0 }}>
+                        <Image src={locked ? UI_ICONS.lock16 : UI_ICONS.play18} alt="" width={16} height={16} />
+                    </Box>
+                    <Typography
+                        component="span"
+                        sx={{ ...TYPE.smallMed14, position: "relative", color: COLORS.neutral75, whiteSpace: "nowrap" }}
+                    >
+                        {locked ? "Mission Locked" : "Continue Mission"}
+                    </Typography>
+                </ButtonBase>
             </Box>
         </Box>
     );

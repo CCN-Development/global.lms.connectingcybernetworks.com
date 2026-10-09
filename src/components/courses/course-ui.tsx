@@ -3,37 +3,6 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 
-/** Small translucent pill used for mission stats ("44 Levels", "5000 XP"). */
-export function MissionChip({
-    icon,
-    label,
-    border = "rgba(255,255,255,0.22)",
-}: {
-    icon: React.ReactNode;
-    label: string;
-    border?: string;
-}) {
-    return (
-        <Box
-            sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 0.5,
-                px: 0.9,
-                py: 0.4,
-                borderRadius: "8px",
-                border: `1px solid ${border}`,
-                bgcolor: "#0d0d18",
-                color: "#e4e4ec",
-                whiteSpace: "nowrap",
-            }}
-        >
-            {icon}
-            <Typography sx={{ fontSize: "0.68rem", fontWeight: 600, lineHeight: 1.4 }}>{label}</Typography>
-        </Box>
-    );
-}
-
 /** Icon + value + caption tile used in the performance and "what's inside" grids. */
 export function StatTile({
     icon,
