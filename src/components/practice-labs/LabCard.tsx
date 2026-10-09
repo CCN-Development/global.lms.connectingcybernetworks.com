@@ -1,32 +1,32 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { Box, Typography } from "@mui/material";
-import {
-    MdBolt,
-    MdStarBorder,
-    MdSignalCellularAlt,
-    MdSignalCellularAlt1Bar,
-    MdSignalCellularAlt2Bar,
-} from "react-icons/md";
-import { DIFFICULTY_COLORS, LAB_ART, labStatusBadge, type PracticeLab } from "./lab-data";
+import { Decor, lato } from "@/components/dashboard/home/shared";
+import { labAsset, labStatusBadge, type PracticeLab } from "./lab-data";
 
-const DIFFICULTY_ICON = {
-    Easy: MdSignalCellularAlt1Bar,
-    Intermediate: MdSignalCellularAlt2Bar,
-    Hard: MdSignalCellularAlt,
+export const DIFFICULTY_ICON = {
+    Easy: "icon-difficulty-easy.svg",
+    Intermediate: "icon-difficulty-intermediate.svg",
+    Hard: "icon-difficulty-hard.svg",
 } as const;
 
-const Dot = () => (
-    <Box component="span" sx={{ color: "#4b4b58", fontSize: "0.7rem", lineHeight: 1 }}>
-        •
-    </Box>
-);
+const metaText = { ...lato(12, 18, 500, "#FFFFFF"), whiteSpace: "nowrap" } as const;
+
+function Meta({ icon, size, label }: { icon: string; size: number; label: string }) {
+    return (
+        <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+            <Image src={labAsset(icon)} alt="" width={size} height={size} />
+            <Typography sx={metaText}>{label}</Typography>
+        </Box>
+    );
+}
+
+const Dot = () => <Image src={labAsset("meta-dot.svg")} alt="" width={4} height={4} style={{ flexShrink: 0 }} />;
 
 export default function LabCard({ lab, onClick }: { lab: PracticeLab; onClick: () => void }) {
     const badge = labStatusBadge(lab);
-    const DifficultyIcon = DIFFICULTY_ICON[lab.difficulty];
-    const difficultyColor = DIFFICULTY_COLORS[lab.difficulty];
 
     return (
         <Box
@@ -38,131 +38,105 @@ export default function LabCard({ lab, onClick }: { lab: PracticeLab; onClick: (
             }}
             sx={{
                 position: "relative",
-                height: { xs: 190, sm: 205 },
-                borderRadius: "14px",
+                height: 284,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                p: "70px 4px 4px",
+                borderRadius: "24px",
                 overflow: "hidden",
                 cursor: "pointer",
-                border: "1px solid #1c1c26",
-                bgcolor: "#07070d",
-                transition: "transform .18s ease, border-color .18s ease, box-shadow .18s ease",
+                bgcolor: "rgba(38,38,38,0.44)",
+                transition: "transform .18s ease, box-shadow .18s ease",
                 "&:hover": {
                     transform: "translateY(-3px)",
-                    borderColor: "#7c3aed",
-                    boxShadow: "0 14px 34px -14px #7c3aed",
+                    boxShadow: "0 14px 34px -16px rgba(147,169,226,0.45)",
                 },
                 "&:focus-visible": { outline: "2px solid #009DFF", outlineOffset: "2px" },
             }}
         >
-            {/* Aurora artwork */}
-            <Box sx={{ position: "absolute", inset: 0, background: LAB_ART[lab.art] }} />
-            <Box
-                sx={{
-                    position: "absolute",
-                    top: "-30%",
-                    right: "-15%",
-                    width: "85%",
-                    height: "95%",
-                    borderRadius: "50%",
-                    background: "linear-gradient(120deg, #ffffff 0%, #b388ff 35%, #ff5bc8 70%, rgba(255,91,200,0) 100%)",
-                    opacity: 0.35,
-                    filter: "blur(26px)",
-                    transform: "rotate(-18deg)",
-                }}
-            />
-            {/* Fade so the copy always stays readable */}
-            <Box
-                sx={{
-                    position: "absolute",
-                    inset: 0,
-                    background:
-                        "linear-gradient(180deg, rgba(5,6,13,0) 0%, rgba(5,6,13,0.5) 34%, #07070d 58%, #07070d 100%)",
-                }}
-            />
+            <Box sx={{ position: "absolute", left: 4, right: 4, top: 4, height: 162, borderRadius: "20px", overflow: "hidden" }}>
+                <Image
+                    src={labAsset("cover.png")}
+                    alt=""
+                    fill
+                    sizes="(max-width: 600px) 100vw, 360px"
+                    style={{ objectFit: "cover", maxWidth: "none" }}
+                />
+            </Box>
 
-            {/* Content */}
-            <Box
-                sx={{
-                    position: "relative",
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "flex-end",
-                    p: 1.5,
-                }}
-            >
+            <Box sx={{ position: "relative", height: 210, flexShrink: 0 }}>
+                {/* SVG backdrop-blur doesn't survive <img>, so the blur is re-applied through the same shape as a mask. */}
                 <Box
-                    component="span"
+                    aria-hidden
                     sx={{
-                        alignSelf: "flex-start",
-                        bgcolor: badge.bg,
-                        color: badge.fg,
-                        borderRadius: "999px",
-                        px: 1.1,
-                        py: 0.3,
-                        mb: 1,
-                        fontSize: "0.65rem",
-                        fontWeight: 700,
-                        lineHeight: 1.5,
-                        whiteSpace: "nowrap",
+                        position: "absolute",
+                        inset: 0,
+                        backdropFilter: "blur(44px)",
+                        WebkitBackdropFilter: "blur(44px)",
+                        maskImage: `url(${labAsset("card-body.svg")})`,
+                        WebkitMaskImage: `url(${labAsset("card-body.svg")})`,
+                        maskSize: "100% 100%",
+                        WebkitMaskSize: "100% 100%",
+                        maskRepeat: "no-repeat",
+                        WebkitMaskRepeat: "no-repeat",
+                    }}
+                />
+                <Decor src={labAsset("card-body.svg")} sx={{ inset: 0 }} />
+
+                <Box
+                    sx={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        p: "16px",
                     }}
                 >
-                    {badge.label}
-                </Box>
+                    <Decor src={labAsset("card-glow.svg")} bleed="-100%" sx={{ left: 49, top: 72, width: 120, height: 120 }} />
 
-                <Typography
-                    sx={{
-                        color: "#fff",
-                        fontSize: "0.92rem",
-                        fontWeight: 700,
-                        lineHeight: 1.3,
-                        letterSpacing: "-0.01em",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 1,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                    }}
-                >
-                    {lab.title}
-                </Typography>
+                    <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
+                        <Box
+                            component="span"
+                            sx={{
+                                alignSelf: "flex-start",
+                                px: "12px",
+                                py: "4px",
+                                borderRadius: "50px",
+                                bgcolor: badge.bg,
+                                ...lato(12, 18, 500, badge.fg),
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {badge.label}
+                        </Box>
 
-                <Typography
-                    sx={{
-                        mt: 0.4,
-                        color: "#9a9aab",
-                        fontSize: "0.72rem",
-                        lineHeight: 1.45,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        minHeight: "2.1rem",
-                    }}
-                >
-                    {lab.description}
-                </Typography>
-
-                <Box sx={{ height: "1px", bgcolor: "#1e1e28", mt: 1.1, mb: 0.9 }} />
-
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>
-                        <DifficultyIcon size={13} color={difficultyColor} />
-                        <Typography sx={{ color: "#c9c9d4", fontSize: "0.68rem", fontWeight: 500 }}>
-                            {lab.difficulty}
-                        </Typography>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
+                            <Typography noWrap sx={lato(18, 27, 600, "#FFFFFF")}>
+                                {lab.title}
+                            </Typography>
+                            <Typography
+                                sx={{
+                                    ...lato(12, 18, 500, "#BFBFBF"),
+                                    height: 36,
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: "vertical",
+                                    overflow: "hidden",
+                                }}
+                            >
+                                {lab.description}
+                            </Typography>
+                        </Box>
                     </Box>
-                    <Dot />
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
-                        <MdBolt size={13} color="#f59e0b" />
-                        <Typography sx={{ color: "#c9c9d4", fontSize: "0.68rem", fontWeight: 500 }}>
-                            {lab.xp} XP
-                        </Typography>
-                    </Box>
-                    <Dot />
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
-                        <MdStarBorder size={13} color={lab.access === "Free" ? "#06b6d4" : "#7c3aed"} />
-                        <Typography sx={{ color: "#c9c9d4", fontSize: "0.68rem", fontWeight: 500 }}>
-                            {lab.access}
-                        </Typography>
+
+                    <Box sx={{ position: "relative", display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                        <Meta icon={DIFFICULTY_ICON[lab.difficulty]} size={20} label={lab.difficulty} />
+                        <Dot />
+                        <Meta icon="icon-zap.svg" size={16} label={`${lab.xp} XP`} />
+                        <Dot />
+                        <Meta icon="icon-star.svg" size={16} label={lab.access} />
                     </Box>
                 </Box>
             </Box>

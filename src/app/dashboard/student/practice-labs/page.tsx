@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Box, Button, Drawer, Typography } from "@mui/material";
-import { MdFilterList, MdOutlineScience } from "react-icons/md";
+import { MdOutlineScience } from "react-icons/md";
 import LabCard from "@/components/practice-labs/LabCard";
 import LabFilters, { EMPTY_LAB_FILTERS, type LabFilterState } from "@/components/practice-labs/LabFilters";
-import { PRACTICE_LABS, type PracticeLab } from "@/components/practice-labs/lab-data";
+import { PRACTICE_LABS, labAsset, type PracticeLab } from "@/components/practice-labs/lab-data";
+import { lato } from "@/components/dashboard/home/shared";
+import { gradientBorder } from "@/components/aish/tokens";
 
 const COURSE_NAME = "CCNA Course";
 
@@ -57,39 +60,43 @@ export default function PracticeLabsPage() {
         <Box
             sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "230px 1fr", lg: "250px 1fr" },
-                gap: 1.5,
+                gridTemplateColumns: { xs: "1fr", md: "260px 1fr", lg: "298px 1fr" },
+                gap: { xs: "16px", lg: "24px" },
                 alignItems: "flex-start",
             }}
         >
-            {/* Filters — sticky rail on desktop */}
-            <Box sx={{ display: { xs: "none", md: "block" }, position: "sticky", top: 0 }}>{panel}</Box>
+            {/* Filters — sticky full-height rail on desktop */}
+            <Box
+                sx={{
+                    display: { xs: "none", md: "block" },
+                    position: "sticky",
+                    top: 0,
+                    height: "calc(100dvh - 112px)",
+                    minHeight: 480,
+                }}
+            >
+                {panel}
+            </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, minWidth: 0 }}>
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-                        <MdOutlineScience size={16} color="#7c3aed" />
-                        <Typography noWrap sx={{ color: "#e4e4ec", fontSize: "0.85rem", fontWeight: 600 }}>
-                            Total {filtered.length} labs in {COURSE_NAME}
-                        </Typography>
-                    </Box>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: "16px", sm: "24px" }, minWidth: 0 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                    <Typography noWrap sx={{ ...lato(18, 27, 500, "#D9D9D9"), fontSize: { xs: "16px", sm: "18px" } }}>
+                        Total {filtered.length} labs in {COURSE_NAME}
+                    </Typography>
 
                     <Button
                         onClick={() => setDrawerOpen(true)}
-                        startIcon={<MdFilterList size={15} />}
+                        startIcon={<Image src={labAsset("icon-filter.svg")} alt="" width={16} height={16} />}
                         sx={{
                             display: { xs: "inline-flex", md: "none" },
                             flexShrink: 0,
-                            px: 1.25,
-                            py: 0.5,
-                            borderRadius: "8px",
-                            border: "1px solid #2b2b38",
-                            bgcolor: "#15151d",
-                            color: "#c9c9d4",
-                            fontSize: "0.72rem",
-                            fontWeight: 600,
+                            px: "12px",
+                            height: 36,
+                            borderRadius: "10px",
+                            border: "2px solid rgba(227,233,248,0.1)",
+                            ...lato(14, 21, 500, "#D9D9D9"),
                             textTransform: "none",
-                            "&:hover": { borderColor: "#7c3aed", bgcolor: "#1d1d28" },
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.04)" },
                         }}
                     >
                         Filters{activeCount > 0 ? ` (${activeCount})` : ""}
@@ -99,32 +106,27 @@ export default function PracticeLabsPage() {
                 {filtered.length === 0 ? (
                     <Box
                         sx={{
+                            position: "relative",
                             display: "flex",
                             flexDirection: "column",
                             alignItems: "center",
                             justifyContent: "center",
-                            gap: 1,
+                            gap: "8px",
                             py: 6,
-                            borderRadius: "14px",
-                            border: "1px solid #1c1c26",
-                            bgcolor: "#0b0b12",
+                            borderRadius: "24px",
+                            bgcolor: "rgba(9,9,21,0.44)",
+                            "&::before": gradientBorder(),
                         }}
                     >
-                        <MdOutlineScience size={26} color="#4b4b58" />
-                        <Typography sx={{ color: "#8a8a9a", fontSize: "0.82rem" }}>
-                            No labs match the selected filters.
-                        </Typography>
+                        <MdOutlineScience size={26} color="#737373" />
+                        <Typography sx={lato(14, 21, 500, "#A6A6A6")}>No labs match the selected filters.</Typography>
                     </Box>
                 ) : (
                     <Box
                         sx={{
                             display: "grid",
-                            gridTemplateColumns: {
-                                xs: "1fr",
-                                sm: "repeat(2, minmax(0, 1fr))",
-                                xl: "repeat(3, minmax(0, 1fr))",
-                            },
-                            gap: 1.5,
+                            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 270px), 1fr))",
+                            gap: "24px",
                         }}
                     >
                         {filtered.map((lab) => (
@@ -142,7 +144,7 @@ export default function PracticeLabsPage() {
                 anchor="left"
                 open={drawerOpen}
                 onClose={() => setDrawerOpen(false)}
-                slotProps={{ paper: { sx: { bgcolor: "#07070d", width: 270, p: 1.25 } } }}
+                slotProps={{ paper: { sx: { bgcolor: "#07070d", width: 290, maxWidth: "85vw", p: "8px" } } }}
             >
                 {panel}
             </Drawer>

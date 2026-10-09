@@ -305,7 +305,10 @@ export default function ExploreBatchesPage() {
                     </Box>
                 ) : (
                     <>
-                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.5 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns:{
+                            xs: "1fr",
+                            md: "1fr 1fr 1fr"
+                        }, gap: 1.5 }}>
                             {filtered.map((batch) => {
                                 const startDate = new Date(batch.batchStartDate);
                                 const endDate = new Date(batch.batchEndDate);

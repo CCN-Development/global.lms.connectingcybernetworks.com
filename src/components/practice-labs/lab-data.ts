@@ -1,12 +1,15 @@
 // Mock data source — swap for a PracticeLabContext once the labs API exists.
 
+// Not under /dashboard: that prefix is claimed by the app router and the auth proxy.
+export const labAsset = (name: string) => `/practice-labs/${name}`;
+
 export type LabDifficulty = "Easy" | "Intermediate" | "Hard";
 export type LabAccess = "Free" | "Paid";
 export type LabRoomType = "Guided" | "Challenge" | "Walkthrough";
 
 export type LabTaskBlock =
-    | { kind: "banner"; caption: string }
-    | { kind: "text"; heading?: string; body: string }
+    | { kind: "banner"; image: string; caption: string }
+    | { kind: "text"; heading?: string; body: string; bullets?: string[] }
     | { kind: "question"; questionId: string; prompt: string; answer: string; hint: string };
 
 export interface PracticeLabTask {
@@ -36,7 +39,14 @@ export interface PracticeLab {
     /** Index into the card artwork palette. */
     art: number;
     tasks: PracticeLabTask[];
+    environment: LabEnvironmentSection[];
     solution: { title: string; body: string }[];
+}
+
+export interface LabEnvironmentSection {
+    heading: string;
+    body?: string;
+    bullets?: string[];
 }
 
 export const DIFFICULTY_COLORS: Record<LabDifficulty, string> = {
@@ -57,7 +67,7 @@ const SOC_TASK: PracticeLabTask = {
     taskId: "task-1",
     title: "Task 1",
     blocks: [
-        { kind: "banner", caption: "Security Operations Center — live alert triage" },
+        { kind: "banner", image: labAsset("task-banner.png"), caption: "Security Operations Center — live alert triage" },
         {
             kind: "text",
             body: "In this lab environment, you will be provided with GUI access to a Kali machine. The target machines will be accessible at demo.ine.local running a vulnerable RDP service.",
@@ -77,7 +87,14 @@ const SOC_TASK: PracticeLabTask = {
         {
             kind: "text",
             heading: "Your daily duties",
-            body: "Are you inspired by your colleagues' work and wish to advance to their level one day? Start by mastering the fundamentals — triage every alert, document what you see, and escalate anything you cannot confidently close. Consistency beats brilliance in a SOC.",
+            body: "Are you inspired by your colleagues' work and wish to advance to their roles? Cyber security is a broad field, and with time you'll find the path that excites you most. But before that, you need to gain work experience as a Junior Security Analyst. Along the way, you'll have many lessons and challenges, where you may:",
+            bullets: [
+                "Detect and prevent a data stealer infection on a coworker's laptop",
+                "Analyze and stop a phishing campaign targeting the finance team",
+                "Participate in a bigger incident, such as a full-scale ransomware attack",
+                "Team up with your teammates to build detection rules and automations",
+                "Go beyond cyber and understand how companies operate from the inside",
+            ],
         },
     ],
 };
@@ -156,6 +173,13 @@ export const PRACTICE_LABS: PracticeLab[] = TITLES.map((entry, index) => {
         isNew: index % 3 === 1,
         art: index % LAB_ART.length,
         tasks: [SOC_TASK, SOC_TASK_2],
+        environment: [
+            {
+                heading: "Tools",
+                body: "The best tools for this lab are:",
+                bullets: ["Nmap", "searchsploit", "msfconsole", "xfreerdp"],
+            },
+        ],
         solution: [
             {
                 title: "Identifying the malicious host",
@@ -178,8 +202,8 @@ export function findPracticeLab(labId: string): PracticeLab | undefined {
 }
 
 export function labStatusBadge(lab: PracticeLab): { label: string; bg: string; fg: string } {
-    if (lab.progress >= 100) return { label: "100% completed", bg: "#10b981", fg: "#04241c" };
-    if (lab.isNew && lab.progress === 0) return { label: "Newly Added", bg: "#f43f5e", fg: "#3d0713" };
-    if (lab.progress > 0) return { label: `${lab.progress}% completed`, bg: "#009DFF", fg: "#031f33" };
-    return { label: "Not Started", bg: "#2a2a35", fg: "#c9c9d4" };
+    if (lab.progress >= 100) return { label: "100% completed", bg: "#BBEDBB", fg: "#195C19" };
+    if (lab.isNew && lab.progress === 0) return { label: "Newly Added", bg: "#F6D4D8", fg: "#9D1F2E" };
+    if (lab.progress > 0) return { label: `${lab.progress}% completed`, bg: "#BBC9ED", fg: "#0E1934" };
+    return { label: "Not Started", bg: "#BFBFBF", fg: "#262626" };
 }

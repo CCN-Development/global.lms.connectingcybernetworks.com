@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Box, Button, Checkbox, Collapse, FormControlLabel, Typography } from "@mui/material";
-import { MdFilterList, MdKeyboardArrowDown, MdRestartAlt } from "react-icons/md";
-import { PRACTICE_LABS } from "./lab-data";
+import Image from "next/image";
+import { Box, Button, ButtonBase, Checkbox, Collapse, FormControlLabel, Typography } from "@mui/material";
+import { MdCheck } from "react-icons/md";
+import { Line, lato } from "@/components/dashboard/home/shared";
+import { FONT_INTER, gradientBorder } from "@/components/aish/tokens";
+import { PRACTICE_LABS, labAsset } from "./lab-data";
 
 export interface LabFilterState {
     status: string[];
@@ -27,107 +30,96 @@ export const DURATION_OPTIONS = ["Under 20 min", "20 - 45 min", "45 min +"] as c
 
 type GroupId = keyof LabFilterState;
 
-const ACCENTS: Record<GroupId, string> = {
-    status: "#10b981",
-    difficulty: "#f59e0b",
-    access: "#06b6d4",
-    category: "#009DFF",
-    duration: "#f97316",
-    roomType: "#7c3aed",
-};
+/** Figma's gradient dividers fade towards the right once flipped. */
+export function FadeDivider({ src = labAsset("group-divider.svg") }: { src?: string }) {
+    return (
+        <Box sx={{ width: "100%", transform: "rotate(180deg)" }}>
+            <Line src={src} />
+        </Box>
+    );
+}
+
+const boxIcon = {
+    width: 16,
+    height: 16,
+    borderRadius: "4px",
+    border: "1px solid #A6A6A6",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+} as const;
 
 function FilterGroup({
     label,
-    accent,
     options,
     selected,
     defaultOpen,
     onToggle,
 }: {
     label: string;
-    accent: string;
     options: readonly string[];
     selected: string[];
     defaultOpen?: boolean;
     onToggle: (option: string) => void;
 }) {
     const [open, setOpen] = useState(Boolean(defaultOpen));
+    const angle = open ? 96.36 : 107.47;
 
     return (
         <Box
             sx={{
-                border: `1px solid ${selected.length ? accent : "#23232e"}`,
-                borderRadius: "10px",
-                bgcolor: "#101018",
-                overflow: "hidden",
-                transition: "border-color .18s ease",
+                width: "100%",
+                px: "16px",
+                py: "12px",
+                borderRadius: "12px",
+                backgroundImage: `linear-gradient(${angle}deg, rgba(64,64,64,0.25) 17.578%, rgba(64,64,64,0) 111.58%)`,
             }}
         >
-            <Box
+            <ButtonBase
                 onClick={() => setOpen((v) => !v)}
-                sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 1,
-                    px: 1.25,
-                    py: 1,
-                    cursor: "pointer",
-                    userSelect: "none",
-                    "&:hover": { bgcolor: "#16161f" },
-                }}
+                aria-expanded={open}
+                sx={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}
             >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: accent, flexShrink: 0 }} />
-                    <Typography noWrap sx={{ color: "#e4e4ec", fontSize: "0.78rem", fontWeight: 600 }}>
-                        {label}
-                    </Typography>
-                    {selected.length > 0 && (
-                        <Box
-                            component="span"
-                            sx={{
-                                bgcolor: accent,
-                                color: "#07070d",
-                                borderRadius: "999px",
-                                px: 0.7,
-                                fontSize: "0.6rem",
-                                fontWeight: 800,
-                                lineHeight: 1.7,
-                            }}
-                        >
-                            {selected.length}
-                        </Box>
-                    )}
-                </Box>
-                <MdKeyboardArrowDown
-                    size={17}
-                    color="#8a8a9a"
-                    style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .18s ease", flexShrink: 0 }}
+                <Typography noWrap sx={lato(14, 21, 500, "#D9D9D9")}>
+                    {label}
+                    {selected.length > 0 && ` (${selected.length})`}
+                </Typography>
+                <Image
+                    src={labAsset("icon-chevron-down.svg")}
+                    alt=""
+                    width={20}
+                    height={20}
+                    style={{ flexShrink: 0 }}
                 />
-            </Box>
+            </ButtonBase>
 
             <Collapse in={open} unmountOnExit>
-                <Box sx={{ px: 1.25, pb: 1, display: "flex", flexDirection: "column" }}>
+                <Box sx={{ pt: "12px" }}>
+                    <FadeDivider />
+                </Box>
+                <Box sx={{ pt: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
                     {options.map((option) => (
                         <FormControlLabel
                             key={option}
                             control={
                                 <Checkbox
-                                    size="small"
                                     checked={selected.includes(option)}
                                     onChange={() => onToggle(option)}
-                                    sx={{
-                                        color: "#3a3a48",
-                                        p: 0.5,
-                                        "&.Mui-checked": { color: accent },
-                                    }}
+                                    disableRipple
+                                    icon={<Box sx={boxIcon} />}
+                                    checkedIcon={
+                                        <Box sx={{ ...boxIcon, borderColor: "#F2F2F2" }}>
+                                            <MdCheck size={12} color="#FFFFFF" />
+                                        </Box>
+                                    }
+                                    sx={{ p: 0 }}
                                 />
                             }
                             label={option}
                             sx={{
                                 m: 0,
-                                gap: 0.75,
-                                "& .MuiFormControlLabel-label": { color: "#b4b4c2", fontSize: "0.74rem" },
+                                gap: "12px",
+                                "& .MuiFormControlLabel-label": { ...lato(14, 21, 500, "#F2F2F2"), whiteSpace: "nowrap" },
                             }}
                         />
                     ))}
@@ -175,71 +167,87 @@ export default function LabFilters({
     return (
         <Box
             sx={{
+                position: "relative",
+                height: "100%",
                 display: "flex",
                 flexDirection: "column",
-                border: "1px solid #1c1c26",
-                borderRadius: "14px",
-                bgcolor: "#0b0b12",
-                p: 1.25,
-                gap: 1,
+                justifyContent: "space-between",
+                gap: "24px",
+                p: { xs: "16px", lg: "24px" },
+                borderRadius: "24px",
+                overflow: "hidden",
+                bgcolor: "rgba(9,9,21,0.44)",
+                backdropFilter: "blur(4px)",
+                "&::before": gradientBorder(),
             }}
         >
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, px: 0.25 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                    <MdFilterList size={16} color="#7c3aed" />
-                    <Typography sx={{ color: "#fff", fontSize: "0.85rem", fontWeight: 700 }}>Filters</Typography>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "16px", minHeight: 0 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <Image src={labAsset("icon-filter.svg")} alt="" width={20} height={20} />
+                        <Typography sx={lato(18, 27, 600, "#BFBFBF")}>Filters</Typography>
+                    </Box>
+                    {draftCount > 0 && (
+                        <ButtonBase
+                            onClick={() => {
+                                setDraft(EMPTY_LAB_FILTERS);
+                                onClear();
+                            }}
+                            sx={{
+                                ...lato(12, 18, 500, "#A6A6A6"),
+                                px: "6px",
+                                borderRadius: "6px",
+                                "&:hover": { color: "#FFFFFF" },
+                            }}
+                        >
+                            Clear all
+                        </ButtonBase>
+                    )}
                 </Box>
-                {draftCount > 0 && (
-                    <Button
-                        onClick={() => {
-                            setDraft(EMPTY_LAB_FILTERS);
-                            onClear();
-                        }}
-                        startIcon={<MdRestartAlt size={14} />}
-                        sx={{
-                            minWidth: 0,
-                            p: 0.25,
-                            color: "#8a8a9a",
-                            fontSize: "0.68rem",
-                            textTransform: "none",
-                            "&:hover": { color: "#f43f5e", bgcolor: "transparent" },
-                        }}
-                    >
-                        Clear
-                    </Button>
-                )}
-            </Box>
 
-            <Box sx={{ height: "1px", bgcolor: "#1c1c26" }} />
+                <FadeDivider src={labAsset("filters-divider.svg")} />
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
-                {groups.map((group) => (
-                    <FilterGroup
-                        key={group.id}
-                        label={group.label}
-                        accent={ACCENTS[group.id]}
-                        options={group.options}
-                        selected={draft[group.id]}
-                        defaultOpen={group.defaultOpen}
-                        onToggle={(option) => toggle(group.id, option)}
-                    />
-                ))}
+                <Box
+                    sx={{
+                        mt: "8px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        minHeight: 0,
+                        overflowY: "auto",
+                        scrollbarWidth: "none",
+                        "&::-webkit-scrollbar": { display: "none" },
+                    }}
+                >
+                    {groups.map((group) => (
+                        <FilterGroup
+                            key={group.id}
+                            label={group.label}
+                            options={group.options}
+                            selected={draft[group.id]}
+                            defaultOpen={group.defaultOpen}
+                            onToggle={(option) => toggle(group.id, option)}
+                        />
+                    ))}
+                </Box>
             </Box>
 
             <Button
                 fullWidth
                 onClick={() => onApply(draft)}
                 sx={{
-                    mt: 0.5,
-                    py: 0.9,
+                    flexShrink: 0,
+                    height: 44,
                     borderRadius: "10px",
+                    border: "2px solid rgba(227,233,248,0.1)",
+                    boxShadow: "0 0 8px rgba(255,255,255,0.12)",
                     textTransform: "none",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    color: "#fff",
-                    border: "1px solid #2b2b38",
-                    bgcolor: "#15151d",
-                    "&:hover": { bgcolor: "#1d1d28", borderColor: "#7c3aed" },
+                    fontFamily: FONT_INTER,
+                    fontSize: "14px",
+                    lineHeight: "21px",
+                    fontWeight: 500,
+                    color: "#FFFFFF",
+                    "&:hover": { bgcolor: "rgba(255,255,255,0.04)", borderColor: "rgba(227,233,248,0.2)" },
                 }}
             >
                 Apply Filters

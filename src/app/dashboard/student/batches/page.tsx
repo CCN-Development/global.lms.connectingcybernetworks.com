@@ -69,7 +69,10 @@ export default function OngoingBatchesPage() {
     }
 
     return (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: {
+            xs:"1fr",
+            md:"1fr 1fr 1fr"
+        }, gap: 2 }}>
             {enrolledBatches.map((enrollment) => {
                 const { batch, nextSession } = enrollment;
                 const joinLink = nextSession?.sessionLink ?? batch.batchLink;

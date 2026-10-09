@@ -90,7 +90,12 @@ function CompletedContent() {
                             <Typography sx={{ fontStyle: "italic", fontSize: "0.95rem", fontWeight: 600, color: "#fff", mb: 1.5 }}>
                                 {group.month}
                             </Typography>
-                            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 1.5 }}>
+                            <Box sx={{
+                                display: "grid", gridTemplateColumns: {
+                                    xs: "1fr",
+                                    md: "1fr 1fr 1fr"
+                                }, gap: 1.5
+                            }}>
                                 {group.batches.map((item) => (
                                     <BatchCard
                                         key={item.batchStudentId}
