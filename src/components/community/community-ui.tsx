@@ -216,10 +216,12 @@ interface LmsButtonProps {
     disabled?: boolean;
     type?: "button" | "submit";
     sx?: SxProps<Theme>;
+    /** Show the blurred highlight along the top edge (some design instances omit it). */
+    glowLine?: boolean;
 }
 
 /** The design system's gradient "LMS Button" with its blurred top highlight. */
-export function LmsButton({ children, onClick, icon, disabled, type = "button", sx }: LmsButtonProps) {
+export function LmsButton({ children, onClick, icon, disabled, type = "button", sx, glowLine = true }: LmsButtonProps) {
     return (
         <ButtonBase
             type={type}
@@ -247,9 +249,11 @@ export function LmsButton({ children, onClick, icon, disabled, type = "button", 
                 ...(Array.isArray(sx) ? sx : [sx]),
             ]}
         >
-            <Box aria-hidden sx={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", lineHeight: 0, pointerEvents: "none" }}>
-                <Image src={communityAsset("btn-glow-line.svg")} alt="" width={158} height={23} />
-            </Box>
+            {glowLine && (
+                <Box aria-hidden sx={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", lineHeight: 0, pointerEvents: "none" }}>
+                    <Image src={communityAsset("btn-glow-line.svg")} alt="" width={158} height={23} />
+                </Box>
+            )}
             {icon}
             <Box component="span" sx={{ position: "relative" }}>
                 {children}

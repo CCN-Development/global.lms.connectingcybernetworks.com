@@ -1,262 +1,225 @@
 "use client";
-import React, { useEffect, useState } from "react";
+
+import React, { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Box, ButtonBase, InputBase, Menu, MenuItem, Typography } from "@mui/material";
 import StudentLayout from "@/layouts/StudentLayout";
 import StudentHeader from "@/layouts/StudentHeader";
-import { Box, Button, InputAdornment, Menu, MenuItem, TextField, Typography } from "@mui/material";
-import { MdAdd, MdKeyboardArrowDown, MdSearch } from "react-icons/md";
-import CCNButton from "@/components/buttons/CCNButton";
+import { LmsButton } from "@/components/community/community-ui";
 import CreateRequestModal from "@/components/requests/CreateRequestModal";
-import { REQUEST_TYPES, RequestProvider, useRequests } from "@/contexts/RequestContext";
-import { RequestFiltersProvider, useRequestFilters, type RequestSort } from "./filters";
+import { DATE_OPTIONS, RQ, SORT_OPTIONS, TEXT, requestAsset } from "@/components/requests/request-data";
+import { Icon, dropdownItemSx, dropdownPaperSx } from "@/components/requests/request-parts";
+import { RequestFiltersProvider, useRequestFilters } from "./filters";
 
-// ── Tabs ───────────────────────────────────────────────────────────────────────
+const BASE = "/dashboard/student/requests";
 
 const TABS = [
-    { label: "Active", href: "/dashboard/student/requests", key: "active" as const },
-    { label: "Resolved", href: "/dashboard/student/requests/resolved", key: "resolved" as const },
-    { label: "Rejected", href: "/dashboard/student/requests/rejected", key: "rejected" as const },
+    { label: "Active", href: BASE },
+    { label: "Resolved", href: `${BASE}/resolved` },
+    { label: "Rejected", href: `${BASE}/rejected` },
 ];
 
-const SORT_OPTIONS: { label: string; value: RequestSort }[] = [
-    { label: "Newest first", value: "newest" },
-    { label: "Oldest first", value: "oldest" },
-];
+// ─── Filter dropdown ("Sort By" / "Date") ──────────────────────────────────
+function FilterDropdown<T extends string>({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: T;
+    options: { value: T; label: string }[];
+    onChange: (value: T) => void;
+}) {
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+    return (
+        <>
+            <ButtonBase
+                aria-haspopup="menu"
+                aria-label={`${label}: ${options.find((o) => o.value === value)?.label ?? ""}`}
+                onClick={(event) => setAnchor(event.currentTarget)}
+                sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    pl: "16px",
+                    pr: "12px",
+                    py: "8px",
+                    borderRadius: "8px",
+                    bgcolor: RQ.filterBg,
+                    backdropFilter: "blur(12px)",
+                    ...TEXT.med16,
+                    color: RQ.white,
+                    whiteSpace: "nowrap",
+                    transition: "background-color .15s ease",
+                    "&:hover": { bgcolor: "rgba(64,64,64,0.6)" },
+                }}
+            >
+                {label}
+                <Icon name="icon-chevron-down.svg" size={24} sx={{ transform: anchor ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
+            </ButtonBase>
+            <Menu
+                anchorEl={anchor}
+                open={Boolean(anchor)}
+                onClose={() => setAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+                transformOrigin={{ vertical: "top", horizontal: "left" }}
+                slotProps={{ paper: { sx: { ...dropdownPaperSx, minWidth: 180 } } }}
+            >
+                {options.map((option) => (
+                    <MenuItem
+                        key={option.value}
+                        selected={option.value === value}
+                        sx={dropdownItemSx}
+                        onClick={() => {
+                            onChange(option.value);
+                            setAnchor(null);
+                        }}
+                    >
+                        {option.label}
+                    </MenuItem>
+                ))}
+            </Menu>
+        </>
+    );
+}
 
-const FILTER_BUTTON_SX = {
-    color: "rgba(255,255,255,0.65)",
-    bgcolor: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "8px",
-    px: 1.5,
-    py: 0.55,
-    fontSize: "0.75rem",
-    fontWeight: 500,
-    textTransform: "none",
-    "&:hover": { bgcolor: "rgba(255,255,255,0.08)" },
-} as const;
-
-const MENU_SLOT_PROPS = {
-    paper: {
-        sx: {
-            bgcolor: "#0A0A0C",
-            border: "1px solid #26262B",
-            borderRadius: "10px",
-            "& .MuiMenuItem-root": { fontSize: "0.78rem", color: "#E4E4E7" },
-            "& .MuiMenuItem-root:hover": { bgcolor: "#18181B" },
-            "& .Mui-selected": { bgcolor: "#1E1B4B !important" },
-        },
-    },
-} as const;
-
-// ── Toolbar ────────────────────────────────────────────────────────────────────
-
+// ─── Header + toolbar ──────────────────────────────────────────────────────
 function RequestsToolbar() {
     const pathname = usePathname();
     const router = useRouter();
-    const { summary, getStudentRequestSummary } = useRequests();
-    const { search, setSearch, sort, setSort, requestType, setRequestType, refresh } = useRequestFilters();
-
+    const { search, setSearch, sort, setSort, dateRange, setDateRange, addRequest } = useRequestFilters();
     const [createOpen, setCreateOpen] = useState(false);
-    const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
-    const [typeAnchor, setTypeAnchor] = useState<null | HTMLElement>(null);
-
-    useEffect(() => { void getStudentRequestSummary(); }, [getStudentRequestSummary]);
-
-    const counts: Record<string, number | undefined> = {
-        active: summary?.active,
-        resolved: summary?.resolved,
-        rejected: summary?.rejected,
-    };
 
     return (
         <>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
-                {/* Tab pills */}
+            {/* Title row */}
+            <Box sx={{ position: "relative", display: "flex", alignItems: "center", justifyContent: { xs: "flex-end", md: "space-between" }, gap: "16px", minHeight: 44 }}>
+                <Typography component="h1" sx={{ ...TEXT.poppinsMed20, color: RQ.white, display: { xs: "none", md: "block" } }}>
+                    My Requests
+                </Typography>
+                <Box aria-hidden sx={{ position: "absolute", left: 159, top: -755, lineHeight: 0, pointerEvents: "none", display: { xs: "none", md: "block" } }}>
+                    <Image src={requestAsset("header-stars.svg")} alt="" width={901} height={831} loading="eager" />
+                </Box>
+                <LmsButton onClick={() => setCreateOpen(true)} icon={<Icon name="icon-plus.svg" size={20} />} sx={{ position: "relative" }}>
+                    Create New Request
+                </LmsButton>
+            </Box>
+
+            {/* Tabs + filters */}
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px 24px" }}>
                 <Box
+                    role="tablist"
                     sx={{
                         display: "flex",
-                        gap: 0.5,
-                        bgcolor: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: "10px",
-                        p: "3px",
+                        alignItems: "center",
+                        gap: "8px",
+                        p: "4px",
+                        borderRadius: "99px",
+                        border: `1px solid ${RQ.tabGroupBorder}`,
+                        bgcolor: RQ.tabGroupBg,
+                        backdropFilter: "blur(4px)",
+                        opacity: 0.8,
+                        maxWidth: "100%",
+                        overflowX: "auto",
+                        scrollbarWidth: "none",
+                        "&::-webkit-scrollbar": { display: "none" },
                     }}
                 >
-                    {TABS.map(({ label, href, key }) => {
-                        const active =
-                            href === "/dashboard/student/requests"
-                                ? pathname === href
-                                : pathname.startsWith(href);
-                        const count = counts[key];
+                    {TABS.map((tab) => {
+                        const active = tab.href === BASE ? pathname === BASE : pathname.startsWith(tab.href);
                         return (
-                            <Button
-                                key={href}
-                                onClick={() => router.push(href)}
+                            <ButtonBase
+                                key={tab.href}
+                                LinkComponent={Link}
+                                href={tab.href}
+                                role="tab"
+                                aria-selected={active}
                                 sx={{
-                                    borderRadius: "7px",
-                                    px: 1.5,
-                                    py: 0.45,
-                                    fontSize: "0.75rem",
-                                    fontWeight: active ? 600 : 500,
-                                    textTransform: "none",
-                                    bgcolor: active ? "rgba(255,255,255,0.12)" : "transparent",
-                                    color: active ? "#fff" : "rgba(255,255,255,0.45)",
-                                    minWidth: 0,
-                                    lineHeight: 1.4,
-                                    gap: 0.6,
-                                    "&:hover": {
-                                        bgcolor: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
-                                        color: active ? "#fff" : "rgba(255,255,255,0.7)",
-                                    },
+                                    height: 44,
+                                    px: active ? "16px" : "20px",
+                                    py: "8px",
+                                    flexShrink: 0,
+                                    borderRadius: active ? "99px" : "8px",
+                                    border: active ? `1px solid ${RQ.primary75}` : "1px solid transparent",
+                                    backgroundImage: active ? RQ.tabActiveBg : "none",
+                                    backdropFilter: active ? "blur(12px)" : "none",
+                                    ...TEXT.med16,
+                                    color: active ? RQ.white : RQ.n400,
+                                    whiteSpace: "nowrap",
+                                    transition: "color .15s ease",
+                                    "&:hover": { color: RQ.white },
                                 }}
                             >
-                                {label}
-                                {count !== undefined && count > 0 && (
-                                    <Typography
-                                        component="span"
-                                        sx={{
-                                            fontSize: "0.66rem",
-                                            fontWeight: 600,
-                                            px: 0.6,
-                                            borderRadius: "999px",
-                                            bgcolor: "rgba(255,255,255,0.12)",
-                                            color: "inherit",
-                                            lineHeight: 1.6,
-                                        }}
-                                    >
-                                        {count}
-                                    </Typography>
-                                )}
-                            </Button>
+                                {tab.label}
+                            </ButtonBase>
                         );
                     })}
                 </Box>
 
-                <Box sx={{ flex: 1 }} />
-
-                {/* Sort By */}
-                <Button
-                    onClick={(event) => setSortAnchor(event.currentTarget)}
-                    endIcon={<MdKeyboardArrowDown size={14} />}
-                    sx={FILTER_BUTTON_SX}
-                >
-                    {SORT_OPTIONS.find((option) => option.value === sort)?.label ?? "Sort By"}
-                </Button>
-                <Menu
-                    anchorEl={sortAnchor}
-                    open={Boolean(sortAnchor)}
-                    onClose={() => setSortAnchor(null)}
-                    slotProps={MENU_SLOT_PROPS}
-                >
-                    {SORT_OPTIONS.map((option) => (
-                        <MenuItem
-                            key={option.value}
-                            selected={option.value === sort}
-                            onClick={() => { setSort(option.value); setSortAnchor(null); }}
-                        >
-                            {option.label}
-                        </MenuItem>
-                    ))}
-                </Menu>
-
-                {/* Category filter */}
-                <Button
-                    onClick={(event) => setTypeAnchor(event.currentTarget)}
-                    endIcon={<MdKeyboardArrowDown size={14} />}
-                    sx={FILTER_BUTTON_SX}
-                >
-                    {requestType || "Category"}
-                </Button>
-                <Menu
-                    anchorEl={typeAnchor}
-                    open={Boolean(typeAnchor)}
-                    onClose={() => setTypeAnchor(null)}
-                    slotProps={MENU_SLOT_PROPS}
-                >
-                    <MenuItem
-                        selected={requestType === ""}
-                        onClick={() => { setRequestType(""); setTypeAnchor(null); }}
+                <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px 24px", width: { xs: "100%", lg: "auto" }, justifyContent: { lg: "flex-end" } }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                        <FilterDropdown label="Sort By" value={sort} options={SORT_OPTIONS} onChange={setSort} />
+                        <FilterDropdown label="Date" value={dateRange} options={DATE_OPTIONS} onChange={setDateRange} />
+                    </Box>
+                    <Box
+                        role="search"
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            height: 48,
+                            width: { xs: "100%", sm: 279 },
+                            px: "12px",
+                            py: "8px",
+                            borderRadius: "12px",
+                            border: `1px solid ${RQ.primary75}`,
+                        }}
                     >
-                        All categories
-                    </MenuItem>
-                    {REQUEST_TYPES.map((type) => (
-                        <MenuItem
-                            key={type}
-                            selected={type === requestType}
-                            onClick={() => { setRequestType(type); setTypeAnchor(null); }}
-                        >
-                            {type}
-                        </MenuItem>
-                    ))}
-                </Menu>
-
-                {/* Search */}
-                <TextField
-                    placeholder="Search requests..."
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    size="small"
-                    slotProps={{
-                        input: {
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <MdSearch size={15} style={{ color: "rgba(255,255,255,0.3)" }} />
-                                </InputAdornment>
-                            ),
-                        },
-                    }}
-                    sx={{
-                        width: 195,
-                        "& .MuiOutlinedInput-root": {
-                            borderRadius: "8px",
-                            bgcolor: "rgba(255,255,255,0.05)",
-                            fontSize: "0.75rem",
-                            "& fieldset": { borderColor: "rgba(255,255,255,0.1)" },
-                            "&:hover fieldset": { borderColor: "rgba(255,255,255,0.2)" },
-                            "&.Mui-focused fieldset": { borderColor: "rgba(120,80,200,0.5)" },
-                        },
-                        "& .MuiOutlinedInput-input": {
-                            color: "rgba(255,255,255,0.7)",
-                            py: 0.72,
-                            "&::placeholder": { color: "rgba(255,255,255,0.28)", opacity: 1 },
-                        },
-                    }}
-                />
-
-                {/* Create */}
-                <Box>
-                    <CCNButton onClick={() => setCreateOpen(true)}>
-                        <MdAdd size={15} style={{ marginRight: 5, verticalAlign: "middle" }} />
-                        Create New Request
-                    </CCNButton>
+                        <Icon name="icon-search.svg" size={24} />
+                        <InputBase
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Search requests..."
+                            inputProps={{ "aria-label": "Search requests" }}
+                            sx={{
+                                flex: 1,
+                                minWidth: 0,
+                                ...TEXT.interReg16,
+                                lineHeight: "25px",
+                                color: RQ.white,
+                                "& input": { p: 0, textOverflow: "ellipsis" },
+                                "& input::placeholder": { color: RQ.n300, opacity: 1 },
+                            }}
+                        />
+                    </Box>
                 </Box>
             </Box>
 
             <CreateRequestModal
                 open={createOpen}
                 onClose={() => setCreateOpen(false)}
-                onCreated={() => {
-                    refresh();
-                    void getStudentRequestSummary();
-                    router.push("/dashboard/student/requests");
+                onCreated={(request) => {
+                    addRequest(request);
+                    router.push(BASE);
                 }}
             />
         </>
     );
 }
 
-// ── Layout ─────────────────────────────────────────────────────────────────────
-
+// ─── Layout ────────────────────────────────────────────────────────────────
 export default function RequestsLayout({ children }: { children: React.ReactNode }) {
     return (
-        <RequestProvider>
-            <RequestFiltersProvider>
-                <StudentLayout header={<StudentHeader title="My Requests" />}>
+        <RequestFiltersProvider>
+            <StudentLayout header={<StudentHeader title="My Requests" />} headerMobileOnly>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", pb: "24px" }}>
                     <RequestsToolbar />
                     {children}
-                </StudentLayout>
-            </RequestFiltersProvider>
-        </RequestProvider>
+                </Box>
+            </StudentLayout>
+        </RequestFiltersProvider>
     );
 }

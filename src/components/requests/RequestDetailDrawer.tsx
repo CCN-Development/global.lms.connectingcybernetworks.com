@@ -1,415 +1,327 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-    Box,
-    Button,
-    CircularProgress,
-    Drawer,
-    IconButton,
-    Typography,
-} from "@mui/material";
+import React from "react";
+import Image from "next/image";
+import { Box, ButtonBase, Drawer, Typography } from "@mui/material";
 import toast from "react-hot-toast";
-import {
-    MdCheck,
-    MdClose,
-    MdDescription,
-    MdThumbDown,
-    MdThumbUp,
-    MdVisibility,
-} from "react-icons/md";
-import {
-    ACTIVE_STATUSES,
-    STATUS_LABELS,
-    useRequests,
-    type RequestTimeline,
-    type StudentRequest,
-} from "@/contexts/RequestContext";
-import { STATUS_TONE, formatDateTime, formatFileSize, hoursRemaining } from "./request-ui";
+import { RQ, TEXT, requestAsset, type SampleRequest, type TimelineItem } from "./request-data";
+import { DateStamp, DrawerStatusPill, Icon, TagPill } from "./request-parts";
 
-/* ------------------------------------------------------------------ */
-/* Sub-components                                                      */
-/* ------------------------------------------------------------------ */
+const hiddenScrollbar = {
+    scrollbarWidth: "none",
+    msOverflowStyle: "none",
+    "&::-webkit-scrollbar": { display: "none" },
+} as const;
+
+/** Glass panel used by the description and feedback blocks. */
+const glassPanelSx = {
+    position: "relative",
+    borderRadius: "24px",
+    border: "1px solid rgba(255,255,255,0.88)",
+    backgroundImage: RQ.glassPanel,
+    backdropFilter: "blur(12px)",
+    boxShadow: RQ.glassInset,
+} as const;
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
+    return <Typography sx={{ ...TEXT.reg14, color: RQ.n300, textTransform: "uppercase" }}>{children}</Typography>;
+}
+
+function TimelineMarker({ kind }: { kind: TimelineItem["kind"] }) {
+    if (kind === "step") return <Icon name="timeline-dot-20.svg" size={20} />;
     return (
-        <Typography
+        <Box
             sx={{
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "#8A8A93",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 20,
+                height: 20,
+                borderRadius: "50px",
+                border: "1px solid rgba(255,255,255,0.08)",
+                bgcolor: kind === "rejected" ? RQ.error600 : undefined,
+                backgroundImage: kind === "accepted" ? RQ.acceptedMarker : undefined,
+                flexShrink: 0,
             }}
         >
-            {children}
-        </Typography>
+            <Icon name={kind === "rejected" ? "icon-x-12.svg" : "icon-check-12.svg"} size={12} />
+        </Box>
     );
 }
 
-function TimelineRow({ item, isLast }: { item: RequestTimeline; isLast: boolean }) {
-    const isRejected = item.timelineStatus === "rejected" || item.timelineStatus === "withdrawn";
-    const isDone = item.timelineStatus === "approved" || item.timelineStatus === "resolved";
-
-    const markerColor = isRejected ? "#f43f5e" : isDone ? "#10b981" : "#8B5CF6";
-
+function TimelineRow({ item }: { item: TimelineItem }) {
     return (
-        <Box sx={{ display: "flex", gap: 1.25, position: "relative", pb: isLast ? 0 : 1.75 }}>
-            {/* Connector + marker */}
-            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                <Box
-                    sx={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        bgcolor: markerColor,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#fff",
-                        zIndex: 1,
-                    }}
-                >
-                    {isRejected ? <MdClose size={12} /> : isDone ? <MdCheck size={12} /> : (
-                        <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#fff" }} />
-                    )}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: "12px", minHeight: 47 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", alignSelf: "stretch", pt: "2px", flexShrink: 0 }}>
+                <TimelineMarker kind={item.kind} />
+                {item.kind === "step" && <Box sx={{ flex: 1, width: "1px", minHeight: "1px", backgroundImage: RQ.timelineLine }} />}
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", columnGap: "12px", rowGap: "4px", flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                    <Typography sx={{ ...TEXT.med16, color: RQ.white }}>{item.title}</Typography>
+                    {item.note && <Typography sx={{ ...TEXT.interReg12, color: RQ.n300 }}>{item.note}</Typography>}
                 </Box>
-                {!isLast && (
-                    <Box sx={{ position: "absolute", top: 18, bottom: -4, width: "2px", bgcolor: "#3F3F46" }} />
-                )}
-            </Box>
-
-            {/* Copy */}
-            <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 0.5 }}>
-                <Typography sx={{ fontSize: "0.85rem", fontWeight: 500, color: "#fff", flex: 1, minWidth: 120 }}>
-                    {item.timelineTitle}
-                </Typography>
-                <Typography sx={{ fontSize: "0.72rem", color: "#8A8A93", whiteSpace: "nowrap" }}>
-                    {formatDateTime(item.timelineDate)}
-                </Typography>
-                {item.timelineNote && (
-                    <Typography sx={{ fontSize: "0.76rem", color: "#A1A1AA", width: "100%", mt: 0.25 }}>
-                        {item.timelineNote}
-                    </Typography>
-                )}
+                <DateStamp iso={item.at} size="drawer" />
             </Box>
         </Box>
     );
 }
 
-function CalloutBox({
-    label,
-    text,
-    color,
-}: { label: string; text: string; color: string }) {
+function Callout({ label, text, tone }: { label: string; text: string; tone: "next" | "rejection" }) {
+    const isNext = tone === "next";
     return (
-        <Box sx={{ borderRadius: "12px", border: `1px solid ${color}`, bgcolor: "#0A0A0C", p: 1.5 }}>
-            <Typography
-                sx={{
-                    fontSize: "0.7rem",
-                    fontWeight: 600,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    color,
-                    mb: 0.75,
-                }}
-            >
-                {label}
-            </Typography>
-            <Typography sx={{ fontSize: "0.85rem", color: "#E4E4E7", lineHeight: 1.55, whiteSpace: "pre-line" }}>
-                {text}
-            </Typography>
+        <Box
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                p: "16px",
+                borderRadius: "24px",
+                borderStyle: "solid",
+                borderColor: isNext ? RQ.primary500 : "#7A1824",
+                borderWidth: isNext ? "1px 1px 3px 1px" : "0.6px 0.6px 2px 0.6px",
+                bgcolor: isNext ? "rgba(47,83,173,0.08)" : undefined,
+                backgroundImage: isNext
+                    ? undefined
+                    : "linear-gradient(180deg, rgba(224,44,66,0.08) 0%, rgba(173,34,51,0.08) 50%, rgba(122,24,36,0.08) 100%)",
+            }}
+        >
+            <SectionLabel>{label}</SectionLabel>
+            <Typography sx={{ ...TEXT.med16, color: RQ.white, whiteSpace: "pre-line" }}>{text}</Typography>
         </Box>
     );
 }
-
-/* ------------------------------------------------------------------ */
-/* Drawer                                                              */
-/* ------------------------------------------------------------------ */
 
 export interface RequestDetailDrawerProps {
     open: boolean;
-    request: StudentRequest | null;
+    request: SampleRequest | null;
     onClose: () => void;
-    onChanged?: (request: StudentRequest) => void;
+    onWithdraw: (request: SampleRequest) => void;
+    onFeedback: (request: SampleRequest, value: "up" | "down") => void;
 }
 
-export default function RequestDetailDrawer({ open, request, onClose, onChanged }: RequestDetailDrawerProps) {
-    const { withdrawRequest, submitRequestFeedback, submitting } = useRequests();
-    const [feedbackBusy, setFeedbackBusy] = useState(false);
+export default function RequestDetailDrawer({ open, request, onClose, onWithdraw, onFeedback }: RequestDetailDrawerProps) {
+    const isActive = request?.tab === "active";
 
-    if (!request) return null;
-
-    const isActive = ACTIVE_STATUSES.includes(request.requestStatus);
-    const tone = STATUS_TONE[request.requestStatus];
-    const sla = hoursRemaining(request);
-
-    const handleWithdraw = async () => {
-        const res = await withdrawRequest(request.requestId);
-        if (!res.success || !res.data) {
-            toast.error(res.message ?? "Failed to withdraw request");
-            return;
-        }
-        toast.success(res.message ?? "Request withdrawn");
-        onChanged?.(res.data);
-        onClose();
-    };
-
-    const handleFeedback = async (isSatisfied: boolean) => {
-        setFeedbackBusy(true);
-        const res = await submitRequestFeedback(request.requestId, isSatisfied);
-        setFeedbackBusy(false);
-        if (!res.success || !res.data) {
-            toast.error(res.message ?? "Failed to submit feedback");
-            return;
-        }
-        toast.success(res.message ?? "Thanks for your feedback");
-        onChanged?.(res.data);
+    const openAttachment = () => {
+        if (request?.attachment?.url) window.open(request.attachment.url, "_blank", "noopener,noreferrer");
+        else toast("Preview isn’t available for sample attachments.");
     };
 
     return (
         <Drawer
             anchor="right"
-            open={open}
+            open={open && request !== null}
             onClose={onClose}
             slotProps={{
+                backdrop: { sx: { bgcolor: RQ.overlay, backdropFilter: "blur(12px)" } },
                 paper: {
                     sx: {
-                        width: { xs: "100%", sm: 460 },
-                        bgcolor: "#000000",
-                        borderLeft: "1px solid #041884",
-                        borderTopLeftRadius: { xs: 0, sm: "18px" },
-                        borderBottomLeftRadius: { xs: 0, sm: "18px" },
-                        color: "#fff",
+                        width: { xs: "100%", sm: 476 },
+                        height: "100%",
+                        overflow: "hidden",
+                        bgcolor: "#000",
+                        backgroundImage: "none",
+                        color: RQ.white,
+                        borderStyle: "solid",
+                        borderColor: RQ.modalStroke,
+                        borderWidth: { xs: 0, sm: "1.5px 0 1.5px 1.5px" },
+                        borderTopLeftRadius: { xs: 0, sm: "32px" },
+                        borderBottomLeftRadius: { xs: 0, sm: "32px" },
+                        boxShadow: "0 0 44px rgba(255,255,255,0.32)",
+                        backdropFilter: "blur(50px)",
                     },
                 },
-                backdrop: { sx: { backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" } },
             }}
         >
-            <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                {/* Header */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 2, pt: 2, pb: 1 }}>
-                    <SectionLabel>Request Details</SectionLabel>
-                    <Box sx={{ flex: 1 }} />
-                    <IconButton
-                        onClick={onClose}
-                        size="small"
+            {request && (
+                <>
+                    {/* Ellipse 697 / 698 glows */}
+                    <Box aria-hidden sx={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+                        {[
+                            { left: 180.44, top: 184.64 },
+                            { left: 257.44, top: 107.64 },
+                        ].map((glow) => (
+                            <Box
+                                key={glow.left}
+                                sx={{ position: "absolute", left: glow.left, top: glow.top, transform: "translate(-50%, -50%) rotate(-40.17deg)", lineHeight: 0 }}
+                            >
+                                <Image src={requestAsset("drawer-glow.svg")} alt="" width={169.794} height={1533.31} />
+                            </Box>
+                        ))}
+                    </Box>
+
+                    <Box
                         sx={{
-                            color: "#fff",
-                            border: "1px solid #3F3F46",
-                            bgcolor: "#121216",
-                            "&:hover": { bgcolor: "#1F1F26" },
+                            position: "relative",
+                            height: "100%",
+                            overflowY: "auto",
+                            ...hiddenScrollbar,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "32px",
+                            p: { xs: "20px", sm: "32px" },
                         }}
                     >
-                        <MdClose size={16} />
-                    </IconButton>
-                </Box>
-
-                {/* Scrollable body */}
-                <Box sx={{ flex: 1, overflowY: "auto", px: 2, pb: 2 }}>
-                    {/* Pills */}
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 0.5 }}>
-                        <Box
-                            sx={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 0.5,
-                                px: 1.1,
-                                py: 0.4,
-                                borderRadius: "999px",
-                                bgcolor: tone.bg,
-                            }}
-                        >
-                            <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: tone.text }} />
-                            <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: tone.text, lineHeight: 1 }}>
-                                {STATUS_LABELS[request.requestStatus]}
-                            </Typography>
-                        </Box>
-                        <Box sx={{ px: 1.1, py: 0.4, borderRadius: "999px", bgcolor: "#26262B" }}>
-                            <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "#D4D4D8", lineHeight: 1.4 }}>
-                                {request.requestType}
-                            </Typography>
-                        </Box>
-                        {request.isUrgent && (
-                            <Box sx={{ px: 1.1, py: 0.4, borderRadius: "999px", bgcolor: "#3a2a08" }}>
-                                <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#fbbf24", lineHeight: 1.4 }}>
-                                    Urgent
-                                </Typography>
+                        {/* Header + summary */}
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+                                <SectionLabel>Request Details</SectionLabel>
+                                <ButtonBase
+                                    aria-label="Close"
+                                    onClick={onClose}
+                                    sx={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: "50px",
+                                        border: "1px solid rgba(255,255,255,0.08)",
+                                        backgroundImage: RQ.iconButton,
+                                        backdropFilter: "blur(25px)",
+                                        flexShrink: 0,
+                                        "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                                    }}
+                                >
+                                    <Icon name="icon-x.svg" size={24} />
+                                </ButtonBase>
                             </Box>
-                        )}
-                    </Box>
 
-                    {/* Title */}
-                    <Typography sx={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", lineHeight: 1.25, mt: 1.5 }}>
-                        {request.requestTitle}
-                    </Typography>
-
-                    {/* Description */}
-                    <Box sx={{ mt: 1.75, borderRadius: "12px", border: "1px solid #26262B", bgcolor: "#0A0A0C", p: 1.5 }}>
-                        <SectionLabel>Description</SectionLabel>
-                        <Typography sx={{ fontSize: "0.85rem", color: "#E4E4E7", lineHeight: 1.6, mt: 0.75, whiteSpace: "pre-line" }}>
-                            {request.requestDescription}
-                        </Typography>
-                    </Box>
-
-                    {/* Attachments */}
-                    {request.requestSupportingDocuments.map((doc) => (
-                        <Box
-                            key={doc.documentId}
-                            sx={{
-                                mt: 1.25,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1.25,
-                                p: 1.25,
-                                borderRadius: "12px",
-                                bgcolor: "#121216",
-                            }}
-                        >
-                            <Box
-                                sx={{
-                                    width: 34,
-                                    height: 34,
-                                    borderRadius: "8px",
-                                    bgcolor: "#26262B",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    color: "#D4D4D8",
-                                    flexShrink: 0,
-                                }}
-                            >
-                                <MdDescription size={18} />
-                            </Box>
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography sx={{ fontSize: "0.85rem", fontWeight: 500, color: "#fff" }} noWrap>
-                                    {doc.documentName}
-                                </Typography>
-                                <Typography sx={{ fontSize: "0.72rem", color: "#8A8A93" }}>
-                                    {formatFileSize(doc.documentSize) || "Attachment"}
-                                </Typography>
-                            </Box>
-                            <IconButton
-                                component="a"
-                                href={doc.documentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                size="small"
-                                sx={{
-                                    color: "#D4D4D8",
-                                    border: "1px solid #3F3F46",
-                                    "&:hover": { color: "#fff", bgcolor: "#1F1F26" },
-                                }}
-                            >
-                                <MdVisibility size={15} />
-                            </IconButton>
-                        </Box>
-                    ))}
-
-                    {/* Status history */}
-                    <Box sx={{ mt: 2.5 }}>
-                        <SectionLabel>Status History</SectionLabel>
-                        <Box sx={{ mt: 1.25 }}>
-                            {request.requestTimelines.map((item, index) => (
-                                <TimelineRow
-                                    key={item.timelineId}
-                                    item={item}
-                                    isLast={index === request.requestTimelines.length - 1}
-                                />
-                            ))}
-                        </Box>
-                    </Box>
-
-                    {/* SLA note — only while the request is still open */}
-                    {isActive && (
-                        <Typography sx={{ mt: 1.75, fontSize: "0.8rem", fontWeight: 500, color: "#f59e0b" }}>
-                            {sla === null
-                                ? "Response is overdue — your RM has been notified"
-                                : `Expected response within ${sla} hour${sla === 1 ? "" : "s"}`}
-                        </Typography>
-                    )}
-
-                    {/* Outcome callout */}
-                    {request.rejectionReason && (
-                        <Box sx={{ mt: 2 }}>
-                            <CalloutBox label="Reason for rejection" text={request.rejectionReason} color="#f43f5e" />
-                        </Box>
-                    )}
-                    {!request.rejectionReason && request.responseMessage && (
-                        <Box sx={{ mt: 2 }}>
-                            <CalloutBox label="Next step" text={request.responseMessage} color="#3B5BFF" />
-                        </Box>
-                    )}
-
-                    {/* Satisfaction feedback */}
-                    {!isActive && (
-                        <Box
-                            sx={{
-                                mt: 2,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                                p: 1.5,
-                                borderRadius: "12px",
-                                border: "1px solid #26262B",
-                                bgcolor: "#0A0A0C",
-                            }}
-                        >
-                            <Typography sx={{ flex: 1, fontSize: "0.85rem", color: "#E4E4E7" }}>
-                                {request.isSatisfied === null
-                                    ? "Was this request handled satisfactorily?"
-                                    : request.isSatisfied
-                                        ? "Thanks — glad we could help."
-                                        : "Thanks for the feedback, we'll do better."}
-                            </Typography>
-                            {request.isSatisfied === null && (
-                                <>
-                                    <IconButton
-                                        onClick={() => handleFeedback(true)}
-                                        disabled={feedbackBusy}
-                                        size="small"
-                                        sx={{ color: "#D4D4D8", "&:hover": { color: "#10b981" } }}
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                        <DrawerStatusPill tab={request.tab} />
+                                        <TagPill label={request.tag} />
+                                    </Box>
+                                    <Typography
+                                        component="h2"
+                                        sx={{ ...TEXT.poppinsSemi28, fontSize: { xs: "24px", sm: "28px" }, lineHeight: { xs: "36px", sm: "42px" }, color: RQ.white, overflowWrap: "anywhere" }}
                                     >
-                                        <MdThumbUp size={17} />
-                                    </IconButton>
-                                    <IconButton
-                                        onClick={() => handleFeedback(false)}
-                                        disabled={feedbackBusy}
-                                        size="small"
-                                        sx={{ color: "#D4D4D8", "&:hover": { color: "#f43f5e" } }}
+                                        {request.title}
+                                    </Typography>
+                                </Box>
+
+                                <Box sx={{ ...glassPanelSx, display: "flex", flexDirection: "column", gap: "16px", p: "20px" }}>
+                                    <SectionLabel>Description</SectionLabel>
+                                    <Typography sx={{ ...TEXT.reg16, color: RQ.n75, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
+                                        {request.description}
+                                    </Typography>
+                                </Box>
+
+                                {request.attachment && (
+                                    <Box
+                                        sx={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            gap: "12px",
+                                            minHeight: 67,
+                                            p: "16px",
+                                            borderRadius: "16px",
+                                            backgroundImage: RQ.attachmentRow,
+                                        }}
                                     >
-                                        <MdThumbDown size={17} />
-                                    </IconButton>
-                                </>
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0 }}>
+                                                <Icon name="file-icon.svg" size={40} height={42} />
+                                            </Box>
+                                            <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+                                                <Typography sx={{ ...TEXT.med16, color: RQ.n75, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    {request.attachment.name}
+                                                </Typography>
+                                                <Typography sx={{ ...TEXT.interReg14, color: RQ.n400 }}>{request.attachment.sizeLabel}</Typography>
+                                            </Box>
+                                        </Box>
+                                        <ButtonBase
+                                            aria-label="View attachment"
+                                            onClick={openAttachment}
+                                            sx={{
+                                                width: 40,
+                                                height: 40,
+                                                borderRadius: "99px",
+                                                border: `1px solid ${RQ.n700}`,
+                                                bgcolor: "rgba(38,38,38,0.12)",
+                                                boxShadow: "0 5px 20px rgba(0,0,0,0.02)",
+                                                flexShrink: 0,
+                                                "&:hover": { borderColor: RQ.n500, bgcolor: "rgba(255,255,255,0.06)" },
+                                            }}
+                                        >
+                                            <Icon name="icon-eye.svg" size={20} />
+                                        </ButtonBase>
+                                    </Box>
+                                )}
+                            </Box>
+                        </Box>
+
+                        {/* Status history */}
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                            <SectionLabel>Status History</SectionLabel>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                {request.timeline.map((item) => (
+                                    <TimelineRow key={item.id} item={item} />
+                                ))}
+                                {request.nextStep && <Callout label="Next Step" text={request.nextStep} tone="next" />}
+                                {request.rejectionReason && <Callout label="Reason for Rejection" text={request.rejectionReason} tone="rejection" />}
+                            </Box>
+                            {isActive && request.expectedResponse && (
+                                <Typography sx={{ ...TEXT.med14, color: RQ.warning }}>{request.expectedResponse}</Typography>
                             )}
                         </Box>
-                    )}
-                </Box>
 
-                {/* Footer action */}
-                {isActive && (
-                    <Box sx={{ px: 2, pb: 2, pt: 1, borderTop: "1px solid #1A1A20" }}>
-                        <Button
-                            fullWidth
-                            onClick={handleWithdraw}
-                            disabled={submitting}
-                            sx={{
-                                py: 1.1,
-                                borderRadius: "10px",
-                                textTransform: "none",
-                                fontSize: "0.88rem",
-                                fontWeight: 500,
-                                color: "#fff",
-                                border: "1px solid #3F3F46",
-                                bgcolor: "#0A0A0C",
-                                "&:hover": { bgcolor: "#18181B", borderColor: "#52525B" },
-                            }}
-                        >
-                            {submitting ? <CircularProgress size={16} color="inherit" /> : "Withdraw Request"}
-                        </Button>
+                        {/* Feedback (closed requests) */}
+                        {!isActive && (
+                            <Box sx={{ ...glassPanelSx, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", p: "20px", backgroundImage: RQ.glassPanel.replace("169deg", "176.78deg") }}>
+                                <Typography sx={{ ...TEXT.reg16, color: RQ.n75 }}>
+                                    {request.feedback ? "Thanks for your feedback!" : "Was this request handled satisfactorily?"}
+                                </Typography>
+                                <Box sx={{ display: "flex", gap: "12px", flexShrink: 0 }}>
+                                    {(["up", "down"] as const).map((value) => {
+                                        const selected = request.feedback === value;
+                                        return (
+                                            <ButtonBase
+                                                key={value}
+                                                aria-label={value === "up" ? "Yes, satisfied" : "No, not satisfied"}
+                                                aria-pressed={selected}
+                                                onClick={() => onFeedback(request, value)}
+                                                sx={{
+                                                    borderRadius: "6px",
+                                                    opacity: request.feedback && !selected ? 0.4 : 1,
+                                                    outline: selected ? `1px solid ${RQ.n300}` : "none",
+                                                    outlineOffset: "3px",
+                                                    transition: "opacity .15s ease",
+                                                    "&:hover": { opacity: 1 },
+                                                }}
+                                            >
+                                                <Icon name={value === "up" ? "icon-thumbs-up.svg" : "icon-thumbs-down.svg"} size={24} />
+                                            </ButtonBase>
+                                        );
+                                    })}
+                                </Box>
+                            </Box>
+                        )}
+
+                        {/* Withdraw (open requests) */}
+                        {isActive && (
+                            <ButtonBase
+                                onClick={() => onWithdraw(request)}
+                                sx={{
+                                    mt: "auto",
+                                    width: "100%",
+                                    height: 44,
+                                    flexShrink: 0,
+                                    px: "24px",
+                                    borderRadius: "10px",
+                                    border: `1px solid ${RQ.n700}`,
+                                    ...TEXT.interMed14,
+                                    color: RQ.n100,
+                                    transition: "border-color .15s ease, background-color .15s ease",
+                                    "&:hover": { borderColor: RQ.n500, bgcolor: "rgba(255,255,255,0.04)" },
+                                }}
+                            >
+                                Withdraw Request
+                            </ButtonBase>
+                        )}
                     </Box>
-                )}
-            </Box>
+                </>
+            )}
         </Drawer>
     );
 }

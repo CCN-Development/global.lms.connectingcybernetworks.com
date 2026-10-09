@@ -1,69 +1,45 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-    Box,
-    Button,
-    CircularProgress,
-    IconButton,
-    MenuItem,
-    Select,
-    TextField,
-    Typography,
-} from "@mui/material";
+import React, { useRef, useState } from "react";
+import Image from "next/image";
+import { Box, ButtonBase, Dialog, InputBase, Menu, MenuItem, Typography } from "@mui/material";
 import toast from "react-hot-toast";
-import { MdClose, MdDescription, MdKeyboardArrowDown } from "react-icons/md";
-import CCNModal from "@/components/modals/CCNModal";
-import { fileUploaderToS3 } from "@/services/s3";
+import { LmsButton } from "@/components/community/community-ui";
 import {
-    REQUEST_TYPES,
-    useRequests,
-    type RequestDocumentInput,
-    type StudentRequest,
-} from "@/contexts/RequestContext";
-import { formatFileSize } from "./request-ui";
+    REQUEST_CATEGORIES,
+    RQ,
+    TEXT,
+    formatFileSize,
+    makeRequest,
+    requestAsset,
+    type RequestAttachment,
+    type SampleRequest,
+} from "./request-data";
+import { Icon, dropdownItemSx, dropdownPaperSx } from "./request-parts";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
-const FIELD_SX = {
-    "& .MuiOutlinedInput-root": {
-        borderRadius: "10px",
-        bgcolor: "#0A0A0C",
-        color: "#fff",
-        fontSize: "0.85rem",
-        "& fieldset": { borderColor: "#26262B" },
-        "&:hover fieldset": { borderColor: "#3F3F46" },
-        "&.Mui-focused fieldset": { borderColor: "#3B5BFF" },
-    },
-    "& .MuiOutlinedInput-input::placeholder": { color: "#6B6B73", opacity: 1 },
-};
-
 export interface CreateRequestModalProps {
     open: boolean;
     onClose: () => void;
-    onCreated?: (request: StudentRequest) => void;
+    onCreated: (request: SampleRequest) => void;
 }
 
 export default function CreateRequestModal({ open, onClose, onCreated }: CreateRequestModalProps) {
-    const { createRequest, submitting } = useRequests();
-
     const [category, setCategory] = useState("");
     const [description, setDescription] = useState("");
-    const [attachment, setAttachment] = useState<RequestDocumentInput | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [progress, setProgress] = useState(0);
+    const [attachment, setAttachment] = useState<RequestAttachment | null>(null);
+    const [categoryAnchor, setCategoryAnchor] = useState<HTMLElement | null>(null);
+    const fileInput = useRef<HTMLInputElement>(null);
 
     const reset = () => {
         setCategory("");
         setDescription("");
         setAttachment(null);
-        setUploading(false);
-        setProgress(0);
     };
 
     const handleClose = () => {
-        if (uploading || submitting) return;
         reset();
         onClose();
     };
@@ -72,7 +48,6 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
         const file = event.target.files?.[0];
         event.target.value = "";
         if (!file) return;
-
         if (!ACCEPTED_TYPES.includes(file.type)) {
             toast.error("Only JPEG, PNG and PDF files are allowed");
             return;
@@ -81,29 +56,10 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
             toast.error("File must be 5MB or smaller");
             return;
         }
-
-        setUploading(true);
-        setProgress(0);
-        fileUploaderToS3(
-            file,
-            setProgress,
-            (fileUrl) => {
-                setUploading(false);
-                if (!fileUrl) {
-                    toast.error("Upload failed, please try again");
-                    return;
-                }
-                setAttachment({
-                    documentName: file.name,
-                    documentUrl: fileUrl,
-                    documentType: file.type,
-                    documentSize: file.size,
-                });
-            },
-        );
+        setAttachment({ name: file.name, sizeLabel: formatFileSize(file.size), url: URL.createObjectURL(file) });
     };
 
-    const handleSubmit = async () => {
+    const handleSubmit = () => {
         if (!category) {
             toast.error("Select a category");
             return;
@@ -112,201 +68,209 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
             toast.error("Describe your issue or request");
             return;
         }
-
-        const res = await createRequest({
-            requestType: category,
-            requestDescription: description.trim(),
-            documents: attachment ? [attachment] : undefined,
-        });
-
-        if (!res.success || !res.data) {
-            toast.error(res.message ?? "Failed to create request");
-            return;
-        }
-        toast.success(res.message ?? "Request submitted");
-        onCreated?.(res.data);
+        onCreated(makeRequest(category, description.trim(), attachment ?? undefined));
+        toast.success("Request submitted");
         reset();
         onClose();
     };
 
-    const busy = uploading || submitting;
-
     return (
-        <CCNModal open={open} onClose={handleClose} maxWidth={585}>
-            <Box sx={{ p: { xs: 2, sm: 3 } }}>
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            scroll="body"
+            slotProps={{
+                backdrop: { sx: { bgcolor: RQ.overlay, backdropFilter: "blur(12px)" } },
+                paper: {
+                    sx: {
+                        position: "relative",
+                        width: "100%",
+                        maxWidth: 604,
+                        m: { xs: "16px", sm: "32px auto" },
+                        p: { xs: "20px", sm: "32px" },
+                        bgcolor: "#000",
+                        backgroundImage: "none",
+                        borderRadius: "24px",
+                        borderTop: `1.5px solid ${RQ.modalStroke}`,
+                        borderRight: `1.5px solid ${RQ.modalStroke}`,
+                        backdropFilter: "blur(50px)",
+                        boxShadow: "none",
+                        overflow: "hidden",
+                        color: RQ.white,
+                    },
+                },
+            }}
+        >
+            {/* Ellipse 697 glow */}
+            <Box
+                aria-hidden
+                sx={{ position: "absolute", left: 349, top: 288, transform: "translate(-50%, -50%) rotate(-40.17deg)", lineHeight: 0, pointerEvents: "none" }}
+            >
+                <Image src={requestAsset("modal-glow.svg")} alt="" width={269.794} height={1633.31} />
+            </Box>
+
+            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "32px" }}>
                 {/* Header */}
-                <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: "1.4rem", fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <Typography component="h2" sx={{ ...TEXT.poppinsSemi24, fontSize: { xs: "20px", sm: "24px" }, color: RQ.white }}>
                             Create Request
                         </Typography>
-                        <Typography sx={{ fontSize: "0.82rem", color: "#A1A1AA", mt: 0.5 }}>
-                            Describe your issue or request. We&apos;ll help you resolve it.
+                        <Typography sx={{ ...TEXT.interMed14, color: RQ.n300 }}>
+                            Describe your issue or request. We’ll help you resolve it.
                         </Typography>
                     </Box>
-                    <IconButton onClick={handleClose} size="small" sx={{ color: "#71717A", "&:hover": { color: "#fff" } }}>
-                        <MdClose size={18} />
-                    </IconButton>
+                    <Box component="img" src={requestAsset("modal-divider.svg")} alt="" aria-hidden sx={{ display: "block", width: "100%", height: "1px" }} />
                 </Box>
 
-                <Box sx={{ height: "1px", bgcolor: "#26262B", my: 2 }} />
-
-                {/* Category */}
-                <Select
-                    fullWidth
-                    displayEmpty
-                    value={category}
-                    onChange={(event) => setCategory(event.target.value)}
-                    IconComponent={MdKeyboardArrowDown}
-                    renderValue={(value) => (
-                        value
-                            ? <span style={{ color: "#fff" }}>{value as string}</span>
-                            : <span style={{ color: "#A1A1AA" }}>Select a Category <span style={{ color: "#f43f5e" }}>*</span></span>
-                    )}
-                    MenuProps={{
-                        slotProps: {
-                            paper: {
-                                sx: {
-                                    bgcolor: "#0A0A0C",
-                                    border: "1px solid #26262B",
-                                    borderRadius: "10px",
-                                    "& .MuiMenuItem-root": { fontSize: "0.82rem", color: "#E4E4E7" },
-                                    "& .MuiMenuItem-root:hover": { bgcolor: "#18181B" },
-                                    "& .Mui-selected": { bgcolor: "#1E1B4B !important" },
-                                },
-                            },
-                        },
-                    }}
-                    sx={{
-                        borderRadius: "10px",
-                        bgcolor: "#0A0A0C",
-                        color: "#fff",
-                        fontSize: "0.85rem",
-                        "& .MuiOutlinedInput-notchedOutline": { borderColor: "#26262B" },
-                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#3F3F46" },
-                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#3B5BFF" },
-                        "& .MuiSelect-icon": { color: "#A1A1AA" },
-                    }}
-                >
-                    {REQUEST_TYPES.map((type) => (
-                        <MenuItem key={type} value={type}>{type}</MenuItem>
-                    ))}
-                </Select>
-
-                {/* Description */}
-                <TextField
-                    fullWidth
-                    multiline
-                    minRows={6}
-                    placeholder="Provide more details about your issue or request"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    sx={{ ...FIELD_SX, mt: 1.5 }}
-                />
-
-                {/* Attachment */}
-                <Box
-                    sx={{
-                        mt: 1.5,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.25,
-                        p: 1.25,
-                        borderRadius: "10px",
-                        border: "1px dashed #3F3F46",
-                        bgcolor: "#0A0A0C",
-                    }}
-                >
-                    <Box
+                {/* Fields */}
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <ButtonBase
+                        aria-haspopup="listbox"
+                        onClick={(event) => setCategoryAnchor(event.currentTarget)}
                         sx={{
-                            width: 34,
-                            height: 34,
-                            borderRadius: "8px",
-                            bgcolor: "#26262B",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                            color: "#A1A1AA",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            px: "16px",
+                            py: "10px",
+                            borderRadius: "12px",
+                            border: `1px solid ${categoryAnchor ? RQ.n500 : RQ.n700}`,
+                            textAlign: "left",
+                            transition: "border-color .15s ease",
+                            "&:hover": { borderColor: RQ.n500 },
                         }}
                     >
-                        <MdDescription size={18} />
-                    </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "4px", px: "8px", py: "4px", minWidth: 0 }}>
+                            <Typography component="span" sx={{ ...TEXT.interReg16, color: RQ.white, whiteSpace: "nowrap" }}>
+                                {category || "Select a Category"}
+                            </Typography>
+                            {!category && (
+                                <Typography component="span" sx={{ ...TEXT.interMed16, color: RQ.error500 }}>
+                                    *
+                                </Typography>
+                            )}
+                        </Box>
+                        <Icon
+                            name="icon-chevron-down-field.svg"
+                            size={24}
+                            sx={{ transform: categoryAnchor ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}
+                        />
+                    </ButtonBase>
+                    <Menu
+                        anchorEl={categoryAnchor}
+                        open={Boolean(categoryAnchor)}
+                        onClose={() => setCategoryAnchor(null)}
+                        slotProps={{
+                            paper: { sx: { ...dropdownPaperSx, width: categoryAnchor?.offsetWidth, maxHeight: 320 } },
+                        }}
+                    >
+                        {REQUEST_CATEGORIES.map((option) => (
+                            <MenuItem
+                                key={option}
+                                selected={option === category}
+                                sx={dropdownItemSx}
+                                onClick={() => {
+                                    setCategory(option);
+                                    setCategoryAnchor(null);
+                                }}
+                            >
+                                {option}
+                            </MenuItem>
+                        ))}
+                    </Menu>
 
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff" }} noWrap>
-                            {attachment ? attachment.documentName : "Attachment (Optional)"}
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.72rem", color: "#8A8A93" }} noWrap>
-                            {uploading
-                                ? `Uploading… ${progress}%`
-                                : attachment
-                                    ? formatFileSize(attachment.documentSize) || "Ready"
-                                    : "JPEG, PNG and PDF formats, up to 5MB"}
-                        </Typography>
-                    </Box>
+                    <InputBase
+                        multiline
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder="Provide more details about your issue or request"
+                        inputProps={{ "aria-label": "Request details" }}
+                        sx={{
+                            alignItems: "flex-start",
+                            height: 208,
+                            p: "16px",
+                            borderRadius: "12px",
+                            border: `1.2px solid ${RQ.n700}`,
+                            ...TEXT.interReg16,
+                            color: RQ.white,
+                            transition: "border-color .15s ease",
+                            "&.Mui-focused": { borderColor: RQ.n500 },
+                            "& textarea": { height: "100% !important", overflowY: "auto !important", p: 0 },
+                            "& textarea::placeholder": { color: RQ.n300, opacity: 1 },
+                        }}
+                    />
 
-                    {attachment && !uploading ? (
-                        <Button
-                            onClick={() => setAttachment(null)}
-                            size="small"
-                            sx={{ textTransform: "none", fontSize: "0.75rem", color: "#fb7185", minWidth: 0 }}
-                        >
-                            Remove
-                        </Button>
-                    ) : (
-                        <Button
-                            component="label"
-                            size="small"
-                            disabled={uploading}
+                    {/* Uploader */}
+                    <Box
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "16px",
+                            p: "16px",
+                            borderRadius: "16px",
+                            border: `1px dashed ${RQ.n700}`,
+                        }}
+                    >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+                            <Icon name="upload-file-icon.svg" size={36} height={38} />
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                                <Typography sx={{ ...TEXT.interMed16, color: RQ.n100, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    {attachment ? attachment.name : "Attachment (Optional)"}
+                                </Typography>
+                                <Typography sx={{ fontFamily: TEXT.interReg12.fontFamily, fontWeight: 400, fontSize: "12px", lineHeight: "21px", letterSpacing: 0, color: "#7D7D7D" }}>
+                                    {attachment ? attachment.sizeLabel : "JPEG, PNG and PDF formats, up to 5MB"}
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <ButtonBase
+                            onClick={() => (attachment ? setAttachment(null) : fileInput.current?.click())}
                             sx={{
-                                textTransform: "none",
-                                fontSize: "0.78rem",
-                                fontWeight: 600,
-                                color: "#fff",
-                                bgcolor: "#3F3F46",
-                                borderRadius: "7px",
-                                px: 1.5,
+                                height: 36,
+                                px: "16px",
+                                borderRadius: "10px",
+                                border: `1px solid ${RQ.n700}`,
+                                bgcolor: RQ.n800,
+                                filter: "drop-shadow(0 5px 10px rgba(0,0,0,0.02))",
+                                fontFamily: TEXT.interMed14.fontFamily,
+                                fontWeight: 500,
+                                fontSize: "14px",
+                                lineHeight: "16px",
+                                letterSpacing: "0.56px",
+                                color: "#E3E4E6",
+                                whiteSpace: "nowrap",
                                 flexShrink: 0,
-                                "&:hover": { bgcolor: "#52525B" },
+                                "&:hover": { bgcolor: "#303030" },
                             }}
                         >
-                            {uploading ? <CircularProgress size={14} color="inherit" /> : "Select File"}
-                            <input hidden type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFile} />
-                        </Button>
-                    )}
+                            {attachment ? "Remove" : "Select File"}
+                        </ButtonBase>
+                        <input ref={fileInput} hidden type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFile} />
+                    </Box>
                 </Box>
 
                 {/* Actions */}
-                <Button
-                    fullWidth
-                    onClick={handleSubmit}
-                    disabled={busy}
-                    sx={{
-                        mt: 2.5,
-                        py: 1.15,
-                        borderRadius: "9px",
-                        textTransform: "none",
-                        fontSize: "0.9rem",
-                        fontWeight: 600,
-                        color: "#fff",
-                        background: "linear-gradient(90deg, #1D34D8 0%, #7A16C4 100%)",
-                        "&:hover": { filter: "brightness(1.1)" },
-                        "&.Mui-disabled": { color: "#A1A1AA", background: "#26262B" },
-                    }}
-                >
-                    {submitting ? <CircularProgress size={16} color="inherit" /> : "Send Request"}
-                </Button>
-
-                <Button
-                    fullWidth
-                    onClick={handleClose}
-                    disabled={busy}
-                    sx={{ mt: 0.75, textTransform: "none", fontSize: "0.85rem", color: "#D4D4D8" }}
-                >
-                    Cancel
-                </Button>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", py: "8px" }}>
+                    <LmsButton onClick={handleSubmit} sx={{ width: "100%" }}>
+                        Send Request
+                    </LmsButton>
+                    <ButtonBase
+                        onClick={handleClose}
+                        sx={{
+                            width: "100%",
+                            height: 44,
+                            px: "24px",
+                            borderRadius: "10px",
+                            ...TEXT.interMed14,
+                            color: RQ.n100,
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.04)" },
+                        }}
+                    >
+                        Cancel
+                    </ButtonBase>
+                </Box>
             </Box>
-        </CCNModal>
+        </Dialog>
     );
 }

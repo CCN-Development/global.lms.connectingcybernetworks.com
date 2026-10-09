@@ -1,0 +1,16 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="front">
+<rect width="40" height="40" rx="20" fill="url(#paint0_linear_0_138)"/>
+<g id="Ellipse 698">
+</g>
+<g id="Icons/check">
+<path id="Vector" d="M28 14.5L17 25.5L12 20.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke="white"/>
+</g>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_138" x1="1.54897" y1="22.7" x2="41.9025" y2="23.2031" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2EC4B6"/>
+<stop offset="1" stop-color="#1B4C33"/>
+</linearGradient>
+</defs>
+</svg>

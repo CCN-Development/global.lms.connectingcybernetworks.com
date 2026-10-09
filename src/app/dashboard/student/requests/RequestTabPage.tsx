@@ -1,56 +1,58 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import RequestGrid from "@/components/requests/RequestGrid";
 import RequestDetailDrawer from "@/components/requests/RequestDetailDrawer";
-import { useRequests, type RequestTab, type StudentRequest } from "@/contexts/RequestContext";
+import { inDateRange, type RequestTab, type SampleRequest } from "@/components/requests/request-data";
 import { useRequestFilters } from "./filters";
 
-const SEARCH_DEBOUNCE_MS = 350;
-
 export default function RequestTabPage({ tab, emptyLabel }: { tab: RequestTab; emptyLabel: string }) {
-    const { requestsByTab, loadingRequests, getStudentRequests, getStudentRequestSummary } = useRequests();
-    const { search, sort, requestType, refreshKey } = useRequestFilters();
+    const { requests, search, sort, dateRange, withdrawRequest, setFeedback } = useRequestFilters();
 
-    const [selected, setSelected] = useState<StudentRequest | null>(null);
+    const [selected, setSelected] = useState<SampleRequest | null>(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
 
-    const load = useCallback(() => {
-        void getStudentRequests({
-            tab,
-            sort,
-            search: search.trim() || undefined,
-            requestType: requestType || undefined,
-        }).then((res) => {
-            if (!res.success) toast.error(res.message ?? "Failed to load requests");
-        });
-    }, [getStudentRequests, tab, sort, search, requestType]);
+    const visible = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        return requests
+            .filter((r) => r.tab === tab)
+            .filter((r) => inDateRange(r.createdAt, dateRange))
+            .filter((r) => !query || [r.category, r.tag, r.title, r.description].some((field) => field.toLowerCase().includes(query)))
+            .sort((a, b) => {
+                const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                return sort === "newest" ? diff : -diff;
+            });
+    }, [requests, tab, search, sort, dateRange]);
 
-    useEffect(() => {
-        const timer = setTimeout(load, search ? SEARCH_DEBOUNCE_MS : 0);
-        return () => clearTimeout(timer);
-        // `refreshKey` re-runs the fetch after a request is created elsewhere.
-    }, [load, refreshKey, search]);
+    const openRequest = (request: SampleRequest) => {
+        setSelected(request);
+        setDrawerOpen(true);
+    };
 
-    const requests = requestsByTab[tab];
+    const handleWithdraw = (request: SampleRequest) => {
+        withdrawRequest(request.id);
+        setDrawerOpen(false);
+        toast.success(`${request.category} request withdrawn`);
+    };
 
     return (
         <>
             <RequestGrid
-                requests={requests}
-                loading={loadingRequests && requests.length === 0}
-                emptyLabel={emptyLabel}
-                onView={setSelected}
+                requests={visible}
+                emptyLabel={search || dateRange !== "all" ? "No requests match your filters." : emptyLabel}
+                onView={openRequest}
+                onWithdraw={tab === "active" ? handleWithdraw : undefined}
             />
 
             <RequestDetailDrawer
-                open={selected !== null}
+                open={drawerOpen}
                 request={selected}
-                onClose={() => setSelected(null)}
-                onChanged={(updated) => {
-                    setSelected(updated);
-                    load();
-                    void getStudentRequestSummary();
+                onClose={() => setDrawerOpen(false)}
+                onWithdraw={handleWithdraw}
+                onFeedback={(request, value) => {
+                    setFeedback(request.id, value);
+                    setSelected({ ...request, feedback: value });
                 }}
             />
         </>
