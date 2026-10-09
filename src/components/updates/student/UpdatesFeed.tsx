@@ -1,279 +1,377 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import {
-    Box,
-    Button,
-    InputBase,
-    Menu,
-    MenuItem,
-    Pagination,
-    Skeleton,
-    Typography,
-} from "@mui/material";
-import { MdKeyboardArrowDown, MdSearch } from "react-icons/md";
-import {
-    useUpdates,
-    type UpdateSort,
-    type UpdateTab,
-} from "@/contexts/UpdatesContext";
-import UpdateCard, { BORDER, BORDER_HOVER, MUTED, SURFACE } from "./UpdateCard";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Box, ButtonBase, InputBase, Menu, MenuItem, Typography } from "@mui/material";
+import { FiChevronDown, FiSearch, FiX } from "react-icons/fi";
 import FeaturedCarousel from "./FeaturedCarousel";
-
-const PRIMARY = "#2F53AD";
-const PRIMARY_HOVER = "#26449120";
-const LIMIT = 12;
-
-const TABS: { label: string; value: UpdateTab; href: string; countKey: "news" | "blog" | "announcement" | null }[] = [
-    { label: "News", value: "news", href: "/dashboard/student/updates/news", countKey: "news" },
-    { label: "Blogs", value: "blog", href: "/dashboard/student/updates/blogs", countKey: "blog" },
-    { label: "Announcements", value: "announcement", href: "/dashboard/student/updates/announcements", countKey: "announcement" },
-];
+import UpdateCard from "./UpdateCard";
+import {
+    KIND_META,
+    UPDATE_KINDS,
+    getCategories,
+    getFeaturedUpdates,
+    getUpdateCounts,
+    getUpdates,
+    listHref,
+    type UpdateKind,
+    type UpdateSort,
+} from "./mock-data";
+import { FONT_INTER, FONT_LATO, FONT_POPPINS, UPD } from "./tokens";
 
 const SORT_OPTIONS: { label: string; value: UpdateSort }[] = [
     { label: "Newest", value: "newest" },
     { label: "Oldest", value: "oldest" },
-    { label: "Most viewed", value: "popular" },
+    { label: "Most Viewed", value: "popular" },
 ];
 
-const MENU_SLOT_PROPS = {
-    paper: {
-        sx: {
-            bgcolor: "#0B0D14",
-            border: `1px solid ${BORDER_HOVER}`,
-            borderRadius: "10px",
-            "& .MuiMenuItem-root": { fontSize: "0.78rem", color: "#E4E4E7" },
-            "& .MuiMenuItem-root:hover": { bgcolor: SURFACE },
-        },
-    },
-} as const;
+const ALL_CATEGORY = "All Category";
 
-export default function UpdatesFeed({ tab }: { tab: UpdateTab }) {
-    const router = useRouter();
-    const pathname = usePathname();
-    const { feed, counts, feedMeta, featured, loadingFeed, loadingFeatured, getUpdatesFeed, getFeaturedUpdates } = useUpdates();
-
-    const [searchInput, setSearchInput] = useState("");
-    const [search, setSearch] = useState("");
-    const [sort, setSort] = useState<UpdateSort>("newest");
-    const [page, setPage] = useState(1);
-    const [sortAnchor, setSortAnchor] = useState<null | HTMLElement>(null);
-
-    useEffect(() => { void getFeaturedUpdates(5); }, [getFeaturedUpdates]);
-
-    const load = useCallback(() => {
-        void getUpdatesFeed({ type: tab, search: search || undefined, sort, page, limit: LIMIT });
-    }, [getUpdatesFeed, tab, search, sort, page]);
-
-    useEffect(() => { load(); }, [load]);
-    useEffect(() => { setPage(1); }, [tab, search, sort]);
-
-    const totalLabel = useMemo(() => {
-        const total = feedMeta?.total ?? 0;
-        const noun = tab === "news" ? "news" : tab === "blog" ? "blogs" : tab === "announcement" ? "announcements" : "updates";
-        return { total: total.toLocaleString("en-IN"), noun };
-    }, [feedMeta, tab]);
-
-    const isAnnouncements = tab === "announcement";
-
+// ─── Toolbar dropdown ──────────────────────────────────────────────────────
+function Dropdown<T extends string>({
+    label,
+    value,
+    options,
+    onChange,
+}: {
+    label: string;
+    value: T;
+    options: { label: string; value: T }[];
+    onChange: (value: T) => void;
+}) {
+    const [anchor, setAnchor] = useState<HTMLElement | null>(null);
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pb: 3 }}>
-            {/* ── Intro + featured carousel ── */}
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1.05fr" }, gap: { xs: 2, lg: 3 }, alignItems: "center" }}>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
-                    <Typography sx={{ fontSize: { xs: "1.35rem", md: "1.75rem" }, fontWeight: 600, color: "#FFFFFF", lineHeight: 1.2 }}>
-                        News &amp; Updates
-                    </Typography>
-                    <Typography sx={{ fontSize: "0.8rem", color: MUTED, lineHeight: 1.6, maxWidth: 380 }}>
-                        Stay updated with the latest announcements, cybersecurity news, events, placements, and blogs.
-                    </Typography>
+        <>
+            <ButtonBase
+                aria-haspopup="listbox"
+                aria-expanded={Boolean(anchor)}
+                onClick={(event) => setAnchor(event.currentTarget)}
+                sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    pl: "16px",
+                    pr: "12px",
+                    py: "8px",
+                    borderRadius: "8px",
+                    bgcolor: UPD.dropdownBg,
+                    backdropFilter: "blur(12px)",
+                    color: UPD.white,
+                    flexShrink: 0,
+                    transition: "background-color .2s",
+                    "&:hover": { bgcolor: "rgba(64,64,64,0.6)" },
+                }}
+            >
+                <Typography sx={{ fontFamily: FONT_LATO, fontWeight: 500, fontSize: "16px", lineHeight: "24px", color: UPD.white, whiteSpace: "nowrap" }}>
+                    {label}
+                </Typography>
+                <Box component="span" sx={{ display: "flex", transition: "transform .2s", transform: anchor ? "rotate(180deg)" : "none" }}>
+                    <FiChevronDown size={24} strokeWidth={1.5} />
+                </Box>
+            </ButtonBase>
+            <Menu
+                anchorEl={anchor}
+                open={Boolean(anchor)}
+                onClose={() => setAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+                transformOrigin={{ vertical: "top", horizontal: "left" }}
+                slotProps={{
+                    paper: {
+                        sx: {
+                            mt: "6px",
+                            minWidth: anchor?.offsetWidth,
+                            bgcolor: "rgba(20,20,24,0.92)",
+                            backdropFilter: "blur(12px)",
+                            border: `1px solid ${UPD.neutral700}`,
+                            borderRadius: "8px",
+                            "& .MuiMenuItem-root": { fontFamily: FONT_LATO, fontSize: "14px", color: UPD.neutral100 },
+                            "& .MuiMenuItem-root:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                            "& .MuiMenuItem-root.Mui-selected": { bgcolor: "rgba(187,201,237,0.16)", color: UPD.white },
+                        },
+                    },
+                }}
+            >
+                {options.map((option) => (
+                    <MenuItem
+                        key={option.value}
+                        selected={option.value === value}
+                        onClick={() => {
+                            onChange(option.value);
+                            setAnchor(null);
+                        }}
+                    >
+                        {option.label}
+                    </MenuItem>
+                ))}
+            </Menu>
+        </>
+    );
+}
 
+// ─── Segmented tabs ────────────────────────────────────────────────────────
+function KindTabs({ active }: { active: UpdateKind }) {
+    const counts = getUpdateCounts();
+    return (
+        <Box
+            role="tablist"
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                p: "4px",
+                borderRadius: "99px",
+                bgcolor: UPD.tabsBg,
+                border: `1px solid ${UPD.tabsBorder}`,
+                backdropFilter: "blur(4px)",
+                maxWidth: "100%",
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                "&::-webkit-scrollbar": { display: "none" },
+            }}
+        >
+            {UPDATE_KINDS.map((kind) => {
+                const selected = kind === active;
+                return (
                     <Box
-                        component="form"
-                        onSubmit={(event: React.FormEvent) => { event.preventDefault(); setSearch(searchInput.trim()); }}
+                        key={kind}
+                        component={Link}
+                        href={listHref(kind)}
+                        role="tab"
+                        aria-selected={selected}
                         sx={{
                             display: "flex",
                             alignItems: "center",
-                            gap: 1,
-                            bgcolor: SURFACE,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: "10px",
-                            pl: 1.5,
-                            pr: 0.6,
-                            py: 0.6,
-                            maxWidth: 380,
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            height: 44,
+                            px: selected ? "16px" : "20px",
+                            borderRadius: selected ? "99px" : "8px",
+                            border: selected ? `1px solid ${UPD.primary75}` : "1px solid transparent",
+                            background: selected ? UPD.tabActiveBg : "transparent",
+                            backdropFilter: selected ? "blur(12px)" : "none",
+                            textDecoration: "none",
+                            fontFamily: FONT_LATO,
+                            fontWeight: 500,
+                            fontSize: "16px",
+                            lineHeight: "24px",
+                            whiteSpace: "nowrap",
+                            color: selected ? UPD.white : UPD.neutral400,
+                            transition: "color .2s",
+                            "&:hover": { color: UPD.white },
+                        }}
+                    >
+                        {KIND_META[kind].tabLabel} ({counts[kind]})
+                    </Box>
+                );
+            })}
+        </Box>
+    );
+}
+
+// ─── Feed ──────────────────────────────────────────────────────────────────
+export default function UpdatesFeed({ kind }: { kind: UpdateKind }) {
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [sort, setSort] = useState<UpdateSort>("newest");
+    const [category, setCategory] = useState(ALL_CATEGORY);
+
+    const featured = useMemo(() => getFeaturedUpdates(), []);
+    const categoryOptions = useMemo(
+        () => [ALL_CATEGORY, ...getCategories(kind)].map((value) => ({ label: value, value })),
+        [kind],
+    );
+    const items = useMemo(
+        () => getUpdates(kind, { search, sort, category: category === ALL_CATEGORY ? "" : category }),
+        [kind, search, sort, category],
+    );
+
+    const total = items.length.toLocaleString("en-IN");
+    const summary = kind === "blog" ? `${KIND_META.blog.noun} in ${category}` : `${KIND_META[kind].noun} in total`;
+
+    const clearSearch = () => {
+        setSearchInput("");
+        setSearch("");
+    };
+
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "32px", pb: "32px" }}>
+            {/* ── Hero ── */}
+            <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, alignItems: { xs: "stretch", lg: "center" }, gap: "32px" }}>
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: { xs: "24px", lg: "44px" },
+                        px: { xs: 0, lg: "24px" },
+                        width: { xs: "100%", lg: 465 },
+                        flexShrink: 0,
+                    }}
+                >
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <Typography
+                            component="h1"
+                            sx={{ fontFamily: FONT_POPPINS, fontWeight: 600, fontSize: { xs: "24px", sm: "28px" }, lineHeight: { xs: "36px", sm: "42px" }, color: UPD.white }}
+                        >
+                            News &amp; Updates
+                        </Typography>
+                        <Typography sx={{ fontFamily: FONT_LATO, fontWeight: 500, fontSize: "16px", lineHeight: "24px", color: UPD.neutral300 }}>
+                            Stay updated with the latest announcements, cybersecurity news, events, placements, and blogs.
+                        </Typography>
+                    </Box>
+
+                    <Box
+                        component="form"
+                        role="search"
+                        onSubmit={(event: React.FormEvent) => {
+                            event.preventDefault();
+                            setSearch(searchInput.trim());
+                        }}
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "8px",
+                            height: 44,
+                            pl: "20px",
+                            pr: "6px",
+                            borderRadius: "12px",
+                            border: `1px solid ${UPD.primary75}`,
+                            background: UPD.searchBg,
+                            boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
                         }}
                     >
                         <InputBase
                             value={searchInput}
-                            onChange={(event) => setSearchInput(event.target.value)}
+                            onChange={(event) => {
+                                setSearchInput(event.target.value);
+                                if (!event.target.value) setSearch("");
+                            }}
                             placeholder="Search latest news, blogs or announcements..."
-                            sx={{ flex: 1, fontSize: "0.75rem", color: "#FFFFFF", "& input::placeholder": { color: MUTED, opacity: 1 } }}
-                        />
-                        <Button
-                            type="submit"
-                            size="small"
-                            variant="contained"
-                            startIcon={<MdSearch size={14} />}
+                            inputProps={{ "aria-label": "Search news, blogs or announcements" }}
                             sx={{
-                                borderRadius: "7px",
-                                textTransform: "none",
-                                fontSize: "0.72rem",
-                                fontWeight: 700,
-                                px: 1.25,
-                                py: 0.5,
+                                flex: 1,
                                 minWidth: 0,
-                                bgcolor: PRIMARY,
-                                "& .MuiButton-startIcon": { mr: 0.4 },
-                                "&:hover": { bgcolor: "#264491" },
+                                fontFamily: FONT_INTER,
+                                fontSize: "14px",
+                                lineHeight: "21px",
+                                color: UPD.white,
+                                "& input": { p: 0, textOverflow: "ellipsis" },
+                                "& input::placeholder": { color: UPD.neutral600, opacity: 1 },
+                            }}
+                        />
+                        {searchInput ? (
+                            <ButtonBase aria-label="Clear search" onClick={clearSearch} sx={{ color: UPD.neutral400, borderRadius: "50%", p: "4px", "&:hover": { color: UPD.white } }}>
+                                <FiX size={16} />
+                            </ButtonBase>
+                        ) : null}
+                        <ButtonBase
+                            type="submit"
+                            sx={{
+                                position: "relative",
+                                overflow: "hidden",
+                                height: 32,
+                                px: "12px",
+                                borderRadius: "8px",
+                                background: UPD.searchButtonBg,
+                                filter: "drop-shadow(0 0 4px rgba(255,255,255,0.12))",
+                                fontFamily: FONT_LATO,
+                                fontWeight: 500,
+                                fontSize: "12px",
+                                lineHeight: "18px",
+                                color: UPD.white,
+                                flexShrink: 0,
+                                transition: "filter .2s",
+                                "&:hover": { filter: "drop-shadow(0 0 8px rgba(89,0,172,0.6))" },
                             }}
                         >
-                            Search
-                        </Button>
+                            <Box component="span" sx={{ display: { xs: "flex", sm: "none" } }}>
+                                <FiSearch size={14} />
+                            </Box>
+                            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                                Search
+                            </Box>
+                        </ButtonBase>
                     </Box>
                 </Box>
 
-                <FeaturedCarousel items={featured} loading={loadingFeatured} />
+                <FeaturedCarousel items={featured} />
             </Box>
 
             {/* ── Toolbar ── */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
-                <Typography sx={{ fontSize: "0.78rem", color: MUTED }}>
-                    <Box component="span" sx={{ color: "#FFFFFF", fontWeight: 700 }}>{totalLabel.total}</Box>
-                    {` ${totalLabel.noun} in total`}
-                </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px 24px", flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
+                    <Typography sx={{ fontFamily: FONT_INTER, fontWeight: 600, fontSize: "16px", lineHeight: "24px", color: UPD.white }}>{total}</Typography>
+                    <Typography noWrap sx={{ fontFamily: FONT_INTER, fontSize: "16px", lineHeight: "24px", color: UPD.neutral100 }}>
+                        {summary}
+                        {search ? ` for “${search}”` : ""}
+                    </Typography>
+                </Box>
 
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                    <Button
-                        size="small"
-                        onClick={(event) => setSortAnchor(event.currentTarget)}
-                        endIcon={<MdKeyboardArrowDown size={16} />}
-                        sx={{
-                            bgcolor: SURFACE,
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: "9px",
-                            px: 1.5,
-                            py: 0.6,
-                            fontSize: "0.75rem",
-                            fontWeight: 500,
-                            textTransform: "none",
-                            color: "#E4E4E7",
-                            "&:hover": { bgcolor: PRIMARY_HOVER, borderColor: BORDER_HOVER },
-                        }}
-                    >
-                        {SORT_OPTIONS.find((option) => option.value === sort)?.label}
-                    </Button>
-                    <Menu
-                        anchorEl={sortAnchor}
-                        open={Boolean(sortAnchor)}
-                        onClose={() => setSortAnchor(null)}
-                        slotProps={MENU_SLOT_PROPS}
-                    >
-                        {SORT_OPTIONS.map((option) => (
-                            <MenuItem
-                                key={option.value}
-                                selected={option.value === sort}
-                                onClick={() => { setSort(option.value); setSortAnchor(null); }}
-                            >
-                                {option.label}
-                            </MenuItem>
-                        ))}
-                    </Menu>
-
-                    {/* Segmented tabs */}
-                    <Box sx={{ display: "flex", gap: 0.5, bgcolor: SURFACE, border: `1px solid ${BORDER}`, borderRadius: "10px", p: "3px" }}>
-                        {TABS.map(({ label, value, href, countKey }) => {
-                            const active = tab === value || (tab === "all" && pathname === href);
-                            const count = countKey && counts ? counts[countKey] : undefined;
-                            return (
-                                <Button
-                                    key={value}
-                                    onClick={() => router.push(href)}
-                                    sx={{
-                                        borderRadius: "8px",
-                                        px: 1.5,
-                                        py: 0.5,
-                                        fontSize: "0.75rem",
-                                        fontWeight: active ? 600 : 500,
-                                        textTransform: "none",
-                                        minWidth: 0,
-                                        lineHeight: 1.4,
-                                        whiteSpace: "nowrap",
-                                        bgcolor: active ? "#2A2E3F" : "transparent",
-                                        color: active ? "#FFFFFF" : MUTED,
-                                        "&:hover": { bgcolor: active ? "#2A2E3F" : "#1A1D28", color: "#FFFFFF" },
-                                    }}
-                                >
-                                    {label}{count !== undefined ? ` (${count})` : ""}
-                                </Button>
-                            );
-                        })}
-                    </Box>
+                <Box sx={{ display: "flex", alignItems: "center", gap: { xs: "12px", md: "24px" }, flexWrap: "wrap", maxWidth: "100%" }}>
+                    {kind === "blog" ? <Dropdown label={category} value={category} options={categoryOptions} onChange={setCategory} /> : null}
+                    <Dropdown label={SORT_OPTIONS.find((option) => option.value === sort)?.label ?? "Newest"} value={sort} options={SORT_OPTIONS} onChange={setSort} />
+                    <KindTabs active={kind} />
                 </Box>
             </Box>
 
             {/* ── Grid ── */}
-            {loadingFeed ? (
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(3, 1fr)" }, gap: 1.5 }}>
-                    {Array.from({ length: 6 }).map((_, index) => (
-                        <Skeleton
-                            key={index}
-                            variant="rectangular"
-                            height={isAnnouncements ? 110 : 230}
-                            sx={{ borderRadius: "12px", bgcolor: SURFACE }}
-                        />
-                    ))}
-                </Box>
-            ) : feed.length === 0 ? (
+            {items.length === 0 ? (
                 <Box
                     sx={{
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
-                        gap: 1,
-                        py: 6,
-                        bgcolor: SURFACE,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: "12px",
+                        gap: "8px",
+                        py: "56px",
+                        borderRadius: "16px",
+                        border: `1px solid ${UPD.cardBorder}`,
+                        bgcolor: "rgba(255,255,255,0.02)",
                     }}
                 >
-                    <Typography sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#FFFFFF" }}>Nothing here yet</Typography>
-                    <Typography sx={{ fontSize: "0.75rem", color: MUTED }}>
-                        {search ? "No results matched your search." : "Check back soon for new updates."}
+                    <Typography sx={{ fontFamily: FONT_POPPINS, fontWeight: 500, fontSize: "18px", lineHeight: "27px", color: UPD.white }}>
+                        No {KIND_META[kind].noun} found
                     </Typography>
-                    {search ? (
-                        <Button
-                            size="small"
-                            onClick={() => { setSearchInput(""); setSearch(""); }}
-                            sx={{ textTransform: "none", fontSize: "0.75rem", fontWeight: 600, color: "#93C5FD" }}
+                    <Typography sx={{ fontFamily: FONT_LATO, fontSize: "14px", lineHeight: "21px", color: UPD.neutral300 }}>
+                        {search ? "Try a different keyword or clear your search." : "Check back soon for new updates."}
+                    </Typography>
+                    {search || category !== ALL_CATEGORY ? (
+                        <ButtonBase
+                            onClick={() => {
+                                clearSearch();
+                                setCategory(ALL_CATEGORY);
+                            }}
+                            sx={{
+                                mt: "8px",
+                                height: 36,
+                                px: "16px",
+                                borderRadius: "50px",
+                                border: `1px solid ${UPD.neutral700}`,
+                                fontFamily: FONT_LATO,
+                                fontWeight: 500,
+                                fontSize: "14px",
+                                color: UPD.white,
+                                "&:hover": { borderColor: UPD.neutral300 },
+                            }}
                         >
-                            Clear search
-                        </Button>
+                            Clear filters
+                        </ButtonBase>
                     ) : null}
                 </Box>
             ) : (
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(3, 1fr)" }, gap: isAnnouncements ? 1 : 1.5 }}>
-                    {feed.map((item) => (
-                        <UpdateCard key={`${item.updateType}-${item.updateId}`} item={item} />
+                <Box
+                    sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(3, minmax(0, 1fr))" },
+                        columnGap: "24px",
+                        rowGap: "32px",
+                        alignItems: "start",
+                    }}
+                >
+                    {items.map((entry) => (
+                        <UpdateCard key={entry.id} entry={entry} />
                     ))}
                 </Box>
             )}
-
-            {feedMeta && feedMeta.totalPages > 1 ? (
-                <Box sx={{ display: "flex", justifyContent: "center", pt: 1 }}>
-                    <Pagination
-                        size="small"
-                        count={feedMeta.totalPages}
-                        page={page}
-                        onChange={(_, value) => setPage(value)}
-                        sx={{
-                            "& .MuiPaginationItem-root": { color: MUTED },
-                            "& .Mui-selected": { backgroundColor: `${PRIMARY} !important`, color: "#FFFFFF" },
-                        }}
-                    />
-                </Box>
-            ) : null}
         </Box>
     );
 }

@@ -1,570 +1,350 @@
 "use client";
-import React, { useEffect } from "react";
-import { CircularProgress } from "@mui/material";
-import {
-    MdEdit,
-    MdCheckCircle,
-    MdWarningAmber,
-    MdLock,
-    MdLocationOn,
-    MdPersonOutline,
-    MdSchool,
-} from "react-icons/md";
-import { useStudent, type StudentAddress, type StudentDocument } from "@/contexts/StudentContext";
 
-// ─── Shared card style ──────────────────────────────────────────────────────
-const card: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "16px",
-    padding: "14px 16px",
-};
+import React, { useState } from "react";
+import Image from "next/image";
+import { Box, ButtonBase, Typography } from "@mui/material";
+import { PC, PERSONAL, profileAsset } from "@/components/profile/profile-data";
+import { CardTitle, FieldRow, GlassCard, InfoField, PIcon, PT, SectionPill, VerifiedMark } from "@/components/profile/profile-ui";
+import VerifyParentPhoneModal from "@/components/profile/VerifyParentPhoneModal";
 
-const EMPTY = "—";
-
-function formatDate(value: string | null | undefined): string {
-    if (!value) return EMPTY;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return EMPTY;
-    return date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
-        .replace(/\//g, "-");
-}
-
-function formatPhone(callingCode: string | null | undefined, number: string | null | undefined): string {
-    if (!number) return EMPTY;
-    return callingCode ? `+${callingCode} ${number}` : number;
-}
-
-function addressLabel(address: StudentAddress): string {
-    return address.addressType?.trim() || "Address";
-}
-
-function isPermanent(address: StudentAddress): boolean {
-    return (address.addressType ?? "").toLowerCase().includes("permanent");
-}
-
-// ─── Section label pill ─────────────────────────────────────────────────────
-function Pill({ children }: { children: React.ReactNode }) {
+function EditDetailsButton() {
     return (
-        <span
-            style={{
-                display: "inline-flex",
+        <ButtonBase
+            sx={{
+                display: "flex",
                 alignItems: "center",
-                fontSize: "0.62rem",
-                fontWeight: 600,
-                padding: "3px 9px",
+                gap: "8px",
+                height: 32,
+                px: "12px",
                 borderRadius: "99px",
-                background: "rgba(139,92,246,0.22)",
-                color: "#c4b5fd",
-                letterSpacing: "0.02em",
-                textTransform: "capitalize",
-            }}
-        >
-            {children}
-        </span>
-    );
-}
-
-// ─── Display field ──────────────────────────────────────────────────────────
-function Field({
-    label,
-    value,
-    badge,
-}: {
-    label: string;
-    value: React.ReactNode;
-    badge?: React.ReactNode;
-}) {
-    return (
-        <div
-            style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                borderRadius: "10px",
-                padding: "8px 12px",
-                flex: 1,
-                minWidth: 0,
-            }}
-        >
-            <div style={{ fontSize: "0.6rem", color: "rgba(255,255,255,0.45)", marginBottom: 3 }}>
-                {label}
-            </div>
-            <div
-                style={{
-                    fontSize: "0.78rem",
-                    fontWeight: 500,
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 4,
-                }}
-            >
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {value}
-                </span>
-                {badge}
-            </div>
-        </div>
-    );
-}
-
-// ─── Card header ────────────────────────────────────────────────────────────
-function CardHeader({ title }: { title: string }) {
-    return (
-        <div
-            style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "12px",
-            }}
-        >
-            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#fff" }}>{title}</span>
-            <button
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: "0.65rem",
-                    fontWeight: 600,
-                    color: "rgba(255,255,255,0.55)",
-                    background: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "3px 0",
-                }}
-            >
-                <MdEdit size={12} />
-                Edit Details
-            </button>
-        </div>
-    );
-}
-
-// ─── VerifiedBadge ───────────────────────────────────────────────────────────
-function VerifiedBadge({ verified }: { verified: boolean }) {
-    return (
-        <span
-            style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 18,
-                height: 18,
-                borderRadius: "50%",
-                background: verified ? "rgba(34,197,94,0.15)" : "rgba(250,204,21,0.15)",
                 flexShrink: 0,
+                "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
             }}
         >
-            {verified ? (
-                <MdCheckCircle size={13} color="#22c55e" />
-            ) : (
-                <MdWarningAmber size={13} color="#facc15" />
-            )}
-        </span>
+            <PIcon name="icon-edit.svg" size={20} />
+            <Typography component="span" sx={{ ...PT.med14, color: PC.n200, whiteSpace: "nowrap" }}>
+                Edit Details
+            </Typography>
+        </ButtonBase>
     );
 }
 
-function EmptyRow({ label }: { label: string }) {
+function PillRow({ pill, aside }: { pill: string; aside?: React.ReactNode }) {
     return (
-        <div
-            style={{
-                fontSize: "0.7rem",
-                color: "rgba(255,255,255,0.4)",
-                padding: "10px 0",
-                textAlign: "center",
-            }}
-        >
-            {label}
-        </div>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", width: "100%" }}>
+            <SectionPill>{pill}</SectionPill>
+            {aside}
+        </Box>
     );
 }
 
-// ─── Address block ───────────────────────────────────────────────────────────
-function AddressBlock({ address }: { address: StudentAddress }) {
+// ─── Left column ───────────────────────────────────────────────────────────
+function BasicDetailsCard() {
     return (
-        <>
-            <div style={{ marginBottom: "10px" }}>
-                <Pill>{addressLabel(address)}</Pill>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                <Field label="Street Address" value={address.addressLine ?? EMPTY} />
-                <Field label="City" value={address.city ?? EMPTY} />
-                <Field label="State" value={address.state ?? EMPTY} />
-                <Field label="Country" value={address.country ?? EMPTY} />
-                <Field label="ZIP" value={address.postalCode ?? EMPTY} />
-            </div>
-        </>
+        <GlassCard>
+            <CardTitle action={<EditDetailsButton />}>Basic Details</CardTitle>
+            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "71px" }}>
+                {/* Gradient banner with the avatar overlapping its bottom edge. */}
+                <Box sx={{ position: "relative", height: 125, borderRadius: "16px", border: "1px solid rgba(191,191,191,0.44)" }}>
+                    <Box sx={{ position: "absolute", inset: 0, borderRadius: "16px", overflow: "hidden" }}>
+                        <Box
+                            component="img"
+                            src={profileAsset("banner-gradient.png")}
+                            alt=""
+                            aria-hidden
+                            sx={{ position: "absolute", left: "-0.49%", top: "-238.3%", width: "101.23%", height: "436.17%", maxWidth: "none" }}
+                        />
+                    </Box>
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            top: 30,
+                            left: "calc(50% - 0.5px)",
+                            transform: "translateX(-50%)",
+                            width: 147,
+                            height: 147,
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            bgcolor: "#BBC9ED",
+                            border: "1.8px solid rgba(191,191,191,0.24)",
+                        }}
+                    >
+                        <Box sx={{ position: "absolute", left: -55.86, top: 7.35, width: 245.356, height: 245.356 }}>
+                            <Image src={profileAsset("avatar-student.png")} alt={PERSONAL.name} fill sizes="246px" style={{ objectFit: "cover" }} priority />
+                        </Box>
+                    </Box>
+                </Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <Typography sx={{ ...PT.poppinsSemi20, color: PC.white, textAlign: "center" }}>{PERSONAL.name}</Typography>
+                    <FieldRow sx={{ flexDirection: "row" }}>
+                        <InfoField label="Gender" value={PERSONAL.gender} />
+                        <InfoField label="Date of Birth" value={PERSONAL.dateOfBirth} />
+                    </FieldRow>
+                </Box>
+            </Box>
+        </GlassCard>
     );
 }
 
-// ─── Document row ────────────────────────────────────────────────────────────
-function DocumentRow({ document }: { document: StudentDocument }) {
+function ContactDetailsCard() {
     return (
-        <div
-            style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 8,
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                borderRadius: "10px",
-                padding: "8px 12px",
-            }}
-        >
-            <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
-                    {document.documentType}
-                </div>
-                <div
-                    style={{
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        color: "#fff",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
+        <GlassCard>
+            <CardTitle>Contact Details</CardTitle>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <PillRow pill="Primary Details" aside={<Typography sx={{ ...PT.med12, color: PC.primary75, whiteSpace: "nowrap" }}>2/2 verified</Typography>} />
+                    <FieldRow>
+                        <InfoField label="Phone Number" value={PERSONAL.phone} trailing={<VerifiedMark />} />
+                        <InfoField label="Email" value={PERSONAL.email} trailing={<VerifiedMark />} />
+                    </FieldRow>
+                </Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <PillRow pill="WhatsApp Details" />
+                    <InfoField label="WhatsApp Number" value={PERSONAL.whatsapp} trailing={<VerifiedMark />} />
+                </Box>
+            </Box>
+        </GlassCard>
+    );
+}
+
+function AadharCard() {
+    return (
+        <GlassCard>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "16px", minWidth: 0 }}>
+                    <Box sx={{ position: "relative", width: 44, height: 44, flexShrink: 0 }}>
+                        <Image src={profileAsset("icon-lock-3d.png")} alt="" fill sizes="44px" style={{ objectFit: "cover" }} />
+                    </Box>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                        <Typography component="h2" sx={{ ...PT.poppinsSemi20, color: PC.white, whiteSpace: "nowrap" }}>
+                            Aadhar Details
+                        </Typography>
+                        <Typography sx={{ ...PT.med16, color: PC.n100, whiteSpace: "nowrap" }}>{PERSONAL.aadhaarMasked}</Typography>
+                    </Box>
+                </Box>
+                <Box sx={{ display: "flex", alignItems: "center", px: "16px", py: "8px", borderRadius: "99px", border: `1px solid ${PC.success500}` }}>
+                    <VerifiedMark label="Verified" />
+                </Box>
+            </Box>
+        </GlassCard>
+    );
+}
+
+function PasswordCard() {
+    return (
+        <GlassCard>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                    <Box sx={{ position: "relative", width: 40, height: 40, flexShrink: 0 }}>
+                        <Image src={profileAsset("icon-lock-3d.png")} alt="" fill sizes="40px" style={{ objectFit: "cover" }} />
+                    </Box>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "1.7px", minWidth: 0 }}>
+                        <Typography component="h2" sx={{ ...PT.med18, color: PC.white }}>
+                            Password
+                        </Typography>
+                        <Typography sx={{ ...PT.reg14, color: PC.n300 }}>{PERSONAL.passwordUpdated}</Typography>
+                    </Box>
+                </Box>
+                <ButtonBase
+                    sx={{
+                        px: "16px",
+                        py: "8px",
+                        borderRadius: "99px",
+                        border: `1px solid ${PC.n600}`,
+                        ...PT.med16,
+                        color: PC.white,
                         whiteSpace: "nowrap",
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
                     }}
                 >
-                    {document.documentName}
-                </div>
-            </div>
-            <a
-                href={document.documentUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    fontSize: "0.72rem",
-                    fontWeight: 600,
-                    color: "#60a5fa",
-                    whiteSpace: "nowrap",
-                    textDecoration: "none",
-                }}
-            >
-                View Document
-                <VerifiedBadge verified={document.isVerified} />
-            </a>
-        </div>
+                    Change Password
+                </ButtonBase>
+            </Box>
+        </GlassCard>
     );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
-export default function ProfilePage() {
-    const { profile, loadingProfile, getProfile } = useStudent();
-
-    useEffect(() => {
-        getProfile();
-    }, [getProfile]);
-
-    if (loadingProfile && !profile) {
-        return (
-            <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
-                <CircularProgress size={24} sx={{ color: "#a78bfa" }} />
-            </div>
-        );
-    }
-
-    if (!profile) {
-        return <EmptyRow label="Profile could not be loaded." />;
-    }
-
-    const parent = profile.parentDetails[0] ?? null;
-    const currentAddress = profile.studentAddresses.find((address) => !isPermanent(address))
-        ?? profile.studentAddresses[0]
-        ?? null;
-    const permanentAddress = profile.studentAddresses.find(isPermanent) ?? null;
-    const adhaar = profile.studentAdhaarDatas[0] ?? null;
-
+// ─── Right column ──────────────────────────────────────────────────────────
+function AcademicDetailsCard() {
+    const { academic } = PERSONAL;
     return (
-        <div
-            style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "12px",
-                padding: "4px 0 12px",
-            }}
-        >
-            {/* ══════════════ LEFT COLUMN ══════════════ */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <GlassCard>
+            <CardTitle>Academic Details</CardTitle>
+            <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "flex-start", sm: "center" }, gap: { xs: "20px", sm: "32px" } }}>
+                <Box sx={{ position: "relative", width: 150, height: 150, flexShrink: 0, borderRadius: "7.5px", border: "1px solid #E3E5EB", bgcolor: PC.white, overflow: "hidden" }}>
+                    <Image src={profileAsset("college-logo.png")} alt={`${academic.institute} logo`} fill sizes="150px" style={{ objectFit: "cover" }} />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0, width: "100%", display: "flex", flexDirection: "column", gap: "24px" }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <Typography sx={{ ...PT.poppinsMed20, color: PC.white }}>{academic.institute}</Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <PIcon name="icon-map-pin.svg" size={14} />
+                            <Typography sx={{ ...PT.med14, color: PC.n200 }}>{academic.location}</Typography>
+                        </Box>
+                    </Box>
+                    <Box component="img" src={profileAsset("divider-line.svg")} alt="" aria-hidden sx={{ display: "block", width: "100%", height: "1px" }} />
+                    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: { xs: "20px", sm: "40px" } }}>
+                        <Box sx={{ width: 172, display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <Typography sx={{ ...PT.reg12, color: PC.n300 }}>Your Highest Education</Typography>
+                            <Typography sx={{ ...PT.med16, color: PC.white, minHeight: 32, display: "flex", alignItems: "center" }}>{academic.highestEducation}</Typography>
+                        </Box>
+                        <Box sx={{ width: 172, display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <Typography sx={{ ...PT.reg12, color: PC.n300 }}>{academic.documentLabel}</Typography>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <ButtonBase sx={{ py: "4px", borderRadius: "99px", ...PT.med16, color: PC.white, textDecoration: "underline", whiteSpace: "nowrap" }}>View Document</ButtonBase>
+                                {academic.documentVerified ? <VerifiedMark /> : <PIcon name="icon-alert-triangle.svg" size={16} />}
+                            </Box>
+                        </Box>
+                    </Box>
+                </Box>
+            </Box>
+        </GlassCard>
+    );
+}
 
-                {/* ── Basic Details ── */}
-                <div style={card}>
-                    <CardHeader title="Basic Details" />
-
-                    {/* Profile banner + avatar */}
-                    <div style={{ position: "relative", marginBottom: "36px" }}>
-                        <div
-                            style={{
-                                height: 80,
-                                borderRadius: "12px",
-                                background:
-                                    "linear-gradient(135deg, #e879f9 0%, #f97316 50%, #facc15 100%)",
-                            }}
-                        />
-                        <div
-                            style={{
-                                position: "absolute",
-                                bottom: -30,
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                width: 62,
-                                height: 62,
-                                borderRadius: "50%",
-                                border: "3px solid #0b0c1e",
-                                overflow: "hidden",
-                                background: "rgba(255,255,255,0.08)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
-                            {profile.studentPhoto ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={profile.studentPhoto}
-                                    alt={profile.studentName}
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                />
-                            ) : (
-                                <MdPersonOutline size={30} color="rgba(255,255,255,0.5)" />
-                            )}
-                        </div>
-                    </div>
-
-                    <p
-                        style={{
-                            textAlign: "center",
-                            fontSize: "0.82rem",
-                            fontWeight: 700,
-                            color: "#fff",
-                            marginBottom: "4px",
-                        }}
-                    >
-                        {profile.studentName}
-                    </p>
-                    <p
-                        style={{
-                            textAlign: "center",
-                            fontSize: "0.65rem",
-                            color: "rgba(255,255,255,0.45)",
-                            marginBottom: "14px",
-                        }}
-                    >
-                        {profile.studentRegistrationNumber ?? "Registration pending"} · {profile.branch.branchName}
-                    </p>
-
-                    <div style={{ display: "flex", gap: "8px" }}>
-                        <Field label="Gender" value={profile.gender ?? EMPTY} />
-                        <Field label="Date of Birth" value={formatDate(profile.dateOfBirth)} />
-                    </div>
-                </div>
-
-                {/* ── Contact Details ── */}
-                <div style={card}>
-                    <CardHeader title="Contact Details" />
-
-                    <div style={{ marginBottom: "10px" }}>
-                        <Pill>Primary Details</Pill>
-                    </div>
-
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                        <Field
+function ParentsDetailsCard({ verified, onVerify }: { verified: boolean; onVerify: () => void }) {
+    const { parent } = PERSONAL;
+    return (
+        <GlassCard>
+            <CardTitle>Parents Details</CardTitle>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <PillRow
+                    pill="Primary Details"
+                    aside={
+                        verified ? undefined : (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <PIcon name="icon-alert-triangle-14.svg" size={14} />
+                                <Typography sx={{ ...PT.med12, color: PC.warning500, whiteSpace: "nowrap" }}>0/1 verified</Typography>
+                            </Box>
+                        )
+                    }
+                />
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <FieldRow>
+                        <InfoField label="Full Name" value={parent.name} />
+                        <InfoField
                             label="Phone Number"
-                            value={formatPhone(profile.callingCode, profile.phoneNumber)}
+                            value={parent.phone}
+                            trailing={
+                                verified ? (
+                                    <VerifiedMark label="Verified" />
+                                ) : (
+                                    <ButtonBase onClick={onVerify} sx={{ ...PT.med14, color: PC.teal, borderRadius: "4px", px: "4px", "&:hover": { textDecoration: "underline" } }}>
+                                        Verify
+                                    </ButtonBase>
+                                )
+                            }
                         />
-                        <Field label="Email" value={profile.email ?? EMPTY} />
-                    </div>
+                    </FieldRow>
+                    <FieldRow>
+                        <InfoField label="Email" value={parent.email} />
+                        <InfoField label="Relationship" value={parent.relationship} />
+                    </FieldRow>
+                </Box>
+            </Box>
+        </GlassCard>
+    );
+}
 
-                    <div style={{ marginBottom: "10px" }}>
-                        <Pill>Alternate Details</Pill>
-                    </div>
+function AddressFields() {
+    const { residential: a } = PERSONAL;
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <FieldRow>
+                <InfoField label="Street Address" value={a.street} />
+                <InfoField label="Apartment" value={a.apartment} />
+            </FieldRow>
+            <FieldRow>
+                <InfoField label="City" value={a.city} />
+                <InfoField label="State" value={a.state} />
+                <InfoField label="ZIP" value={a.zip} />
+            </FieldRow>
+        </Box>
+    );
+}
 
-                    <Field
-                        label="Alternate Number"
-                        value={formatPhone(profile.callingCode, profile.studentAlternatePhoneNumber)}
-                    />
-                </div>
-
-                {/* ── Identity ── */}
-                {adhaar && (
-                    <div style={card}>
-                        <CardHeader title="Identity" />
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                            <Field
-                                label="Aadhaar Number"
-                                value={adhaar.adhaarNumber ?? EMPTY}
-                                badge={<VerifiedBadge verified={adhaar.isVerified} />}
-                            />
-                            <Field label="Name on Aadhaar" value={adhaar.adhaarName ?? EMPTY} />
-                        </div>
-                    </div>
-                )}
-
-                {/* ── Password ── */}
-                <div
-                    style={{
-                        ...card,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "10px",
-                    }}
-                >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div
-                            style={{
-                                width: 36,
-                                height: 36,
-                                borderRadius: "10px",
-                                background: "rgba(255,255,255,0.06)",
-                                border: "1px solid rgba(255,255,255,0.1)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                            }}
+function AddressCard() {
+    const [sameAsCurrent, setSameAsCurrent] = useState(true);
+    return (
+        <GlassCard>
+            <CardTitle>Address</CardTitle>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <PillRow pill="Residential/Current Address" />
+                    <AddressFields />
+                </Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                        <SectionPill>Permanent Address</SectionPill>
+                        <ButtonBase
+                            role="checkbox"
+                            aria-checked={sameAsCurrent}
+                            onClick={() => setSameAsCurrent((v) => !v)}
+                            sx={{ display: "flex", alignItems: "center", gap: "12px", borderRadius: "4px" }}
                         >
-                            <MdLock size={18} color="rgba(255,255,255,0.7)" />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
-                                Password
-                            </div>
-                            <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.45)", marginTop: 2 }}>
-                                Keep your account secure with a strong password
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        style={{
-                            fontSize: "0.7rem",
-                            fontWeight: 600,
-                            padding: "6px 14px",
-                            borderRadius: "8px",
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "rgba(255,255,255,0.07)",
-                            color: "#fff",
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        Change Password
-                    </button>
-                </div>
-            </div>
-
-            {/* ══════════════ RIGHT COLUMN ══════════════ */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-
-                {/* ── Academic Details ── */}
-                <div style={card}>
-                    <CardHeader title="Academic Details" />
-
-                    <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
-                        <div
-                            style={{
-                                width: 64,
-                                height: 64,
-                                borderRadius: "10px",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                background: "rgba(255,255,255,0.06)",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                            }}
-                        >
-                            <MdSchool size={26} color="rgba(255,255,255,0.55)" />
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", marginBottom: 3 }}>
-                                {profile.highestEducationInstitute ?? "Institute not added"}
-                            </div>
-                            <div
-                                style={{
+                            <Box
+                                sx={{
+                                    position: "relative",
+                                    width: 20,
+                                    height: 20,
+                                    borderRadius: "4px",
+                                    bgcolor: sameAsCurrent ? PC.primary500 : "transparent",
+                                    border: sameAsCurrent ? "none" : `1px solid ${PC.n400}`,
                                     display: "flex",
                                     alignItems: "center",
-                                    gap: 4,
-                                    fontSize: "0.65rem",
-                                    color: "rgba(255,255,255,0.5)",
-                                    marginBottom: 10,
+                                    justifyContent: "center",
                                 }}
                             >
-                                <MdLocationOn size={12} />
-                                {profile.branch.branchName}
-                            </div>
+                                {sameAsCurrent && <PIcon name="icon-check.svg" size={14} />}
+                            </Box>
+                            <Typography component="span" sx={{ ...PT.reg12, color: PC.n50, whiteSpace: "nowrap" }}>
+                                Same as Residential/Current Address
+                            </Typography>
+                        </ButtonBase>
+                    </Box>
+                    {!sameAsCurrent && <AddressFields />}
+                </Box>
+            </Box>
+        </GlassCard>
+    );
+}
 
-                            <div style={{ fontSize: "0.58rem", color: "rgba(255,255,255,0.4)", marginBottom: 2 }}>
-                                Your Highest Education
-                            </div>
-                            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
-                                {profile.highestEducation ?? EMPTY}
-                            </div>
-                        </div>
-                    </div>
+// ─── Page ──────────────────────────────────────────────────────────────────
+export default function PersonalDetailsPage() {
+    const [parentVerified, setParentVerified] = useState(false);
+    const [verifyOpen, setVerifyOpen] = useState(false);
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
-                        {profile.studentDocuments.length === 0 ? (
-                            <EmptyRow label="No documents uploaded yet." />
-                        ) : (
-                            profile.studentDocuments.map((document) => (
-                                <DocumentRow key={document.documentId} document={document} />
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {/* ── Parents Details ── */}
-                <div style={card}>
-                    <CardHeader title="Parents Details" />
-
-                    {!parent ? (
-                        <EmptyRow label="No parent details added yet." />
-                    ) : (
-                        <>
-                            <div style={{ marginBottom: "10px" }}>
-                                <Pill>Primary Details</Pill>
-                            </div>
-
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                                <Field label="Full Name" value={parent.parentName} />
-                                <Field
-                                    label="Phone Number"
-                                    value={formatPhone(parent.parentCallingCode, parent.parentPhoneNumber)}
-                                />
-                                <Field label="Email" value={parent.parentEmail ?? EMPTY} />
-                                <Field label="Relationship" value={parent.parentRelation ?? EMPTY} />
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* ── Address ── */}
-                <div style={card}>
-                    <CardHeader title="Address" />
-
-                    {profile.studentAddresses.length === 0 ? (
-                        <EmptyRow label="No address added yet." />
-                    ) : (
-                        <>
-                            {currentAddress && <AddressBlock address={currentAddress} />}
-                            {permanentAddress && permanentAddress.addressId !== currentAddress?.addressId ? (
-                                <AddressBlock address={permanentAddress} />
-                            ) : (
-                                <div style={{ fontSize: "0.62rem", color: "rgba(255,255,255,0.45)" }}>
-                                    Permanent address is same as the address above.
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+    return (
+        <>
+            <Box
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 576fr) minmax(0, 792fr)" },
+                    alignItems: "start",
+                    gap: "24px",
+                }}
+            >
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+                    <BasicDetailsCard />
+                    <ContactDetailsCard />
+                    <AadharCard />
+                    <PasswordCard />
+                </Box>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+                    <AcademicDetailsCard />
+                    <ParentsDetailsCard verified={parentVerified} onVerify={() => setVerifyOpen(true)} />
+                    <AddressCard />
+                </Box>
+            </Box>
+            <VerifyParentPhoneModal
+                open={verifyOpen}
+                phone={PERSONAL.parent.otpPhone}
+                onClose={() => setVerifyOpen(false)}
+                onVerified={() => {
+                    setParentVerified(true);
+                    setVerifyOpen(false);
+                }}
+            />
+        </>
     );
 }

@@ -11,6 +11,8 @@ import { MdMenu } from "react-icons/md";
 interface StudentLayoutProps {
     children: React.ReactNode | React.ReactNode[] | React.ReactElement | React.ReactElement[];
     header?: React.ReactNode;
+    /** Render the header slot only below `md` (keeps the mobile menu button for pages whose design has no top bar). */
+    headerMobileOnly?: boolean;
 }
 
 interface NavItem {
@@ -59,7 +61,7 @@ const ACTIVE_GLOWS = [
 ];
 
 // ─── Component ─────────────────────────────────────────────────────────────
-export default function StudentLayout({ children, header }: StudentLayoutProps) {
+export default function StudentLayout({ children, header, headerMobileOnly = false }: StudentLayoutProps) {
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const isMobile = useMediaQuery("(max-width:900px)");
@@ -348,7 +350,7 @@ export default function StudentLayout({ children, header }: StudentLayoutProps) 
                         component="header"
                         sx={{
                             flexShrink: 0,
-                            display: "flex",
+                            display: headerMobileOnly ? { xs: "flex", md: "none" } : "flex",
                             alignItems: "center",
                             gap: 0.5,
                             py: 1,

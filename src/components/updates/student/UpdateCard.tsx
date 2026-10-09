@@ -1,234 +1,267 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
 import { Box, Typography } from "@mui/material";
-import { MdArrowForward, MdArticle, MdCampaign, MdPublic, MdTrendingUp } from "react-icons/md";
-import {
-    DEFAULT_ACTION_LABELS,
-    UPDATE_TYPE_SLUGS,
-    type AnnouncementType,
-    type UpdateItem,
-    type UpdateType,
-} from "@/contexts/UpdatesContext";
+import { FiArrowRight, FiFileText, FiGlobe, FiVolume2 } from "react-icons/fi";
+import { KIND_META, updateHref, type UpdateEntry, type UpdateKind } from "./mock-data";
+import { FONT_LATO, UPD } from "./tokens";
 
-export const TYPE_STYLE: Record<UpdateType, { label: string; color: string; icon: React.ElementType; readLabel: string }> = {
-    news: { label: "News", color: "#60a5fa", icon: MdPublic, readLabel: "Read News" },
-    blog: { label: "Blog", color: "#a78bfa", icon: MdArticle, readLabel: "Read Article" },
-    announcement: { label: "Announcement", color: "#a78bfa", icon: MdCampaign, readLabel: "Read More" },
+export const KIND_ICON: Record<UpdateKind, React.ElementType> = {
+    news: FiGlobe,
+    blog: FiFileText,
+    announcement: FiVolume2,
 };
 
-export const SURFACE = "#12141C";
-export const BORDER = "#23262F";
-export const BORDER_HOVER = "#3A3F55";
-export const MUTED = "#8A8FA3";
+const IST = "Asia/Kolkata";
+const dayKey = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: IST });
 
-/** "Published Today" / "Updated 2 hrs ago" style stamp used on the cards. */
-export function relativeStamp(item: UpdateItem): string {
-    const published = item.publishedAt ?? item.createdAt;
-    const updated = item.updatedAt;
-    const useUpdated = new Date(updated).getTime() - new Date(published).getTime() > 60_000;
-    const target = new Date(useUpdated ? updated : published);
-    const prefix = useUpdated ? "Updated" : "Published";
+/** "Published Today" / "Updated 2 hrs ago" stamp used on announcement cards. */
+export function formatStamp(entry: Pick<UpdateEntry, "publishedAt" | "updatedAt">): string {
+    const published = new Date(entry.publishedAt);
+    const updated = new Date(entry.updatedAt);
 
-    const diffMs = Date.now() - target.getTime();
-    const hours = Math.floor(diffMs / 3_600_000);
+    if (updated.getTime() - published.getTime() > 60_000) {
+        const hours = Math.floor((Date.now() - updated.getTime()) / 3_600_000);
+        if (hours < 1) return "Updated just now";
+        if (hours < 24) return `Updated ${hours} hr${hours === 1 ? "" : "s"} ago`;
+        const days = Math.floor(hours / 24);
+        return `Updated ${days} day${days === 1 ? "" : "s"} ago`;
+    }
 
-    if (hours < 1) return `${prefix} just now`;
-    if (hours < 24) return `${prefix} ${hours} hr${hours === 1 ? "" : "s"} ago`;
-
-    const days = Math.floor(hours / 24);
-    if (days === 1) return `${prefix} yesterday`;
-    if (days < 7) return `${prefix} ${days} days ago`;
-
-    return `${prefix} ${target.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
+    const today = new Date();
+    const yesterday = new Date(today.getTime() - 86_400_000);
+    if (dayKey(published) === dayKey(today)) return "Published Today";
+    if (dayKey(published) === dayKey(yesterday)) return "Published Yesterday";
+    return `Published ${published.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: IST })}`;
 }
 
-export function updateHref(item: UpdateItem) {
-    return `/dashboard/student/updates/${UPDATE_TYPE_SLUGS[item.updateType]}/${item.slug}`;
-}
-
-function TypeBadge({ type }: { type: UpdateType }) {
-    const style = TYPE_STYLE[type];
-    const Icon = style.icon;
+// ─── Primitives ────────────────────────────────────────────────────────────
+export function TypeBadge({ kind, size = "sm" }: { kind: UpdateKind; size?: "sm" | "lg" }) {
+    const Icon = KIND_ICON[kind];
+    const large = size === "lg";
     return (
         <Box
             sx={{
-                position: "absolute",
-                top: 8,
-                left: 8,
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: 0.5,
-                bgcolor: "#0B0D14",
-                border: `1px solid ${BORDER_HOVER}`,
-                borderRadius: "7px",
-                px: 0.9,
-                py: 0.35,
+                gap: "8px",
+                px: "8px",
+                py: "2px",
+                bgcolor: UPD.neutral75,
+                borderRadius: large ? "8px" : "4px",
             }}
         >
-            <Icon size={12} color="#FFFFFF" />
-            <Typography sx={{ fontSize: "0.65rem", fontWeight: 700, color: "#FFFFFF", lineHeight: 1 }}>
-                {style.label}
+            <Icon size={16} color={UPD.black} strokeWidth={1.75} />
+            <Typography
+                sx={{
+                    fontFamily: FONT_LATO,
+                    fontWeight: large ? 400 : 500,
+                    fontSize: large ? "16px" : "12px",
+                    lineHeight: large ? "24px" : "18px",
+                    color: UPD.black,
+                    whiteSpace: "nowrap",
+                }}
+            >
+                {KIND_META[kind].label}
             </Typography>
         </Box>
     );
 }
 
-/** Announcements have no cover art in the design — they use a purple megaphone tile. */
-function AnnouncementThumb() {
+export function TrendingBadge() {
     return (
-        <Box
-            sx={{
-                width: 86,
-                height: 86,
-                flexShrink: 0,
-                borderRadius: "10px",
-                background: "linear-gradient(140deg, #3B1E6E 0%, #6D28D9 55%, #2A1250 100%)",
-                border: `1px solid ${BORDER_HOVER}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-            }}
-        >
-            <MdCampaign size={34} color="#E9D5FF" />
+        <Box sx={{ display: "inline-flex", alignItems: "center", px: "8px", py: "2px", bgcolor: UPD.trending, borderRadius: "8px" }}>
+            <Typography sx={{ fontFamily: FONT_LATO, fontSize: "16px", lineHeight: "24px", color: UPD.white, whiteSpace: "nowrap" }}>
+                Trending
+            </Typography>
         </Box>
     );
 }
 
-export default function UpdateCard({ item }: { item: UpdateItem }) {
-    const router = useRouter();
-    const style = TYPE_STYLE[item.updateType];
-    const open = () => router.push(updateHref(item));
-
-    const actionLabel =
-        item.updateType === "announcement"
-            ? item.actionLabel ?? DEFAULT_ACTION_LABELS[(item.announcementType ?? "General") as AnnouncementType]
-            : style.readLabel;
-
-    /* Announcements: compact horizontal row with the megaphone tile. */
-    if (item.updateType === "announcement") {
-        return (
-            <Box
-                onClick={open}
-                sx={{
-                    display: "flex",
-                    gap: 1.5,
-                    p: 1.25,
-                    borderRadius: "12px",
-                    cursor: "pointer",
-                    border: "1px solid transparent",
-                    transition: "background-color .18s, border-color .18s",
-                    "&:hover": { bgcolor: SURFACE, borderColor: BORDER },
-                }}
-            >
-                <AnnouncementThumb />
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.6, minWidth: 0, flex: 1 }}>
-                    <Typography sx={{ fontSize: "0.66rem", color: MUTED, lineHeight: 1 }}>
-                        {item.category} &nbsp;•&nbsp; {relativeStamp(item)}
-                    </Typography>
+export function MetaLine({ items }: { items: string[] }) {
+    return (
+        <Box sx={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
+            {items.map((text, index) => (
+                <Box key={`${text}-${index}`} sx={{ display: "contents" }}>
+                    {index > 0 ? <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: UPD.neutral200, flexShrink: 0 }} /> : null}
                     <Typography
+                        suppressHydrationWarning
                         sx={{
-                            fontSize: "0.85rem",
-                            fontWeight: 700,
-                            color: "#FFFFFF",
-                            lineHeight: 1.35,
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
+                            fontFamily: FONT_LATO,
+                            fontSize: "12px",
+                            lineHeight: "18px",
+                            color: UPD.neutral200,
+                            whiteSpace: "nowrap",
                             overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            flexShrink: index === items.length - 1 ? 1 : 0,
+                            minWidth: 0,
                         }}
                     >
-                        {item.title}
+                        {text}
                     </Typography>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: "auto", color: "#C7CBD9" }}>
-                        <Typography sx={{ fontSize: "0.7rem", fontWeight: 500 }}>{actionLabel}</Typography>
-                        <MdArrowForward size={12} />
-                    </Box>
                 </Box>
-            </Box>
-        );
-    }
+            ))}
+        </Box>
+    );
+}
 
-    /* News & blogs: cover image on top, meta + title + read link below. */
+export function CardAction({ label }: { label: string }) {
     return (
         <Box
-            onClick={open}
-            sx={{
-                display: "flex",
-                flexDirection: "column",
-                borderRadius: "12px",
-                overflow: "hidden",
-                cursor: "pointer",
-                bgcolor: SURFACE,
-                border: `1px solid ${BORDER}`,
-                transition: "border-color .18s, transform .18s, box-shadow .18s",
-                "&:hover": {
-                    borderColor: BORDER_HOVER,
-                    transform: "translateY(-2px)",
-                    boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
-                },
-            }}
+            className="card-action"
+            sx={{ display: "inline-flex", alignItems: "center", gap: "8px", height: 28, color: UPD.neutral200, transition: "color .2s" }}
         >
-            <Box sx={{ position: "relative", aspectRatio: "16 / 9", bgcolor: "#0B0D14", overflow: "hidden" }}>
-                {item.coverImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={item.coverImageUrl}
-                        alt={item.title}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    />
-                ) : (
-                    <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <style.icon size={30} color={style.color} />
-                    </Box>
-                )}
-                <TypeBadge type={item.updateType} />
-                {item.isTrending ? (
-                    <Box
-                        sx={{
-                            position: "absolute",
-                            top: 8,
-                            right: 8,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 0.4,
-                            bgcolor: "#DC2626",
-                            borderRadius: "7px",
-                            px: 0.8,
-                            py: 0.35,
-                        }}
-                    >
-                        <MdTrendingUp size={11} color="#FFFFFF" />
-                        <Typography sx={{ fontSize: "0.62rem", fontWeight: 700, color: "#FFFFFF", lineHeight: 1 }}>
-                            Trending
-                        </Typography>
-                    </Box>
-                ) : null}
-            </Box>
-
-            <Box sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 0.75, flex: 1 }}>
-                <Typography sx={{ fontSize: "0.66rem", color: MUTED, lineHeight: 1 }}>
-                    {item.category} &nbsp;•&nbsp; {item.readTimeMinutes} min read
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: "0.88rem",
-                        fontWeight: 700,
-                        color: "#FFFFFF",
-                        lineHeight: 1.35,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                    }}
-                >
-                    {item.title}
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: "auto", pt: 0.5, color: "#C7CBD9" }}>
-                    <Typography sx={{ fontSize: "0.72rem", fontWeight: 500 }}>{actionLabel}</Typography>
-                    <MdArrowForward size={12} />
-                </Box>
+            <Typography sx={{ fontFamily: FONT_LATO, fontWeight: 500, fontSize: "14px", lineHeight: "21px", color: "inherit", whiteSpace: "nowrap" }}>
+                {label}
+            </Typography>
+            <Box component="span" className="card-action-arrow" sx={{ display: "flex", transition: "transform .2s" }}>
+                <FiArrowRight size={20} strokeWidth={1.5} />
             </Box>
         </Box>
     );
+}
+
+const TITLE_SX = {
+    fontFamily: FONT_LATO,
+    fontWeight: 600,
+    fontSize: "18px",
+    lineHeight: "27px",
+    color: UPD.white,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+} as const;
+
+const CARD_HOVER_SX = {
+    "&:hover .card-action": { color: UPD.white },
+    "&:hover .card-action-arrow": { transform: "translateX(3px)" },
+    "&:focus-visible": { outline: `2px solid ${UPD.primary100}`, outlineOffset: "4px" },
+} as const;
+
+// ─── News & blog card ──────────────────────────────────────────────────────
+export function ArticleCard({ entry }: { entry: UpdateEntry }) {
+    return (
+        <Box
+            component={Link}
+            href={updateHref(entry)}
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
+                minWidth: 0,
+                textDecoration: "none",
+                borderRadius: "12px",
+                ...CARD_HOVER_SX,
+                "&:hover .card-cover img": { transform: "scale(1.04)" },
+            }}
+        >
+            <Box
+                className="card-cover"
+                sx={{
+                    position: "relative",
+                    height: 150,
+                    borderRadius: "12px",
+                    border: `1px solid ${UPD.cardBorder}`,
+                    overflow: "hidden",
+                    bgcolor: "#0B0B12",
+                    "& img": { transition: "transform .35s ease" },
+                }}
+            >
+                {entry.coverImage ? (
+                    <Image src={entry.coverImage} alt={entry.title} fill sizes="(max-width: 600px) 100vw, (max-width: 1200px) 50vw, 350px" style={{ objectFit: "cover" }} />
+                ) : null}
+                <Box sx={{ position: "absolute", insetInline: 0, top: 0, height: 102, background: UPD.cardTopShade, pointerEvents: "none" }} />
+                <Box sx={{ position: "absolute", left: 13, top: 12 }}>
+                    <TypeBadge kind={entry.kind} />
+                </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
+                <MetaLine items={[entry.category, `${entry.readMinutes} min read`]} />
+                <Typography sx={TITLE_SX}>{entry.title}</Typography>
+                <CardAction label={KIND_META[entry.kind].readLabel} />
+            </Box>
+        </Box>
+    );
+}
+
+// ─── Announcement card ─────────────────────────────────────────────────────
+/** Purple tile with sun-ray burst and megaphone — announcements have no cover art. */
+export function AnnouncementTile({ size = 120, radius = 12 }: { size?: number; radius?: number }) {
+    const scale = size / 120;
+    return (
+        <Box
+            sx={{
+                position: "relative",
+                width: size,
+                height: size,
+                flexShrink: 0,
+                borderRadius: `${radius}px`,
+                overflow: "hidden",
+                bgcolor: UPD.announcementTileBg,
+            }}
+        >
+            <Box
+                aria-hidden
+                sx={{
+                    position: "absolute",
+                    left: `calc(50% + ${5 * scale}px)`,
+                    top: `calc(50% + ${2 * scale}px)`,
+                    width: 1192 * scale,
+                    height: 1192 * scale,
+                    transform: "translate(-50%, -50%) scaleX(-1)",
+                    pointerEvents: "none",
+                }}
+            >
+                <Image src="/updates/rays.svg" alt="" fill unoptimized />
+            </Box>
+            <Box
+                aria-hidden
+                sx={{
+                    position: "absolute",
+                    left: `calc(50% + ${7 * scale}px)`,
+                    top: `calc(50% + ${7 * scale}px)`,
+                    width: 106 * scale,
+                    height: 106 * scale,
+                    transform: "translate(-50%, -50%)",
+                }}
+            >
+                <Image src="/updates/megaphone.png" alt="" fill sizes={`${Math.ceil(106 * scale)}px`} style={{ objectFit: "cover" }} />
+            </Box>
+        </Box>
+    );
+}
+
+export function AnnouncementCard({ entry }: { entry: UpdateEntry }) {
+    return (
+        <Box
+            component={Link}
+            href={updateHref(entry)}
+            sx={{
+                display: "flex",
+                gap: "20px",
+                alignItems: "flex-start",
+                minWidth: 0,
+                textDecoration: "none",
+                borderRadius: "12px",
+                ...CARD_HOVER_SX,
+            }}
+        >
+            <AnnouncementTile />
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start", flex: 1, minWidth: 0 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                    <MetaLine items={[entry.category, formatStamp(entry)]} />
+                    <Typography sx={TITLE_SX}>{entry.title}</Typography>
+                </Box>
+                <CardAction label={entry.actionLabel ?? KIND_META.announcement.readLabel} />
+            </Box>
+        </Box>
+    );
+}
+
+export default function UpdateCard({ entry }: { entry: UpdateEntry }) {
+    return entry.kind === "announcement" ? <AnnouncementCard entry={entry} /> : <ArticleCard entry={entry} />;
 }

@@ -1,5 +1,5 @@
 import UpdatesFeed from "@/components/updates/student/UpdatesFeed";
 
 export default function Page() {
-    return <UpdatesFeed tab="news" />;
+    return <UpdatesFeed kind="news" />;
 }
