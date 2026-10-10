@@ -1,0 +1,18 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="1192" height="1" viewBox="0 0 1192 1" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Frame 2147239928">
+<path id="Line 252" d="M580 0.5H0" stroke="url(#paint0_linear_0_369)"/>
+<path id="Line 253" d="M612 0.5H1192" stroke="url(#paint1_linear_0_369)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_369" x1="580" y1="1.2219" x2="579.996" y2="-0.248595" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.5" stop-color="white" stop-opacity="0.5"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_369" x1="612" y1="1.2219" x2="612.004" y2="-0.248595" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0"/>
+<stop offset="0.5" stop-color="white" stop-opacity="0.5"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+</defs>
+</svg>

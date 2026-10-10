@@ -76,7 +76,7 @@ export default function BatchesLayout({ children }: { children: React.ReactNode 
     );
 
     return (
-        <StudentLayout header={header} fullBleed>
+        <StudentLayout header={header}>
             <Box
                 sx={{
                     flex: 1,
