@@ -1,214 +1,157 @@
 "use client";
 import React, { useState } from "react";
-import {
-    Box,
-    Typography,
-    Divider,
-    Select,
-    MenuItem,
-    TextField,
-    SelectChangeEvent,
-} from "@mui/material";
-import { MdExpandMore } from "react-icons/md";
-import CCNModal from "@/components/modals/CCNModal";
-import CCNButton from "@/components/buttons/CCNButton";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import { Box, InputBase, MenuItem, Select, type SelectChangeEvent } from "@mui/material";
+import { FONT_INTER, GradientButton } from "@/components/batches/batch-card-ui";
+import { BatchModalShell, ModalHeading, ModalSection, ModalTextButton } from "@/components/batches/BatchModalShell";
 
 export interface AskAboutBatchModalProps {
     open: boolean;
     onClose: () => void;
     batchTitle?: string;
+    /** e.g. "14 Feb – 16 Apr" */
+    dateRange?: string;
     onSubmit?: (queryType: string, message: string) => void;
 }
 
 const QUERY_TYPES = [
-    "Schedule / Timing",
-    "Seat Availability",
-    "Batch Details",
-    "Fee & Payment",
-    "Trainer Info",
+    "Schedule conflict",
+    "Seat availability",
+    "Batch details",
+    "Fee & payment",
+    "Trainer info",
     "Other",
 ];
 
-// ── Shared input styles ───────────────────────────────────────────────────────
-
-const INPUT_SX = {
-    "& .MuiOutlinedInput-root": {
-        bgcolor: "#0D0D0D",
-        borderRadius: "10px",
-        fontSize: "0.8rem",
-        color: "#fff",
-        "& fieldset": { borderColor: "rgba(255,255,255,0.12)" },
-        "&:hover fieldset": { borderColor: "rgba(255,255,255,0.25)" },
-        "&.Mui-focused fieldset": { borderColor: "#7c3aed", borderWidth: "1px" },
-    },
-    "& .MuiSelect-icon": { color: "rgba(255,255,255,0.45)" },
+const FIELD_TEXT_SX = {
+    fontFamily: FONT_INTER,
+    fontSize: "16px",
+    lineHeight: "24px",
+    color: "#fff",
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const ChevronIcon = (props: { className?: string }) => (
+    <Box
+        component="img"
+        src="/batches/explore/icon-chevron-down-24.svg"
+        alt=""
+        className={props.className}
+        sx={{ width: 24, height: 24, right: "16px !important", top: "calc(50% - 12px) !important", pointerEvents: "none" }}
+    />
+);
 
-export default function AskAboutBatchModal({
-    open,
-    onClose,
-    batchTitle,
-    onSubmit,
-}: AskAboutBatchModalProps) {
+export default function AskAboutBatchModal({ open, onClose, batchTitle, dateRange, onSubmit }: AskAboutBatchModalProps) {
     const [queryType, setQueryType] = useState("");
     const [message, setMessage] = useState("");
+
+    const reset = () => {
+        setQueryType("");
+        setMessage("");
+    };
+
+    const handleClose = () => {
+        reset();
+        onClose();
+    };
 
     const handleSubmit = () => {
         if (!queryType || !message.trim()) return;
         onSubmit?.(queryType, message.trim());
-        setQueryType("");
-        setMessage("");
-        onClose();
+        handleClose();
     };
 
-    const handleClose = () => {
-        setQueryType("");
-        setMessage("");
-        onClose();
-    };
+    const context = [batchTitle, dateRange].filter(Boolean).join(" · ");
 
     return (
-        <CCNModal open={open} onClose={handleClose} maxWidth={460}>
-            <Box sx={{ p: "22px 20px 18px" }}>
-                {/* Header */}
-                <Typography
-                    sx={{
-                        fontSize: "1.05rem",
-                        fontWeight: 800,
-                        color: "#fff",
-                        lineHeight: 1.3,
-                        letterSpacing: "-0.01em",
-                        mb: 0.6,
-                    }}
-                >
-                    Ask About This Batch
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: "0.75rem",
-                        color: "rgba(255,255,255,0.45)",
-                        fontWeight: 400,
-                        mb: 2,
-                    }}
-                >
-                    {batchTitle
-                        ? `Have a question about "${batchTitle}"? We're here to help.`
-                        : "Have questions about the schedule, timing, or batch details? We're here to help."}
-                </Typography>
+        <BatchModalShell open={open} onClose={handleClose} gap={32}>
+            <ModalHeading
+                title="Ask About This Batch"
+                subtitle={
+                    <>
+                        {context && <Box component="span" sx={{ display: "block" }}>{context}.</Box>}
+                        <Box component="span" sx={{ display: "block" }}>
+                            Have questions about the schedule, timing, or batch details? We’re here to help.
+                        </Box>
+                    </>
+                }
+            />
 
-                <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 2 }} />
-
-                {/* Query type select */}
+            <ModalSection gap={16}>
                 <Select
                     value={queryType}
                     onChange={(e: SelectChangeEvent) => setQueryType(e.target.value)}
                     displayEmpty
                     fullWidth
-                    IconComponent={MdExpandMore}
-                    renderValue={(val) =>
-                        val ? (
-                            <Typography sx={{ fontSize: "0.8rem", color: "#fff" }}>{val}</Typography>
-                        ) : (
-                            <Typography sx={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.35)" }}>
+                    IconComponent={ChevronIcon}
+                    renderValue={(value) =>
+                        value ? value : (
+                            <>
                                 Choose query type{" "}
-                                <Box component="span" sx={{ color: "#f97316" }}>*</Box>
-                            </Typography>
+                                <Box component="span" sx={{ color: "#d1293d", fontWeight: 500 }}>*</Box>
+                            </>
                         )
                     }
                     sx={{
-                        ...INPUT_SX,
-                        mb: 1.5,
-                        "& .MuiOutlinedInput-root": INPUT_SX["& .MuiOutlinedInput-root"],
-                        bgcolor: "#0D0D0D",
-                        borderRadius: "10px",
-                        color: "#fff",
-                        fontSize: "0.8rem",
-                        "& fieldset": { borderColor: "rgba(255,255,255,0.12)" },
-                        "&:hover fieldset": { borderColor: "rgba(255,255,255,0.25)" },
-                        "&.Mui-focused fieldset": { borderColor: "#7c3aed", borderWidth: "1px" },
-                        "& .MuiSelect-icon": { color: "rgba(255,255,255,0.45)" },
+                        ...FIELD_TEXT_SX,
+                        height: 52,
+                        borderRadius: "12px",
+                        bgcolor: "transparent",
+                        "& .MuiSelect-select": { pl: "24px", pr: "56px !important", py: "14px", display: "flex", alignItems: "center", gap: "4px" },
+                        "& .MuiOutlinedInput-notchedOutline": { borderColor: "#404040" },
+                        "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#5a5a5a" },
+                        "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#2F53AD", borderWidth: "1px" },
                     }}
                     MenuProps={{
-                        PaperProps: {
-                            sx: {
-                                bgcolor: "#1a1a1e",
-                                backgroundImage: "none",
-                                border: "1px solid rgba(255,255,255,0.1)",
-                                borderRadius: "10px",
-                                mt: 0.5,
-                                "& .MuiMenuItem-root": {
-                                    fontSize: "0.8rem",
-                                    color: "rgba(255,255,255,0.75)",
-                                    py: 0.75,
-                                    "&:hover": { bgcolor: "rgba(124,58,237,0.15)", color: "#fff" },
-                                    "&.Mui-selected": {
-                                        bgcolor: "rgba(124,58,237,0.2)",
-                                        color: "#fff",
-                                        "&:hover": { bgcolor: "rgba(124,58,237,0.3)" },
+                        slotProps: {
+                            paper: {
+                                sx: {
+                                    mt: "4px",
+                                    bgcolor: "#0d0d0d",
+                                    backgroundImage: "none",
+                                    border: "1px solid #404040",
+                                    borderRadius: "12px",
+                                    "& .MuiMenuItem-root": {
+                                        fontFamily: FONT_INTER,
+                                        fontSize: "14px",
+                                        color: "#d9d9d9",
+                                        "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                                        "&.Mui-selected": { bgcolor: "rgba(47,83,173,0.32)", color: "#fff" },
                                     },
                                 },
                             },
                         },
                     }}
                 >
-                    {QUERY_TYPES.map((qt) => (
-                        <MenuItem key={qt} value={qt}>{qt}</MenuItem>
+                    {QUERY_TYPES.map((type) => (
+                        <MenuItem key={type} value={type}>{type}</MenuItem>
                     ))}
                 </Select>
 
-                {/* Message textarea */}
-                <TextField
-                    fullWidth
+                <InputBase
                     multiline
-                    minRows={4}
-                    maxRows={7}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Describe your concern (e.g., schedule change, availability, batch details)..."
+                    placeholder="Describe your concern (e.g., schedule change, availability, batch details)…"
                     sx={{
-                        ...INPUT_SX,
-                        mb: 2.5,
-                        "& .MuiOutlinedInput-root": {
-                            ...INPUT_SX["& .MuiOutlinedInput-root"],
-                            alignItems: "flex-start",
-                        },
-                        "& textarea": {
-                            fontSize: "0.78rem",
-                            color: "#fff",
-                            lineHeight: 1.55,
-                            "&::placeholder": { color: "rgba(255,255,255,0.25)", opacity: 1 },
-                        },
+                        ...FIELD_TEXT_SX,
+                        height: 208,
+                        alignItems: "flex-start",
+                        p: "14.8px",
+                        border: "1.2px solid #404040",
+                        borderRadius: "12px",
+                        overflow: "auto",
+                        "&.Mui-focused": { borderColor: "#2F53AD" },
+                        "& textarea": { height: "100% !important", overflow: "auto !important" },
+                        "& textarea::placeholder": { color: "#a6a6a6", opacity: 1 },
                     }}
                 />
+            </ModalSection>
 
-                {/* Actions */}
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    <CCNButton
-                        onClick={handleSubmit}
-                        className="w-full"
-                    >
-                        Send Query
-                    </CCNButton>
-
-                    <Typography
-                        onClick={handleClose}
-                        sx={{
-                            fontSize: "0.78rem",
-                            color: "rgba(255,255,255,0.45)",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            py: 0.5,
-                            "&:hover": { color: "rgba(255,255,255,0.75)" },
-                        }}
-                    >
-                        Cancel
-                    </Typography>
-                </Box>
-            </Box>
-        </CCNModal>
+            <ModalSection gap={10} sx={{ py: "8px", alignItems: "center" }}>
+                <GradientButton fullWidth onClick={handleSubmit}>
+                    Send Query
+                </GradientButton>
+                <ModalTextButton onClick={handleClose}>Cancel</ModalTextButton>
+            </ModalSection>
+        </BatchModalShell>
     );
 }

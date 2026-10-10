@@ -1,0 +1,15 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icons/star">
+<path id="Vector" d="M8 1.33333L10.06 5.50667L14.6667 6.18L11.3333 9.42667L12.12 14.0133L8 11.8467L3.88 14.0133L4.66667 9.42667L1.33333 6.18L5.94 5.50667L8 1.33333Z" fill="url(#paint0_linear_0_341)" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round" stroke="url(#paint1_linear_0_341)"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_341" x1="1.33333" y1="7.67333" x2="14.6667" y2="7.67333" gradientUnits="userSpaceOnUse">
+<stop stop-color="#F1C40E"/>
+<stop offset="1" stop-color="#FF6000"/>
+</linearGradient>
+<linearGradient id="paint1_linear_0_341" x1="1.33333" y1="7.67333" x2="14.6667" y2="7.67333" gradientUnits="userSpaceOnUse">
+<stop stop-color="#F1C40E"/>
+<stop offset="1" stop-color="#FF6000"/>
+</linearGradient>
+</defs>
+</svg>

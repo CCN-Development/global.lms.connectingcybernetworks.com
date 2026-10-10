@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Container">
+<path d="M0 10C0 4.47715 4.47715 0 10 0V0C15.5228 0 20 4.47715 20 10V10C20 15.5228 15.5228 20 10 20V20C4.47715 20 0 15.5228 0 10V10Z" fill="url(#paint0_linear_0_444)"/>
+<circle id="Ellipse 2031" cx="10" cy="10" r="5" fill="#D9D9D9"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_444" x1="6.14097e-07" y1="5.65" x2="19.4715" y2="14.7775" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8C24FF"/>
+<stop offset="1" stop-color="#0E1934"/>
+</linearGradient>
+</defs>
+</svg>

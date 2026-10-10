@@ -1,24 +1,11 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Snackbar } from "@mui/material";
 import BatchCard from "@/components/batches/BatchCard";
 import ViewBatchRequestModal from "@/components/batches/ViewBatchRequestModal";
+import { CARD_GRID_SX, EmptyBatches } from "@/components/batches/batch-card-ui";
+import { formatUTCDate, normalizeMode } from "@/components/batches/batch-format";
 import { useStudent, type StudentBatchRequest } from "@/contexts/StudentContext";
-
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function normalizeMode(mode: string | null): "Online" | "Offline" | "Hybrid" {
-    const value = (mode ?? "").trim().toLowerCase();
-    if (value === "offline") return "Offline";
-    if (value === "hybrid") return "Hybrid";
-    return "Online";
-}
-
-function formatDate(iso: string): string {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "—";
-    return `${date.getUTCDate()} ${MONTH_LABELS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-}
 
 function normalizeStatus(status: StudentBatchRequest["requestStatus"]): "Pending" | "Approved" | "Rejected" {
     if (status === "approved") return "Approved";
@@ -26,13 +13,26 @@ function normalizeStatus(status: StudentBatchRequest["requestStatus"]): "Pending
     return "Pending";
 }
 
+/** Request timestamps are real instants — format them as dates, not UTC wall-clock. */
+function formatRequestedOn(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export default function UpcomingBatchesPage() {
     const { batchRequests, loadingBatchRequests, getBatchRequests } = useStudent();
     const [selectedRequest, setSelectedRequest] = useState<StudentBatchRequest | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     useEffect(() => {
         getBatchRequests();
     }, [getBatchRequests]);
+
+    // TODO(backend): there is no student "cancel batch request" endpoint yet — wire this to it once available.
+    const cancelRequest = () => {
+        setNotice("Cancelling a request isn’t available yet — please contact your coordinator.");
+    };
 
     if (loadingBatchRequests) {
         return (
@@ -43,33 +43,32 @@ export default function UpcomingBatchesPage() {
     }
 
     if (batchRequests.length === 0) {
-        return (
-            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
-                You have not requested any batch yet.
-            </Typography>
-        );
+        return <EmptyBatches message="You have not requested any batch yet." />;
     }
 
     return (
-        <Box sx={{
-            display: "grid", gridTemplateColumns: {
-                xs: "1fr",
-                md: "1fr 1fr 1fr"
-            }, gap: 2
-        }}>
+        <Box sx={CARD_GRID_SX}>
             {batchRequests.map((request) => (
                 <BatchCard
                     key={request.batchRequestId}
                     variant="upcoming"
                     title={request.batch.course?.courseName ?? request.batch.batchName}
                     mode={normalizeMode(request.modeRequested ?? request.batch.mode)}
-                    trainers={request.batch.batchTrainers.map((item) => ({ name: item.trainer.trainerName }))}
-                    requestedOn={formatDate(request.createdAt)}
-                    batchStartDate={formatDate(request.batch.batchStartDate)}
+                    requestedOn={formatRequestedOn(request.createdAt)}
+                    batchStartDate={formatUTCDate(request.batch.batchStartDate)}
                     requestStatus={normalizeStatus(request.requestStatus)}
+                    onCancelRequest={cancelRequest}
                     onViewRequest={() => setSelectedRequest(request)}
                 />
             ))}
+
+            <Snackbar
+                open={Boolean(notice)}
+                autoHideDuration={4000}
+                onClose={() => setNotice(null)}
+                message={notice}
+                anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+            />
 
             {selectedRequest && (
                 <ViewBatchRequestModal
@@ -79,9 +78,9 @@ export default function UpcomingBatchesPage() {
                     modeRequested={normalizeMode(selectedRequest.modeRequested ?? selectedRequest.batch.mode)}
                     requestStatus={selectedRequest.requestStatus}
                     requestReason={selectedRequest.requestReason}
-                    requestedOn={formatDate(selectedRequest.createdAt)}
-                    batchStartDate={formatDate(selectedRequest.batch.batchStartDate)}
-                    lastUpdatedOn={formatDate(selectedRequest.updatedAt)}
+                    requestedOn={formatUTCDate(selectedRequest.createdAt)}
+                    batchStartDate={formatUTCDate(selectedRequest.batch.batchStartDate)}
+                    lastUpdatedOn={formatUTCDate(selectedRequest.updatedAt)}
                 />
             )}
         </Box>

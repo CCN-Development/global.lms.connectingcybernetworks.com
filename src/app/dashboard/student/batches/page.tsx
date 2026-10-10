@@ -1,47 +1,21 @@
 "use client";
-import { useEffect } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import { useEffect, useMemo } from "react";
+import { Box, CircularProgress } from "@mui/material";
 import BatchCard from "@/components/batches/BatchCard";
+import { CARD_GRID_SX, EmptyBatches } from "@/components/batches/batch-card-ui";
+import { daysFromToday, formatUTCClock, MONTH_SHORT, normalizeMode } from "@/components/batches/batch-format";
 import { useRouter } from "next/navigation";
 import { useStudent, type EnrolledBatch } from "@/contexts/StudentContext";
 
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function normalizeMode(mode: string | null): "Online" | "Offline" | "Hybrid" {
-    const value = (mode ?? "").trim().toLowerCase();
-    if (value === "offline") return "Offline";
-    if (value === "hybrid") return "Hybrid";
-    return "Online";
-}
-
-/** Session dates/times are persisted in UTC, so they must be read in UTC. */
-function formatClockTime(iso: string): string {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "";
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
-    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
-}
-
-function daysFromToday(iso: string): number | null {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return null;
-    const now = new Date();
-    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-    const target = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    return Math.round((target - today) / 86400000);
-}
-
-function formatSessionTiming(session: EnrolledBatch["nextSession"]): string {
-    if (!session) return "No upcoming session";
+function formatSessionTiming(session: NonNullable<EnrolledBatch["nextSession"]>): string {
     const offset = daysFromToday(session.sessionDate);
     const date = new Date(session.sessionDate);
     const day = offset === 0
         ? "Today"
         : offset === 1
             ? "Tomorrow"
-            : `${date.getUTCDate()} ${MONTH_LABELS[date.getUTCMonth()]}`;
-    return `${day} • ${formatClockTime(session.sessionTime)}`;
+            : `${date.getUTCDate()} ${MONTH_SHORT[date.getUTCMonth()]}`;
+    return `${day} • ${formatUTCClock(session.sessionTime)}`;
 }
 
 export default function OngoingBatchesPage() {
@@ -52,6 +26,12 @@ export default function OngoingBatchesPage() {
         getEnrolledBatches();
     }, [getEnrolledBatches]);
 
+    // Completed enrollments live in the Completed tab and dropped ones in the Missed tab.
+    const ongoing = useMemo(
+        () => enrolledBatches.filter((enrollment) => enrollment.status !== "completed" && enrollment.status !== "dropped"),
+        [enrolledBatches],
+    );
+
     if (loadingEnrolledBatches) {
         return (
             <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
@@ -60,20 +40,13 @@ export default function OngoingBatchesPage() {
         );
     }
 
-    if (enrolledBatches.length === 0) {
-        return (
-            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 4 }}>
-                You are not enrolled in any batch yet.
-            </Typography>
-        );
+    if (ongoing.length === 0) {
+        return <EmptyBatches message="You are not enrolled in any batch yet." />;
     }
 
     return (
-        <Box sx={{ display: "grid", gridTemplateColumns: {
-            xs:"1fr",
-            md:"1fr 1fr 1fr"
-        }, gap: 2 }}>
-            {enrolledBatches.map((enrollment) => {
+        <Box sx={CARD_GRID_SX}>
+            {ongoing.map((enrollment) => {
                 const { batch, nextSession } = enrollment;
                 const joinLink = nextSession?.sessionLink ?? batch.batchLink;
                 const isToday = nextSession ? daysFromToday(nextSession.sessionDate) === 0 : false;
@@ -87,7 +60,9 @@ export default function OngoingBatchesPage() {
                         batchProgress={enrollment.progress.progressPercentage}
                         attendance={enrollment.attendance.attendancePercentage}
                         nextSession={nextSession && {
-                            label: isToday ? "Today's Class" : "Next Session",
+                            label: isToday ? "Today’s Topic" : "Next Topic",
+                            // TODO(backend): expose the session topic name on `nextSession` (Figma shows e.g. "Network Fundamentals");
+                            // until then the session number is shown in its place.
                             title: `Session ${nextSession.sessionNumber} of ${enrollment.progress.totalSessions}`,
                             timing: formatSessionTiming(nextSession),
                         }}

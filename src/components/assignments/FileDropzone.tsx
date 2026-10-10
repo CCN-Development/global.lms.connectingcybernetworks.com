@@ -47,6 +47,51 @@ function extensionOf(fileName: string): string {
     return parts.length > 1 ? parts.pop()!.toLowerCase() : "file";
 }
 
+/** Uploads files to S3 one by one, skipping oversized ones; returns the documents that uploaded. */
+export async function uploadDocuments(
+    incoming: File[],
+    {
+        maxSizeMB,
+        dirName,
+        onProgress,
+    }: { maxSizeMB: number; dirName: string; onProgress?: (key: string, percent: number | null) => void }
+): Promise<TaskDocumentInput[]> {
+    const accepted = incoming.filter((file) => {
+        if (file.size > maxSizeMB * 1024 * 1024) {
+            toast.error(`${file.name} exceeds the ${maxSizeMB} MB limit`);
+            return false;
+        }
+        return true;
+    });
+
+    const uploaded: TaskDocumentInput[] = [];
+    for (const file of accepted) {
+        const key = `${file.name}-${file.size}`;
+        onProgress?.(key, 0);
+        let url: string | null = null;
+        await fileUploaderToS3(
+            file,
+            (percent) => onProgress?.(key, percent),
+            (fileUrl) => {
+                url = fileUrl;
+            },
+            dirName
+        );
+        onProgress?.(key, null);
+        if (!url) {
+            toast.error(`Failed to upload ${file.name}`);
+            continue;
+        }
+        uploaded.push({
+            documentName: file.name,
+            documentType: extensionOf(file.name),
+            documentUrl: url,
+            fileSizeInBytes: file.size,
+        });
+    }
+    return uploaded;
+}
+
 export default function FileDropzone({
     files,
     onChange,
@@ -73,44 +118,17 @@ export default function FileDropzone({
 
     const upload = useCallback(
         async (incoming: File[]) => {
-            const accepted = incoming.filter((file) => {
-                if (file.size > maxSizeMB * 1024 * 1024) {
-                    toast.error(`${file.name} exceeds the ${maxSizeMB} MB limit`);
-                    return false;
-                }
-                return true;
+            const uploaded = await uploadDocuments(incoming, {
+                maxSizeMB,
+                dirName,
+                onProgress: (key, percent) =>
+                    setProgress((prev) => {
+                        const next = { ...prev };
+                        if (percent === null) delete next[key];
+                        else next[key] = percent;
+                        return next;
+                    }),
             });
-            if (accepted.length === 0) return;
-
-            const uploaded: TaskDocumentInput[] = [];
-            for (const file of accepted) {
-                const key = `${file.name}-${file.size}`;
-                setProgress((prev) => ({ ...prev, [key]: 0 }));
-                let url: string | null = null;
-                await fileUploaderToS3(
-                    file,
-                    (percent) => setProgress((prev) => ({ ...prev, [key]: percent })),
-                    (fileUrl) => {
-                        url = fileUrl;
-                    },
-                    dirName
-                );
-                setProgress((prev) => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-                if (!url) {
-                    toast.error(`Failed to upload ${file.name}`);
-                    continue;
-                }
-                uploaded.push({
-                    documentName: file.name,
-                    documentType: extensionOf(file.name),
-                    documentUrl: url,
-                    fileSizeInBytes: file.size,
-                });
-            }
 
             if (uploaded.length > 0) {
                 onChange([...files, ...uploaded]);

@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Stepper">
+<rect width="24" height="24" rx="12" fill="url(#paint0_linear_0_742)"/>
+<circle id="Ellipse 2019" cx="12" cy="12" r="6" fill="white"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_742" x1="0.929382" y1="13.62" x2="25.1415" y2="13.9218" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2EC4B6"/>
+<stop offset="1" stop-color="#1B4C33"/>
+</linearGradient>
+</defs>
+</svg>

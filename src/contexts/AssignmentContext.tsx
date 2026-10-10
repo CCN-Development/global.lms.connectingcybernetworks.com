@@ -341,6 +341,8 @@ export interface StudentAssignmentListItem {
     progressStatus: AssignmentProgressStatus;
     daysOverdue: number;
     completedOn: string | null;
+    /** Most recent task submission by the student, or null if nothing was submitted. */
+    lastSubmittedOn: string | null;
     feedback: string | null;
     feedbackGrade: FeedbackGrade | null;
 }

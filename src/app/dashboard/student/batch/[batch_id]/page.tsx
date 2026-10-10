@@ -1,92 +1,45 @@
 "use client";
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import Image from "next/image";
 import { useParams } from "next/navigation";
-import { Box, Typography, Button, LinearProgress, Avatar, CircularProgress } from "@mui/material";
-import {
-    MdAccessTime,
-    MdCalendarToday,
-    MdLocationOn,
-    MdPerson,
-    MdClass,
-    MdRemoveRedEye,
-    MdDownload,
-    MdOutlineAssignmentTurnedIn,
-    MdOutlineQuestionAnswer,
-} from "react-icons/md";
+import { Box, ButtonBase, CircularProgress, Typography, type SxProps, type Theme } from "@mui/material";
 import RichTextView from "@/components/editor/RichTextView";
-import { useStudent, type MyBatchQuery, type MyBatchRequest, type StudentBatchDetail } from "@/contexts/StudentContext";
+import { COLORS, FONTS, TYPE } from "@/components/courses/my-courses-theme";
+import { framedPanelSx } from "@/components/courses/my-courses-ui";
+import { MONTH_LONG, formatUTCClock } from "@/components/batches/batch-format";
+import TrainerProfileModal, { TrainerAvatar, trainerSubtitle } from "@/components/batches/TrainerProfileModal";
+import { useStudent, type StudentBatchDetail, type StudentBatchTrainer } from "@/contexts/StudentContext";
 
-const MONTH_NAMES = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-];
+const ASSET = "/batches/detail";
+const NOISE = "/profile/summary-noise.png";
+
+const WEEK_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS: Record<string, string> = {
     sun: "Sunday", mon: "Monday", tue: "Tuesday", wed: "Wednesday",
     thu: "Thursday", fri: "Friday", sat: "Saturday",
 };
 
-const CARD_SX = {
-    bgcolor: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "16px",
-    p: 2,
+const TEXT = {
+    interMed16: { fontFamily: FONTS.inter, fontWeight: 500, fontSize: "16px", lineHeight: "24px" },
+    interReg14: { fontFamily: FONTS.inter, fontWeight: 400, fontSize: "14px", lineHeight: "21px" },
+    interSemi18: { fontFamily: FONTS.inter, fontWeight: 600, fontSize: "18px", lineHeight: "27px" },
+    latoSemi12: { ...TYPE.xsMed12, fontWeight: 600 },
 } as const;
 
-const STATUS_COLORS: Record<string, { fg: string; bg: string }> = {
-    pending: { fg: "#f59e0b", bg: "#3a2c10" },
-    approved: { fg: "#10b981", bg: "#0d2f26" },
-    rejected: { fg: "#f43f5e", bg: "#3a1620" },
-    resolved: { fg: "#10b981", bg: "#0d2f26" },
-    closed: { fg: "#94a3b8", bg: "#1e2733" },
-};
-
-function StatusChip({ status }: { status: string }) {
-    const tone = STATUS_COLORS[status] ?? { fg: "#94a3b8", bg: "#1e2733" };
-    return (
-        <Box
-            component="span"
-            sx={{
-                bgcolor: tone.bg,
-                color: tone.fg,
-                border: `1px solid ${tone.fg}`,
-                borderRadius: "999px",
-                px: 1,
-                py: 0.2,
-                fontSize: "0.65rem",
-                fontWeight: 700,
-                textTransform: "capitalize",
-                lineHeight: 1.6,
-                flexShrink: 0,
-            }}
-        >
-            {status}
-        </Box>
-    );
-}
+const DATE_CHIP_FILL = "linear-gradient(154.64deg, rgba(140,36,255,0.24) 9.0161%, rgba(14,25,52,0.24) 89.867%)";
+const INSTRUCTOR_ROW_FILL = "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(153,153,153,0.04) 100%)";
 
 function ordinal(day: number): string {
-    if (day > 3 && day < 21) return `${day}th`;
-    switch (day % 10) {
-        case 1: return `${day}st`;
-        case 2: return `${day}nd`;
-        case 3: return `${day}rd`;
-        default: return `${day}th`;
-    }
+    const rem100 = day % 100;
+    if (rem100 >= 11 && rem100 <= 13) return `${day}th`;
+    return `${day}${{ 1: "st", 2: "nd", 3: "rd" }[day % 10] ?? "th"}`;
 }
 
+/** Batch dates are stored as UTC calendar dates → "12th January, 2026". */
 function formatLongDate(iso: string): string {
     const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return "—";
-    return `${ordinal(date.getUTCDate())} ${MONTH_NAMES[date.getUTCMonth()]}, ${date.getUTCFullYear()}`;
-}
-
-/** Clock times are persisted as 1970-01-01T{HH:mm}Z, so they must be read in UTC. */
-function formatClockTime(iso: string | null): string | null {
-    const date = iso ? new Date(iso) : null;
-    if (!date || Number.isNaN(date.getTime())) return null;
-    const hours = date.getUTCHours();
-    const minutes = date.getUTCMinutes();
-    return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
+    return `${ordinal(date.getUTCDate())} ${MONTH_LONG[date.getUTCMonth()]}, ${date.getUTCFullYear()}`;
 }
 
 function formatMode(mode: string | null): string {
@@ -94,437 +47,424 @@ function formatMode(mode: string | null): string {
     return value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : "Not specified";
 }
 
-function formatTimestamp(iso: string): string {
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "—";
-    return `${formatLongDate(iso)} • ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+/** Consecutive weekdays collapse to a range ("Tuesday - Friday"); anything else is listed. */
+function formatDays(days: string[] | null | undefined): string | null {
+    const keys = (days ?? []).map((d) => d.trim().toLowerCase().slice(0, 3));
+    const known = keys.filter((k) => DAY_LABELS[k]);
+    if (known.length === 0) return days?.length ? days.join(", ") : null;
+    const ordered = [...new Set(known)].sort((a, b) => WEEK_ORDER.indexOf(a) - WEEK_ORDER.indexOf(b));
+    if (ordered.length === 1) return DAY_LABELS[ordered[0]];
+    const consecutive = ordered.every((k, i) => i === 0 || WEEK_ORDER.indexOf(k) === WEEK_ORDER.indexOf(ordered[i - 1]) + 1);
+    return consecutive
+        ? `${DAY_LABELS[ordered[0]]} - ${DAY_LABELS[ordered[ordered.length - 1]]}`
+        : ordered.map((k) => DAY_LABELS[k]).join(", ");
 }
 
-function getInitials(name: string): string {
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return "?";
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+function PinIcon() {
+    return (
+        <Box sx={{ position: "relative", width: 24, height: 24, flexShrink: 0 }}>
+            <Box component="img" src={`${ASSET}/icon-pin-head.svg`} alt="" sx={{ position: "absolute", left: "6.73px", top: 0, width: "10.54px", height: "10.54px" }} />
+            <Box component="img" src={`${ASSET}/icon-pin-needle.svg`} alt="" sx={{ position: "absolute", left: "11.226px", top: "9.727px", width: "1.548px", height: "14.272px" }} />
+        </Box>
+    );
+}
+
+function Icon24({ name }: { name: string }) {
+    return <Box component="img" src={`${ASSET}/${name}`} alt="" sx={{ width: 24, height: 24, flexShrink: 0 }} />;
 }
 
 function buildBatchInfo(batch: StudentBatchDetail) {
-    const start = formatClockTime(batch.classStartTime);
-    const end = formatClockTime(batch.classEndTime);
-    const timing = start && end ? `${start} - ${end}` : start ?? batch.classTiming;
-
-    const days = batch.batchDays?.length
-        ? batch.batchDays.map((d) => DAY_LABELS[d.trim().toLowerCase().slice(0, 3)] ?? d).join(" - ")
-        : null;
-
+    const start = formatUTCClock(batch.classStartTime);
+    const end = formatUTCClock(batch.classEndTime);
+    const timing = start && end ? `${start} - ${end}` : start || batch.classTiming;
     const trainerNames = batch.batchTrainers.map((item) => item.trainer.trainerName).join(", ");
 
     return [
-        { icon: <MdAccessTime size={14} />, value: timing },
-        { icon: <MdCalendarToday size={14} />, value: days },
-        { icon: <MdLocationOn size={14} />, value: formatMode(batch.mode) },
-        { icon: <MdPerson size={14} />, value: trainerNames || null },
-        { icon: <MdClass size={14} />, value: batch.classRoomNumber },
+        { key: "time", icon: <Icon24 name="icon-clock.svg" />, value: timing },
+        { key: "days", icon: <Icon24 name="icon-calendar.svg" />, value: formatDays(batch.batchDays) },
+        { key: "mode", icon: <PinIcon />, value: formatMode(batch.mode) },
+        { key: "trainer", icon: <Icon24 name="icon-user.svg" />, value: trainerNames || null },
+        { key: "room", icon: <Icon24 name="icon-star.svg" />, value: batch.classRoomNumber },
     ].filter((row) => Boolean(row.value));
+}
+
+/** Blurred top/bottom edge highlights every Figma "Detail Card" carries. */
+function CardGlow({ src, height, bottom = -1 }: { src: string; height: number; bottom?: number }) {
+    const base: SxProps<Theme> = {
+        position: "absolute",
+        left: 4,
+        width: "calc(100% - 5px)",
+        height,
+        filter: "blur(50px)",
+        pointerEvents: "none",
+        objectFit: "cover",
+    };
+    return (
+        <>
+            <Box component="img" aria-hidden src={src} alt="" sx={{ ...base, top: -7 } as SxProps<Theme>} />
+            <Box component="img" aria-hidden src={src} alt="" sx={{ ...base, bottom, transform: "scaleY(-1)" } as SxProps<Theme>} />
+        </>
+    );
+}
+
+function DetailCard({
+    angle,
+    glow,
+    glowBottom,
+    children,
+}: {
+    angle: string;
+    glow: "wide" | "narrow";
+    glowBottom?: number;
+    children: React.ReactNode;
+}) {
+    return (
+        <Box
+            sx={{
+                ...framedPanelSx({ angle }),
+                overflow: "hidden",
+                width: "100%",
+                p: { xs: "20px", sm: "32px" },
+                display: "flex",
+                flexDirection: "column",
+                gap: "32px",
+                "& > :not(img)": { position: "relative", zIndex: 1 },
+            }}
+        >
+            {glow === "wide"
+                ? <CardGlow src={`${ASSET}/card-glow-wide.png`} height={11} bottom={glowBottom} />
+                : <CardGlow src={`${ASSET}/card-glow.png`} height={8} bottom={glowBottom} />}
+            {children}
+        </Box>
+    );
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+    return (
+        <Typography component="h2" sx={{ ...TYPE.headingSemibold20, color: COLORS.white }}>
+            {children}
+        </Typography>
+    );
+}
+
+function OutlineButton({
+    icon,
+    label,
+    tone,
+    onClick,
+}: {
+    icon: string;
+    label: string;
+    tone: "solid" | "outline" | "muted";
+    onClick?: () => void;
+}) {
+    const tones = {
+        solid: { bg: COLORS.white, border: "#5A5A5A", color: "#262626", text: TEXT.latoSemi12, hover: "#E6E6E6" },
+        outline: { bg: "transparent", border: COLORS.neutral300, color: COLORS.white, text: TEXT.latoSemi12, hover: "rgba(255,255,255,0.08)" },
+        muted: { bg: "transparent", border: "#5A5A5A", color: COLORS.neutral100, text: TYPE.xsMed12, hover: "rgba(255,255,255,0.06)" },
+    }[tone];
+
+    return (
+        <ButtonBase
+            onClick={onClick}
+            sx={{
+                height: 36,
+                px: "12px",
+                py: "8px",
+                gap: "10px",
+                flexShrink: 0,
+                borderRadius: "8px",
+                border: `1px solid ${tones.border}`,
+                bgcolor: tones.bg,
+                transition: "background-color .18s ease",
+                "&:hover": { bgcolor: tones.hover },
+                "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
+            }}
+        >
+            <Box component="img" src={`${ASSET}/${icon}`} alt="" sx={{ width: 16, height: 16 }} />
+            <Typography sx={{ ...tones.text, color: tones.color, whiteSpace: "nowrap" }}>{label}</Typography>
+        </ButtonBase>
+    );
+}
+
+function DateColumn({ label, value }: { label: string; value: string }) {
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
+            <Typography sx={{ ...TEXT.interReg14, color: COLORS.neutral300, whiteSpace: "nowrap" }}>{label}</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", px: { xs: "12px", sm: "16px" }, py: "8px", borderRadius: "99px", backgroundImage: DATE_CHIP_FILL }}>
+                <Typography sx={{ ...TEXT.interMed16, fontSize: { xs: "14px", sm: "16px" }, color: COLORS.neutral100, whiteSpace: "nowrap" }}>
+                    {value}
+                </Typography>
+            </Box>
+        </Box>
+    );
+}
+
+function SyllabusCard() {
+    return (
+        <Box
+            sx={{
+                position: "relative",
+                overflow: "hidden",
+                width: "100%",
+                minHeight: 206,
+                p: "24px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                gap: "32px",
+                borderRadius: "30px",
+                border: "1px solid rgba(255,255,255,0.29)",
+                bgcolor: "#07051B",
+            }}
+        >
+            <Box
+                component="img"
+                aria-hidden
+                src={`${ASSET}/syllabus-rays.svg`}
+                alt=""
+                sx={{
+                    position: "absolute",
+                    left: "-64.92px",
+                    top: "-223.67px",
+                    width: "881.112px",
+                    height: "535.442px",
+                    maxWidth: "none",
+                    transform: "rotate(180deg)",
+                    opacity: 0.44,
+                    pointerEvents: "none",
+                }}
+            />
+            <Box
+                aria-hidden
+                sx={{
+                    position: "absolute",
+                    left: -2,
+                    top: 0,
+                    width: "calc(100% + 4px)",
+                    height: 355,
+                    opacity: 0.44,
+                    pointerEvents: "none",
+                    "&::before": {
+                        content: '""',
+                        position: "absolute",
+                        inset: 0,
+                        backgroundImage: `url(${NOISE})`,
+                        backgroundSize: "568px 568px",
+                        backgroundPosition: "top left",
+                        opacity: 0.1,
+                    },
+                }}
+            />
+            <Box
+                aria-hidden
+                sx={{
+                    position: "absolute",
+                    right: { xs: "-76px", sm: "-25.13px" },
+                    top: { xs: "auto", sm: "-5.48px" },
+                    bottom: { xs: "-40px", sm: "auto" },
+                    width: "285.793px",
+                    height: "214.345px",
+                    transform: { xs: "rotate(-17.23deg) scale(0.5)", sm: "rotate(-17.23deg)" },
+                    pointerEvents: "none",
+                }}
+            >
+                <Image
+                    src={`${ASSET}/syllabus-cap.png`}
+                    alt=""
+                    width={286}
+                    height={214}
+                    sizes="286px"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+            </Box>
+
+            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "12px", width: "100%", maxWidth: 365 }}>
+                <CardTitle>Course Syllabus</CardTitle>
+                <Typography sx={{ ...TYPE.interReg16, color: COLORS.neutral75 }}>
+                    Get a complete overview of the course structure, topics, and timeline.
+                </Typography>
+            </Box>
+
+            <Box sx={{ position: "relative", display: "flex", flexWrap: "wrap", gap: "12px" }}>
+                <OutlineButton tone="solid" icon="icon-eye-dark.svg" label="View Syllabus" />
+                <OutlineButton tone="outline" icon="icon-download.svg" label="Download Syllabus" />
+            </Box>
+        </Box>
+    );
 }
 
 export default function BatchDetailPage() {
     const params = useParams();
     const batchId = params?.batch_id as string;
-    const { batchDetail, loadingBatchDetail, getBatchDetails } = useStudent();
-
-    useEffect(() => {
-        if (batchId) getBatchDetails(batchId);
-    }, [batchId, getBatchDetails]);
+    const { batchDetail, loadingBatchDetail, enrolledBatches, getEnrolledBatches } = useStudent();
+    const [profileTrainer, setProfileTrainer] = useState<StudentBatchTrainer | null>(null);
 
     const batch = batchDetail?.batchId === batchId ? batchDetail : null;
     const infoRows = useMemo(() => (batch ? buildBatchInfo(batch) : []), [batch]);
 
+    // "Your trainer for": this batch plus any other enrolled batch the trainer teaches.
+    const trainerFor = useMemo(() => {
+        if (!profileTrainer || !batch) return [];
+        const label = (courseName: string | undefined, batchName: string) =>
+            courseName && courseName.trim().toLowerCase() !== batchName.trim().toLowerCase() ? `${courseName} — ${batchName}` : batchName;
+        const items = [label(batch.course?.courseName, batch.batchName)];
+        for (const enrollment of enrolledBatches) {
+            const other = enrollment.batch;
+            if (other.batchId === batch.batchId) continue;
+            if (other.batchTrainers.some(({ trainer }) => trainer.trainerId === profileTrainer.trainerId)) {
+                items.push(label(other.course?.courseName, other.batchName));
+            }
+        }
+        return [...new Set(items)];
+    }, [profileTrainer, batch, enrolledBatches]);
+
+    const openProfile = (trainer: StudentBatchTrainer) => {
+        setProfileTrainer(trainer);
+        if (enrolledBatches.length === 0) getEnrolledBatches();
+    };
+
     if (loadingBatchDetail && !batch) {
         return (
             <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-                <CircularProgress size={24} sx={{ color: "#7c3aed" }} />
+                <CircularProgress size={24} sx={{ color: COLORS.purple }} />
             </Box>
         );
     }
 
     if (!batch) {
         return (
-            <Typography sx={{ color: "rgba(255,255,255,0.35)", fontSize: "0.8rem", textAlign: "center", py: 6 }}>
+            <Typography sx={{ ...TEXT.interReg14, color: COLORS.neutral400, textAlign: "center", py: 6 }}>
                 Batch not found.
             </Typography>
         );
     }
 
-    const { attendance } = batch;
     const trainers = batch.batchTrainers.map((item) => item.trainer);
-    const requests: MyBatchRequest[] = batch.batchRequests ?? [];
-    const queries: MyBatchQuery[] = batch.batchQueries ?? [];
 
     return (
-        <Box sx={{
-            display: "grid", gridTemplateColumns: {
-                xs: "1fr", md: "3fr 2fr"
-            }, gap: 1.5, alignItems: "flex-start", flexWrap: { xs: "wrap", lg: "nowrap" }
-        }}>
-
+        <Box
+            sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 420px)", lg: "minmax(0, 1fr) 481px" },
+                gap: "24px",
+                alignItems: "start",
+                pt: { xs: "8px", md: "13px" },
+                pb: "24px",
+            }}
+        >
             {/* ── Left Column ── */}
-            <Box sx={{ flex: "1 1 55%", display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
-
-                {/* About Course */}
-                <Box sx={CARD_SX}>
-                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", mb: 1.5 }}>
-                        About Batch
-                    </Typography>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+                <DetailCard angle="159.34deg" glow="wide">
+                    <CardTitle>About Course</CardTitle>
                     {batch.batchDescription ? (
-                        <Box sx={{
-                            fontSize: "0.78rem",
-                            color: "rgba(255,255,255,0.68)",
-                            lineHeight: 1.75,
-                            "& p": { m: 0, mb: 1.25 },
-                            "& p:last-child": { mb: 0 },
-                            "& ul, & ol": { pl: 2.5, m: 0, mb: 1.25 },
-                            "& li": { mb: 0.5 },
-                            "& strong": { color: "#fff" },
-                            "& a": { color: "#8b5cf6" },
-                        }}>
+                        <Box
+                            sx={{
+                                ...TYPE.interReg16,
+                                color: COLORS.neutral75,
+                                wordBreak: "break-word",
+                                "& .rich-text": { fontSize: "16px", lineHeight: "24px", color: COLORS.neutral75 },
+                                "& p": { m: 0, mb: "24px" },
+                                "& p:last-child": { mb: 0 },
+                                "& ul, & ol": { pl: 3, m: 0, mb: "24px" },
+                                "& li": { mb: 0.5 },
+                                "& strong": { color: COLORS.white },
+                                "& a": { color: "#93A9E2" },
+                            }}
+                        >
                             <RichTextView html={batch.batchDescription} />
                         </Box>
                     ) : (
-                        <Typography sx={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)" }}>
+                        <Typography sx={{ ...TYPE.interReg16, color: COLORS.neutral400 }}>
                             No description has been added for this batch yet.
                         </Typography>
                     )}
-                </Box>
+                </DetailCard>
 
-                {/* Course Syllabus */}
-                <Box sx={{
-                    background: "url('/batch-1.webp') no-repeat center center / cover",
-                    borderRadius: "16px",
-                    p: 2,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 1,
-                    overflow: "hidden",
-                    position: "relative",
-                    minHeight: 160,
-                }}>
-                    {/* Soft glow */}
-                    <Box sx={{
-                        position: "absolute",
-                        top: -30,
-                        right: 60,
-                        width: 100,
-                        height: 100,
-                        borderRadius: "50%",
-                        background: "radial-gradient(circle, rgba(139,92,246,0.35) 0%, transparent 70%)",
-                        pointerEvents: "none",
-                    }} />
-
-                    <Box sx={{ zIndex: 1 }}>
-                        <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", mb: 0.4 }}>
-                            Course Syllabus
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.75rem", color: "rgba(255,255,255,0.72)", mb: 1.5, maxWidth: 260 }}>
-                            Get a complete overview of the course structure, topics, and timeline.
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                            <Button
-                                startIcon={<MdRemoveRedEye size={13} />}
-                                sx={{
-                                    bgcolor: "rgba(255, 255, 255, 0.99)",
-                                    border: "1px solid rgba(255,255,255,0.22)",
-                                    color: "#000",
-                                    borderRadius: "4px",
-                                    px: 1.5,
-                                    py: 0.45,
-                                    fontSize: "0.72rem",
-                                    textTransform: "none",
-                                    fontWeight: 600,
-                                    "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
-                                }}
-                            >
-                                View Syllabus
-                            </Button>
-                            <Button
-                                startIcon={<MdDownload size={13} />}
-                                sx={{
-                                    border: "1px solid rgba(255,255,255,0.22)",
-                                    color: "#fff",
-                                    borderRadius: "4px",
-                                    px: 1.5,
-                                    py: 0.45,
-                                    fontSize: "0.72rem",
-                                    textTransform: "none",
-                                    fontWeight: 600,
-                                    "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
-                                }}
-                            >
-                                Download Syllabus
-                            </Button>
-                        </Box>
-                    </Box>
-                </Box>
-
-                {/* My Enrollment Requests */}
-                <Box sx={CARD_SX}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.25 }}>
-                        <MdOutlineAssignmentTurnedIn size={16} color="#8b5cf6" />
-                        <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff" }}>
-                            Your Enrollment Requests
-                        </Typography>
-                    </Box>
-
-                    {requests.length === 0 ? (
-                        <Typography sx={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)" }}>
-                            You have not raised any enrollment request for this batch.
-                        </Typography>
-                    ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                            {requests.map((req) => (
-                                <Box
-                                    key={req.batchRequestId}
-                                    sx={{
-                                        border: "1px solid rgba(255,255,255,0.08)",
-                                        borderRadius: "10px",
-                                        p: 1.25,
-                                    }}
-                                >
-                                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.5 }}>
-                                        <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff" }}>
-                                            {formatMode(req.modeRequested)} mode requested
-                                        </Typography>
-                                        <StatusChip status={req.requestStatus} />
-                                    </Box>
-                                    {req.requestReason && (
-                                        <Typography sx={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.65)", lineHeight: 1.6, mb: 0.5 }}>
-                                            {req.requestReason}
-                                        </Typography>
-                                    )}
-                                    <Typography sx={{ fontSize: "0.66rem", color: "rgba(255,255,255,0.38)" }}>
-                                        Raised on {formatTimestamp(req.createdAt)}
-                                        {req.updatedAt !== req.createdAt && ` • Updated ${formatTimestamp(req.updatedAt)}`}
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Box>
-                    )}
-                </Box>
-
-                {/* My Queries */}
-                <Box sx={CARD_SX}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.25 }}>
-                        <MdOutlineQuestionAnswer size={16} color="#06b6d4" />
-                        <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff" }}>
-                            My Queries
-                        </Typography>
-                    </Box>
-
-                    {queries.length === 0 ? (
-                        <Typography sx={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)" }}>
-                            You have not raised any query for this batch.
-                        </Typography>
-                    ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                            {queries.map((query) => (
-                                <Box
-                                    key={query.batchQueryId}
-                                    sx={{
-                                        border: "1px solid rgba(255,255,255,0.08)",
-                                        borderRadius: "10px",
-                                        p: 1.25,
-                                    }}
-                                >
-                                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.5 }}>
-                                        <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff", textTransform: "capitalize" }}>
-                                            {query.queryType}
-                                        </Typography>
-                                        <StatusChip status={query.queryStatus} />
-                                    </Box>
-                                    <Typography sx={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.65)", lineHeight: 1.6 }}>
-                                        {query.queryText}
-                                    </Typography>
-
-                                    {query.queryResponse ? (
-                                        <Box sx={{ mt: 1, bgcolor: "rgba(6,182,212,0.08)", border: "1px solid #164e63", borderRadius: "8px", p: 1 }}>
-                                            <Typography sx={{ fontSize: "0.66rem", fontWeight: 700, color: "#22d3ee", mb: 0.3 }}>
-                                                Response
-                                            </Typography>
-                                            <Typography sx={{ fontSize: "0.74rem", color: "rgba(255,255,255,0.78)", lineHeight: 1.6 }}>
-                                                {query.queryResponse}
-                                            </Typography>
-                                        </Box>
-                                    ) : (
-                                        <Typography sx={{ mt: 0.75, fontSize: "0.7rem", color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>
-                                            Awaiting a response from the team.
-                                        </Typography>
-                                    )}
-
-                                    <Typography sx={{ fontSize: "0.66rem", color: "rgba(255,255,255,0.38)", mt: 0.75 }}>
-                                        Asked on {formatTimestamp(query.createdAt)}
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Box>
-                    )}
-                </Box>
+                <SyllabusCard />
             </Box>
 
             {/* ── Right Column ── */}
-            <Box sx={{ flex: "1 1 40%", display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+                <DetailCard angle="164.45deg" glow="narrow">
+                    <CardTitle>Batch Info</CardTitle>
 
-                {/* Batch Info */}
-                <Box sx={CARD_SX}>
-                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", mb: 1.5 }}>
-                        Batch Info
-                    </Typography>
-
-                    {/* Start / End dates */}
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1.5 }}>
-                        <Box sx={{ flex: 1 }}>
-                            <Typography sx={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)", mb: 0.3 }}>Starting at</Typography>
-                            <Box sx={{ borderRadius: "18px", px: 1, py: 0.6, textAlign: "center" }} className="chip-bg">
-                                <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
-                                    {formatLongDate(batch.batchStartDate)}
-                                </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: { xs: "wrap", sm: "nowrap" }, gap: { xs: "12px", sm: "16px" } }}>
+                            <DateColumn label="Starting at" value={formatLongDate(batch.batchStartDate)} />
+                            <Box sx={{ flex: 1, alignSelf: "stretch", display: { xs: "none", sm: "flex" }, alignItems: "center", justifyContent: "center", pt: "24px", minWidth: 0 }}>
+                                <Box component="img" src={`${ASSET}/date-connector.svg`} alt="" sx={{ width: "30.333px", height: "5.333px", flexShrink: 0 }} />
                             </Box>
+                            <DateColumn label="Ending at" value={formatLongDate(batch.batchEndDate)} />
                         </Box>
 
-                        <Box sx={{ display: "flex", gap: "3px", alignItems: "center", pt: 1, flexShrink: 0 }}>
-                            {[0, 1, 2].map((i) => (
-                                <Box key={i} sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.25)" }} />
-                            ))}
-                        </Box>
-
-                        <Box sx={{ flex: 1 }}>
-                            <Typography sx={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.4)", mb: 0.3 }}>Ending at</Typography>
-                            <Box sx={{ borderRadius: "18px", px: 1, py: 0.6, textAlign: "center" }} className="chip-bg">
-                                <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "#fff" }}>
-                                    {formatLongDate(batch.batchEndDate)}
-                                </Typography>
-                            </Box>
-                        </Box>
-                    </Box>
-
-                    {/* Detail rows */}
-                    <Box sx={{ display: "grid", gridTemplateColumns:"1fr 1fr", gap: 0, border: "1px dashed rgba(255, 255, 255, 0.3)", padding: 1, borderRadius: "8px" }}>
-                        {infoRows.map(({ icon, value }, i) => (
+                        {infoRows.length > 0 && (
                             <Box
-                                key={i}
                                 sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 1,
-                                    py: 0.7,
-                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                    display: "grid",
+                                    gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" },
+                                    rowGap: "24px",
+                                    columnGap: "16px",
+                                    p: "16px",
+                                    border: "1px dashed #404040",
+                                    borderRadius: "18px",
                                 }}
                             >
-                                <Box sx={{ color: "rgba(255,255,255,0.38)", display: "flex", flexShrink: 0 }}>
-                                    {icon}
-                                </Box>
-                                <Typography sx={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.78)" }}>
-                                    {value}
-                                </Typography>
+                                {infoRows.map(({ key, icon, value }) => (
+                                    <Box key={key} sx={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                                        {icon}
+                                        <Typography sx={{ ...TEXT.interMed16, color: COLORS.neutral100, minWidth: 0, wordBreak: "break-word" }}>
+                                            {value}
+                                        </Typography>
+                                    </Box>
+                                ))}
                             </Box>
-                        ))}
+                        )}
                     </Box>
-                </Box>
+                </DetailCard>
 
-                {/* Instructors */}
-                <Box sx={CARD_SX}>
-                    <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", mb: 1.25 }}>
-                        Instructors
-                    </Typography>
+                <DetailCard angle="166.68deg" glow="narrow" glowBottom={-8}>
+                    <CardTitle>Instructors</CardTitle>
                     {trainers.length === 0 ? (
-                        <Typography sx={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.35)" }}>
+                        <Typography sx={{ ...TYPE.interReg16, color: COLORS.neutral400 }}>
                             No trainer has been assigned yet.
                         </Typography>
                     ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                             {trainers.map((trainer) => (
                                 <Box
                                     key={trainer.trainerId}
-                                    sx={{ display: "flex", alignItems: "center", gap: 1, justifyContent: "space-between" }}
+                                    sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        flexWrap: { xs: "wrap", sm: "nowrap" },
+                                        gap: { xs: "16px", sm: "32px" },
+                                        p: "16px",
+                                        borderRadius: "18px",
+                                        border: "1px solid rgba(64,64,64,0.24)",
+                                        backgroundImage: INSTRUCTOR_ROW_FILL,
+                                    }}
                                 >
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-                                        <Avatar sx={{ width: 30, height: 30, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#1e40af", flexShrink: 0 }}>
-                                            {getInitials(trainer.trainerName)}
-                                        </Avatar>
-                                        <Box sx={{ minWidth: 0 }}>
-                                            <Typography noWrap sx={{ fontSize: "0.78rem", fontWeight: 600, color: "#fff", lineHeight: 1.3 }}>
+                                    <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                                        <TrainerAvatar trainer={trainer} size={50} />
+                                        <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+                                            <Typography noWrap sx={{ ...TEXT.interSemi18, color: COLORS.neutral100 }}>
                                                 {trainer.trainerName}
                                             </Typography>
-                                            <Typography noWrap sx={{ fontSize: "0.68rem", color: "rgba(255,255,255,0.42)" }}>
-                                                {trainer.email ?? `+${trainer.callingCode} ${trainer.phoneNumber}`}
+                                            <Typography noWrap sx={{ ...TEXT.interReg14, color: COLORS.neutral300 }}>
+                                                {trainerSubtitle(trainer)}
                                             </Typography>
                                         </Box>
                                     </Box>
-                                    <Button
-                                        size="small"
-                                        startIcon={<MdRemoveRedEye size={11} />}
-                                        sx={{
-                                            border: "1px solid rgba(255,255,255,0.1)",
-                                            color: "rgba(255,255,255,0.7)",
-                                            borderRadius: "4px",
-                                            px: 1.1,
-                                            py: 0.35,
-                                            fontSize: "0.68rem",
-                                            textTransform: "none",
-                                            flexShrink: 0,
-                                            whiteSpace: "nowrap",
-                                            "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
-                                        }}
-                                    >
-                                        View Full Profile
-                                    </Button>
+                                    <OutlineButton tone="muted" icon="icon-eye.svg" label="View Full Profile" onClick={() => openProfile(trainer)} />
                                 </Box>
                             ))}
                         </Box>
                     )}
-                </Box>
-
-                {/* Attendance */}
-                <Box sx={CARD_SX}>
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.25 }}>
-                        <Typography sx={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff" }}>
-                            Attendance
-                        </Typography>
-                        <Typography
-                            sx={{
-                                fontSize: "0.7rem",
-                                color: "#6b8fff",
-                                cursor: "pointer",
-                                "&:hover": { textDecoration: "underline" },
-                            }}
-                        >
-                            View Full Attendance
-                        </Typography>
-                    </Box>
-
-                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, mb: 1 }}>
-                        <Typography sx={{ fontSize: "1.75rem", fontWeight: 800, color: "#fff", lineHeight: 1 }}>
-                            {attendance.attendancePercentage}%
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.72rem", color: "rgba(255,255,255,0.45)" }}>
-                            {attendance.attendedSessions}/{attendance.totalSessionsHeld} Classes Attended
-                        </Typography>
-                    </Box>
-
-                    <LinearProgress
-                        variant="determinate"
-                        value={attendance.attendancePercentage}
-                        sx={{
-                            height: 7,
-                            borderRadius: 4,
-                            bgcolor: "rgba(255,255,255,0.08)",
-                            "& .MuiLinearProgress-bar": {
-                                borderRadius: 4,
-                                background: "linear-gradient(90deg, #3b82f6, #8b5cf6)",
-                            },
-                        }}
-                    />
-                </Box>
+                </DetailCard>
             </Box>
+
+            <TrainerProfileModal trainer={profileTrainer} trainerFor={trainerFor} onClose={() => setProfileTrainer(null)} />
         </Box>
     );
 }

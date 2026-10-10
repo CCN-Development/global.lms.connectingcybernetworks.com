@@ -1,10 +1,8 @@
 "use client";
-import React, { useState } from "react";
-import { Box, Typography, Divider } from "@mui/material";
-import CCNModal from "@/components/modals/CCNModal";
-import CCNButton from "@/components/buttons/CCNButton";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import React, { useEffect, useState } from "react";
+import { Box, ButtonBase, Typography } from "@mui/material";
+import { FONT_INTER, GradientButton } from "@/components/batches/batch-card-ui";
+import { BatchModalShell, ModalHeading, ModalSection, ModalTextButton } from "@/components/batches/BatchModalShell";
 
 export type BatchMode = "Online" | "Offline" | "Hybrid";
 
@@ -12,30 +10,26 @@ export interface RequestSeatModalProps {
     open: boolean;
     onClose: () => void;
     batchTitle: string;
-    /** Seats left for the primary available mode */
     seatsLeft?: number;
-    /** Called with the selected mode when the user submits */
+    /** Mode pre-selected when the modal opens */
+    defaultMode?: BatchMode;
     onSubmit?: (mode: BatchMode) => void;
 }
 
-// ── Mode options ──────────────────────────────────────────────────────────────
-
-const MODES: { value: BatchMode; label: string; description: string }[] = [
-    { value: "Offline", label: "Offline", description: "Attend classes at our institute campus" },
-    { value: "Hybrid", label: "Hybrid", description: "Join live instructor-led sessions from home or campus" },
-    { value: "Online", label: "Online", description: "Join live instructor-led sessions from home" },
+const MODES: { value: BatchMode; description: string }[] = [
+    { value: "Offline", description: "Attend classes at our institute campus" },
+    { value: "Hybrid", description: "Join live instructor-led sessions from home or campus" },
+    { value: "Online", description: "Join live instructor-led sessions from home" },
 ];
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export default function RequestSeatModal({
-    open,
-    onClose,
-    batchTitle,
-    seatsLeft,
-    onSubmit,
+    open, onClose, batchTitle, seatsLeft, defaultMode = "Offline", onSubmit,
 }: RequestSeatModalProps) {
-    const [selectedMode, setSelectedMode] = useState<BatchMode>("Offline");
+    const [selectedMode, setSelectedMode] = useState<BatchMode>(defaultMode);
+
+    useEffect(() => {
+        if (open) setSelectedMode(defaultMode);
+    }, [open, defaultMode]);
 
     const handleSubmit = () => {
         onSubmit?.(selectedMode);
@@ -43,181 +37,89 @@ export default function RequestSeatModal({
     };
 
     return (
-        <CCNModal open={open} onClose={onClose} maxWidth={460}>
-            <Box sx={{ p: "22px 20px 18px" }}>
-                {/* Header */}
-                <Typography
-                    sx={{
-                        fontSize: "1.05rem",
-                        fontWeight: 800,
-                        color: "#fff",
-                        lineHeight: 1.3,
-                        letterSpacing: "-0.01em",
-                        mb: 0.6,
-                    }}
-                >
-                    Request a seat for{" "}
-                    <Box component="span" sx={{ color: "#fff" }}>
-                        {batchTitle}
-                    </Box>
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: "0.75rem",
-                        color: "rgba(255,255,255,0.45)",
-                        fontWeight: 400,
-                        mb: 2,
-                    }}
-                >
-                    Secure your seat by completing the details below.
-                </Typography>
+        <BatchModalShell open={open} onClose={onClose} gap={44} glowLeft={-169.88}>
+            <ModalSection gap={32}>
+                <ModalHeading
+                    title={`Request a seat for ${batchTitle} Batch`}
+                    subtitle="Secure your seat by completing the details below."
+                />
 
-                <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 2 }} />
-
-                {/* Mode selector */}
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mb: 2.5 }}>
-                    {MODES.map((m) => {
-                        const isSelected = selectedMode === m.value;
+                <Box role="radiogroup" sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {MODES.map((mode) => {
+                        const selected = mode.value === selectedMode;
                         return (
-                            <Box
-                                key={m.value}
-                                onClick={() => setSelectedMode(m.value)}
+                            <ButtonBase
+                                key={mode.value}
+                                role="radio"
+                                aria-checked={selected}
+                                onClick={() => setSelectedMode(mode.value)}
                                 sx={{
+                                    width: "100%",
                                     display: "flex",
+                                    flexDirection: "column",
                                     alignItems: "flex-start",
-                                    gap: 1.25,
-                                    p: "10px 12px",
-                                    borderRadius: "10px",
-                                    border: isSelected
-                                        ? "1px solid rgba(124,58,237,0.45)"
-                                        : "1px solid rgba(255,255,255,0.08)",
-                                    background: isSelected
-                                        ? "linear-gradient(135deg, rgba(67,32,122,0.55) 0%, rgba(30,40,100,0.45) 100%)"
-                                        : "transparent",
-                                    cursor: "pointer",
-                                    transition: "all 0.18s ease",
-                                    "&:hover": {
-                                        border: "1px solid rgba(124,58,237,0.3)",
-                                        background: "rgba(255,255,255,0.03)",
-                                    },
+                                    gap: "16px",
+                                    px: "19px",
+                                    py: "15px",
+                                    borderRadius: "8px",
+                                    border: "1px solid rgba(217,217,217,0.12)",
+                                    textAlign: "left",
+                                    backgroundImage: selected
+                                        ? "linear-gradient(159.83deg, rgba(140,36,255,0.24) 9.0161%, rgba(14,25,52,0.24) 89.867%)"
+                                        : "none",
+                                    boxShadow: selected ? "0 2px 25px rgba(255,255,255,0.12)" : "none",
+                                    transition: "background-image 0.2s ease, box-shadow 0.2s ease",
+                                    "&:hover": { borderColor: "rgba(217,217,217,0.24)" },
                                 }}
                             >
-                                {/* Custom radio circle */}
-                                <Box
-                                    sx={{
-                                        width: 18,
-                                        height: 18,
-                                        borderRadius: "50%",
-                                        border: isSelected
-                                            ? "2px solid #7c3aed"
-                                            : "2px solid rgba(255,255,255,0.25)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        flexShrink: 0,
-                                        mt: "1px",
-                                        transition: "border-color 0.18s ease",
-                                    }}
-                                >
-                                    {isSelected && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", height: 24 }}>
+                                    <Box
+                                        component="img"
+                                        src={selected ? "/batches/explore/radio-checked.svg" : "/batches/explore/radio-unchecked.svg"}
+                                        alt=""
+                                        sx={{ width: 24, height: 24, flexShrink: 0 }}
+                                    />
+                                    <Typography sx={{ fontFamily: FONT_INTER, fontWeight: 500, fontSize: "16px", lineHeight: "24px", color: "#f2f2f2" }}>
+                                        {mode.value}
+                                    </Typography>
+                                    {selected && seatsLeft !== undefined && (
                                         <Box
+                                            component="span"
                                             sx={{
-                                                width: 8,
-                                                height: 8,
-                                                borderRadius: "50%",
-                                                bgcolor: "#7c3aed",
-                                            }}
-                                        />
-                                    )}
-                                </Box>
-
-                                {/* Label + description */}
-                                <Box sx={{ flex: 1 }}>
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.3 }}>
-                                        <Typography
-                                            sx={{
-                                                fontSize: "0.82rem",
-                                                fontWeight: 700,
-                                                color: isSelected ? "#fff" : "rgba(255,255,255,0.7)",
-                                                lineHeight: 1,
+                                                px: "8px",
+                                                py: "2px",
+                                                borderRadius: "99px",
+                                                bgcolor: "#ffefdc",
+                                                color: "#fb8600",
+                                                fontFamily: FONT_INTER,
+                                                fontWeight: 500,
+                                                fontSize: "12px",
+                                                lineHeight: "18px",
+                                                whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {m.label}
-                                        </Typography>
-
-                                        {/* Seats chip — only on first available mode when seats provided */}
-                                        {m.value === "Offline" && seatsLeft !== undefined && (
-                                            <Box
-                                                sx={{
-                                                    px: 0.75,
-                                                    py: "2px",
-                                                    borderRadius: "5px",
-                                                    bgcolor: "rgba(249,115,22,0.15)",
-                                                    border: "1px solid rgba(249,115,22,0.3)",
-                                                }}
-                                            >
-                                                <Typography
-                                                    sx={{
-                                                        fontSize: "0.6rem",
-                                                        fontWeight: 600,
-                                                        color: "#f97316",
-                                                        lineHeight: 1,
-                                                    }}
-                                                >
-                                                    {seatsLeft} seats available
-                                                </Typography>
-                                            </Box>
-                                        )}
-                                    </Box>
-                                    <Typography
-                                        sx={{
-                                            fontSize: "0.72rem",
-                                            color: "rgba(255,255,255,0.38)",
-                                            lineHeight: 1.4,
-                                        }}
-                                    >
-                                        {m.description}
-                                    </Typography>
+                                            {seatsLeft} seats available
+                                        </Box>
+                                    )}
                                 </Box>
-                            </Box>
+                                <Typography sx={{ fontFamily: FONT_INTER, fontWeight: 500, fontSize: "14px", lineHeight: "21px", color: "#bfbfbf" }}>
+                                    {mode.description}
+                                </Typography>
+                            </ButtonBase>
                         );
                     })}
                 </Box>
+            </ModalSection>
 
-                {/* Actions */}
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    <CCNButton onClick={handleSubmit} className="w-full">
-                        Send Request
-                    </CCNButton>
-
-                    <Typography
-                        onClick={onClose}
-                        sx={{
-                            fontSize: "0.78rem",
-                            color: "rgba(255,255,255,0.45)",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            py: 0.5,
-                            "&:hover": { color: "rgba(255,255,255,0.75)" },
-                        }}
-                    >
-                        Cancel
-                    </Typography>
+            <ModalSection gap={24}>
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", py: "8px" }}>
+                    <GradientButton fullWidth onClick={handleSubmit}>Send Request</GradientButton>
+                    <ModalTextButton onClick={onClose}>Cancel</ModalTextButton>
                 </Box>
-
-                {/* Note */}
-                <Typography
-                    sx={{
-                        fontSize: "0.68rem",
-                        color: "#f97316",
-                        textAlign: "center",
-                        mt: 1.5,
-                        lineHeight: 1.5,
-                    }}
-                >
+                <Typography sx={{ fontFamily: FONT_INTER, fontSize: "12px", lineHeight: "18px", color: "#ffad4f", textAlign: "center" }}>
                     Note : Your seat will be confirmed after the first installment payment.
                 </Typography>
-            </Box>
-        </CCNModal>
+            </ModalSection>
+        </BatchModalShell>
     );
 }

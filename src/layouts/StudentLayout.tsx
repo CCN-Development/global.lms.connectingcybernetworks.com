@@ -29,13 +29,15 @@ interface NavItem {
     /** Path to an SVG in /public, or an icon component when no design asset exists. */
     icon: string | React.ElementType;
     rotate180?: boolean;
+    /** Extra route prefixes that should also mark this item active. */
+    activePrefixes?: string[];
 }
 
 // ─── Nav Items ─────────────────────────────────────────────────────────────
 const NAV_ITEMS: NavItem[] = [
     { label: "Home", icon: "/sidebar/icon-home.svg", href: "/dashboard/student/overview" },
     { label: "My Courses", icon: "/sidebar/icon-school-mgmt.svg", href: "/dashboard/student/my-courses" },
-    { label: "My Batches", icon: "/sidebar/icon-book-open.svg", href: "/dashboard/student/batches" },
+    { label: "My Batches", icon: "/sidebar/icon-book-open.svg", href: "/dashboard/student/batches", activePrefixes: ["/dashboard/student/batch/"] },
     { label: "Attendance", icon: Calendar, href: "/dashboard/student/attendance" },
     { label: "Exam", icon: "/sidebar/icon-file-text.svg", href: "/dashboard/student/exams" },
     { label: "Practice Labs", icon: "/sidebar/icon-filter.svg", rotate180: true, href: "/dashboard/student/practice-labs" },
@@ -252,8 +254,10 @@ export default function StudentLayout({
                         "&::-webkit-scrollbar": { display: "none" },
                     }}
                 >
-                    {NAV_ITEMS.map(({ label, icon, href, rotate180 }) => {
-                        const isActive = pathname === href || pathname.startsWith(href + "/");
+                    {NAV_ITEMS.map(({ label, icon, href, rotate180, activePrefixes }) => {
+                        const isActive = pathname === href
+                            || pathname.startsWith(href + "/")
+                            || Boolean(activePrefixes?.some((prefix) => pathname.startsWith(prefix)));
                         const IconComponent = typeof icon === "string" ? null : icon;
 
                         return (
@@ -423,7 +427,7 @@ export default function StudentLayout({
                             display: headerMobileOnly ? { xs: "flex", md: "none" } : "flex",
                             alignItems: "center",
                             gap: 0.5,
-                            py: 1,
+                            py: fullBleed ? { xs: 1, md: 0 } : 1,
                         }}
                     >
                         {/* Mobile hamburger */}

@@ -288,6 +288,12 @@ export interface StudentBatchTrainer {
     email: string | null;
     callingCode: string;
     phoneNumber: string;
+    /** Profile fields shown on the trainer profile modal; not yet returned by the API. */
+    photoUrl?: string | null;
+    designation?: string | null;
+    experienceYears?: number | null;
+    rating?: number | null;
+    expertise?: string[] | null;
 }
 
 /** Batch row enriched with the course + trainers included by the student endpoints */
@@ -400,7 +406,8 @@ export interface CreateStudentBatchQueryInput {
 /* Attendance types — mirror `GET /student/attendance`                 */
 /* ------------------------------------------------------------------ */
 
-export type AttendanceStatus = "present" | "absent";
+/** `late` is reserved for when the API starts tracking late arrivals. */
+export type AttendanceStatus = "present" | "absent" | "late";
 
 /** One enrolled batch, used to build the attendance scope dropdown */
 export interface AttendanceBatchOption {
@@ -465,6 +472,8 @@ export interface AttendanceHistoryRecord {
     isRescheduled: boolean;
     status: AttendanceStatus;
     markedAt: string | null;
+    /** Session topic; not yet returned by the API. */
+    topic?: string | null;
 }
 
 export interface StudentAttendance {
