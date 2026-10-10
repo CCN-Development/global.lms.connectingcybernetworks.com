@@ -56,6 +56,8 @@ export interface EligibilityStep {
 }
 
 export interface PlacementEligibility {
+    /** All requirements met and the shortlisting step has finished — the Placement Hub is unlocked. */
+    placementReady: boolean;
     /** Number of requirements the student has met (0–3), in step order. */
     completedSteps: number;
     /** Number of completion modals the student has already dismissed. */
@@ -136,8 +138,10 @@ export const LOADER_COPY = {
 
 // ─── Mock student data (replace with API response) ─────────────────────────
 export const PLACEMENT_ELIGIBILITY: PlacementEligibility = {
-    completedSteps: 0,
-    acknowledgedSteps: 0,
+    // The sample student has cleared every requirement; use `?stage=` to review the verification screens.
+    placementReady: true,
+    completedSteps: 3,
+    acknowledgedSteps: 3,
     courses: [
         {
             id: "ccna",

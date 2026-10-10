@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { Box, Dialog, Typography } from "@mui/material";
 import { LmsButton } from "@/components/community/community-ui";
@@ -8,22 +8,31 @@ import { ELIGIBILITY_STEPS, EligibilityStep, LOADER_COPY, placementAsset } from 
 import { Asset, PL, PTEXT } from "./placement-ui";
 
 // ─── Shell ─────────────────────────────────────────────────────────────────
-function PlacementModal({
+export function PlacementModal({
     open,
     labelledBy,
     describedBy,
     padding = "32px",
+    width = 604,
+    gap = "44px",
+    align = "center",
+    onClose,
     children,
 }: {
     open: boolean;
     labelledBy: string;
     describedBy?: string;
     padding?: string;
+    width?: number;
+    gap?: string;
+    align?: "center" | "stretch";
+    onClose?: () => void;
     children: React.ReactNode;
 }) {
     return (
         <Dialog
             open={open}
+            onClose={onClose}
             aria-labelledby={labelledBy}
             aria-describedby={describedBy}
             slotProps={{
@@ -31,16 +40,20 @@ function PlacementModal({
                 paper: {
                     sx: {
                         position: "relative",
-                        width: 604,
+                        width,
                         maxWidth: "calc(100% - 32px)",
+                        maxHeight: "calc(100% - 32px)",
                         m: 2,
                         display: "flex",
                         flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                        gap: "44px",
+                        alignItems: align,
+                        justifyContent: "flex-start",
+                        gap,
                         p: { xs: "24px", sm: padding },
-                        overflow: "hidden",
+                        overflowX: "hidden",
+                        overflowY: "auto",
+                        scrollbarWidth: "none",
+                        "&::-webkit-scrollbar": { display: "none" },
                         bgcolor: "#000",
                         backgroundImage: "none",
                         backdropFilter: "blur(50px)",
@@ -53,27 +66,63 @@ function PlacementModal({
                 },
             }}
         >
-            {/* Diagonal blue light beam from the top-left corner */}
-            <Box
-                aria-hidden
-                sx={{
-                    position: "absolute",
-                    left: -139.88,
-                    top: -282.5,
-                    width: 977.882,
-                    height: 1140.277,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    pointerEvents: "none",
-                }}
-            >
-                <Box sx={{ position: "relative", flexShrink: 0, width: 69.794, height: 1433.31, transform: "rotate(-40.17deg)" }}>
-                    <Asset name="modal-beam.svg" width={269.794} height={1633.31} sx={{ position: "absolute", left: -100, top: -100 }} />
+            {/* Diagonal blue light beam from the top-left corner (clipped so it never adds scroll) */}
+            <Box aria-hidden sx={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: "inherit", pointerEvents: "none" }}>
+                <Box
+                    sx={{
+                        position: "absolute",
+                        left: -139.88,
+                        top: -282.5,
+                        width: 977.882,
+                        height: 1140.277,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                >
+                    <Box sx={{ position: "relative", flexShrink: 0, width: 69.794, height: 1433.31, transform: "rotate(-40.17deg)" }}>
+                        <Asset name="modal-beam.svg" width={269.794} height={1633.31} sx={{ position: "absolute", left: -100, top: -100 }} />
+                    </Box>
                 </Box>
             </Box>
             {children}
         </Dialog>
+    );
+}
+
+/** Envelope illustration + bold title + centred body lines used by success-style modals. */
+export function ModalHero({ title, lines, bodyGap = "16px", children }: { title: string; lines: string[]; bodyGap?: string; children?: React.ReactNode }) {
+    return (
+        <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", width: "100%" }}>
+            <Image src={placementAsset("envelope-check.png")} alt="" width={200} height={200} sizes="200px" priority style={{ flexShrink: 0 }} />
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: bodyGap, width: "100%", textAlign: "center" }}>
+                <Typography id="placement-modal-title" component="h2" sx={{ ...PTEXT.poppinsBold28, fontSize: { xs: "24px", sm: "28px" }, color: PL.white, width: "100%" }}>
+                    {title}
+                </Typography>
+                <Box id="placement-modal-body" sx={{ ...PTEXT.interReg16, color: PL.n100, width: "100%" }}>
+                    {lines.map((line, i) => (
+                        <Box component="p" key={i} sx={{ m: 0, minHeight: "24px" }}>
+                            {line}
+                        </Box>
+                    ))}
+                </Box>
+                {children}
+            </Box>
+        </Box>
+    );
+}
+
+/** Left-aligned form modal heading ("Apply for this Job", "Request Job"). */
+export function ModalHeading({ title, subtitle }: { title: string; subtitle: string }) {
+    return (
+        <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+            <Typography id="placement-modal-title" component="h2" sx={{ ...PTEXT.poppinsBold28, fontSize: { xs: "24px", sm: "28px" }, color: PL.white }}>
+                {title}
+            </Typography>
+            <Typography id="placement-modal-body" sx={{ ...PTEXT.med14, color: PL.n300 }}>
+                {subtitle}
+            </Typography>
+        </Box>
     );
 }
 
@@ -90,56 +139,31 @@ function StepCompletedContent({
     const { completion } = step;
     return (
         <>
-            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", width: "100%" }}>
-                <Image
-                    src={placementAsset("envelope-check.png")}
-                    alt=""
-                    width={200}
-                    height={200}
-                    sizes="200px"
-                    priority
-                    style={{ flexShrink: 0 }}
-                />
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", width: "100%", textAlign: "center" }}>
-                    <Typography
-                        id="placement-modal-title"
-                        component="h2"
-                        sx={{ ...PTEXT.poppinsBold28, fontSize: { xs: "24px", sm: "28px" }, color: PL.white, width: "100%" }}
+            <ModalHero title={completion.title} lines={completion.lines}>
+                {nextStep && completion.nextStepHint && (
+                    <Box
+                        sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                            width: "100%",
+                            // Figma strokes sit inside the frame; trim padding so the 1px/3px border keeps its 79px height.
+                            p: "15px 15px 13px",
+                            textAlign: "left",
+                            opacity: 0.8,
+                            borderRadius: "12px",
+                            bgcolor: PL.nextStepBg,
+                            border: `1px solid ${PL.nextStepBorder}`,
+                            borderBottomWidth: "3px",
+                        }}
                     >
-                        {completion.title}
-                    </Typography>
-                    <Box id="placement-modal-body" sx={{ ...PTEXT.interReg16, color: PL.n100, width: "100%" }}>
-                        {completion.lines.map((line, i) => (
-                            <Box component="p" key={i} sx={{ m: 0, minHeight: "24px" }}>
-                                {line}
-                            </Box>
-                        ))}
+                        <Typography sx={{ ...PTEXT.med12, color: PL.n300, textTransform: "uppercase" }}>
+                            Next Step : {nextStep.title}
+                        </Typography>
+                        <Typography sx={{ ...PTEXT.med14, color: PL.white }}>{completion.nextStepHint}</Typography>
                     </Box>
-                    {nextStep && completion.nextStepHint && (
-                        <Box
-                            sx={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "8px",
-                                width: "100%",
-                                // Figma strokes sit inside the frame; trim padding so the 1px/3px border keeps its 79px height.
-                                p: "15px 15px 13px",
-                                textAlign: "left",
-                                opacity: 0.8,
-                                borderRadius: "12px",
-                                bgcolor: PL.nextStepBg,
-                                border: `1px solid ${PL.nextStepBorder}`,
-                                borderBottomWidth: "3px",
-                            }}
-                        >
-                            <Typography sx={{ ...PTEXT.med12, color: PL.n300, textTransform: "uppercase" }}>
-                                Next Step : {nextStep.title}
-                            </Typography>
-                            <Typography sx={{ ...PTEXT.med14, color: PL.white }}>{completion.nextStepHint}</Typography>
-                        </Box>
-                    )}
-                </Box>
-            </Box>
+                )}
+            </ModalHero>
             <LmsButton onClick={onAction} sx={{ width: "100%" }}>
                 {completion.actionLabel}
             </LmsButton>
@@ -181,6 +205,8 @@ function ShortlistingLoaderContent() {
 }
 
 // ─── Flow modal ────────────────────────────────────────────────────────────
+const SHORTLISTING_MS = 2500;
+
 /** Step index whose completion is being celebrated, `"loader"` while shortlisting, or `null` when closed. */
 export type PlacementModalView = number | "loader" | null;
 
@@ -188,9 +214,24 @@ export type PlacementModalView = number | "loader" | null;
  * One dialog for the whole flow so the backdrop stays put when moving from
  * "placement ready" to the loader; the last view is kept during the exit fade.
  */
-export function PlacementFlowModal({ view, onAcknowledge }: { view: PlacementModalView; onAcknowledge: (stepIndex: number) => void }) {
+export function PlacementFlowModal({
+    view,
+    onAcknowledge,
+    onShortlisted,
+}: {
+    view: PlacementModalView;
+    onAcknowledge: (stepIndex: number) => void;
+    /** Fired once the shortlisting loader has run, to reveal the Placement Hub. */
+    onShortlisted?: () => void;
+}) {
     const [shown, setShown] = useState<PlacementModalView>(view);
     if (view !== null && view !== shown) setShown(view);
+
+    useEffect(() => {
+        if (view !== "loader" || !onShortlisted) return;
+        const timer = window.setTimeout(onShortlisted, SHORTLISTING_MS);
+        return () => window.clearTimeout(timer);
+    }, [view, onShortlisted]);
 
     return (
         <PlacementModal
