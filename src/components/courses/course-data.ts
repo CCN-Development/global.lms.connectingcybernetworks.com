@@ -3,7 +3,7 @@
 import type { CourseThemeKey } from "./my-courses-theme";
 
 export type CourseStatus = "Active" | "Locked" | "Completed";
-export type LessonKind = "video" | "reading" | "lab" | "quiz";
+export type LessonKind = "video" | "reading" | "lab" | "quiz" | "module";
 
 export interface CourseInstructor {
     instructorId: string;
@@ -27,6 +27,8 @@ export interface CourseLesson {
     watched?: number;
     /** Index into LESSON_THUMBS. */
     art: number;
+    /** `kind: "module"` only — opens the module page (videos, theory, quizzes and labs). */
+    moduleId?: string;
 }
 
 export interface CourseLevel {
@@ -159,8 +161,8 @@ const CCNA_LEVELS: CourseLevel[] = [
                 xp: 12,
                 completed: true,
             }),
-            lesson("ls-2-2", "Explain Computer Hardware", 2),
-            lesson("ls-2-3", "Computer Memory - Internal and External", 3),
+            lesson("ls-2-2", "Explain Computer Hardware", 2, { kind: "module", moduleId: "explain-computer-hardware" }),
+            lesson("ls-2-3", "Computer Memory - Internal and External", 3, { kind: "module", moduleId: "computer-memory" }),
             lesson("ls-2-4", "Network Interface Card (NIC)", 4),
             lesson("ls-2-5", "CPU and types of CPU - Manufacture (Intel and AMD)", 5),
             lesson("ls-2-6", "GPU and types of GPU - Manufacture (Intel and NVIDIA)", 6),
@@ -174,7 +176,7 @@ const CCNA_LEVELS: CourseLevel[] = [
         progress: 0,
         lessons: [
             lesson("ls-3-1", "What is a Network and Why it Matters", 1),
-            lesson("ls-3-2", "OSI Model - All Seven Layers Explained", 2),
+            lesson("ls-3-2", "OSI Model - All Seven Layers Explained", 2, { kind: "module", moduleId: "osi-model" }),
             lesson("ls-3-3", "TCP/IP Model and Protocol Stack", 3, { kind: "lab", xp: 120 }),
             lesson("ls-3-4", "Knowledge Check - Networking Basics", 4, { kind: "quiz", tasks: 20, duration: "25min", xp: 60 }),
         ],

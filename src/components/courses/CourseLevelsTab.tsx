@@ -134,7 +134,7 @@ function LessonRow({ lesson, onOpen }: { lesson: CourseLesson; onOpen: () => voi
     );
 }
 
-function LevelStatus({ progress }: { progress: number }) {
+export function LevelStatus({ progress }: { progress: number }) {
     const done = progress >= 100;
     const started = progress > 0;
     return (
@@ -163,9 +163,11 @@ function LevelCard({ level, onOpenLesson }: { level: CourseLevel; onOpenLesson: 
     return (
         <Box
             component="section"
+            id={`level-${level.levelNo}`}
             aria-label={`Level ${level.levelNo}: ${level.title}`}
             sx={{
                 position: "relative",
+                scrollMarginTop: "16px",
                 overflow: "hidden",
                 display: "grid",
                 gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 1fr) minmax(0, 816px)" },

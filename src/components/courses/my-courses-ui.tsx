@@ -149,7 +149,7 @@ export function BackButton({ onClick, label }: { onClick: () => void; label: str
 }
 
 /** White-outlined frosted capsule ("Active Mission"). */
-export function StatusPill({ label, size = "sm" }: { label: string; size?: "sm" | "md" }) {
+export function StatusPill({ label, size = "sm", color = COLORS.white }: { label: string; size?: "sm" | "md"; color?: string }) {
     return (
         <Box
             sx={{
@@ -165,7 +165,7 @@ export function StatusPill({ label, size = "sm" }: { label: string; size?: "sm" 
                 backdropFilter: "blur(4px)",
             }}
         >
-            <Typography sx={{ ...(size === "md" ? TYPE.smallMed14 : TYPE.xsMed12), color: COLORS.white, whiteSpace: "nowrap" }}>
+            <Typography sx={{ ...(size === "md" ? TYPE.smallMed14 : TYPE.xsMed12), color, whiteSpace: "nowrap" }}>
                 {label}
             </Typography>
         </Box>

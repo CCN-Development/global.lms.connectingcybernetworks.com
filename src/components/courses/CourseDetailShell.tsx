@@ -23,6 +23,10 @@ export function courseDetailPath(courseId: string, tab: CourseDetailTab = "overv
     return tab === "overview" ? base : `${base}/${tab}`;
 }
 
+export function modulePath(courseId: string, moduleId: string): string {
+    return `${MY_COURSES_PATH}/${courseId}/${moduleId}`;
+}
+
 /** Shared frame for the course detail routes: course lookup, header row and the Overview / Levels switch. */
 export default function CourseDetailShell({
     tab,
