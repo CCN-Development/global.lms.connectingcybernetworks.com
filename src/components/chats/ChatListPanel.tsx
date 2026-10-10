@@ -1,21 +1,21 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { Box, IconButton, InputBase, ListItemIcon, Menu, MenuItem, Switch, Tooltip, Typography } from "@mui/material";
+import { Box, InputBase, Menu, MenuItem } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-    MdSearch, MdMoreVert, MdClose, MdPushPin, MdOutlinePushPin, MdVolumeOff,
-    MdVolumeUp, MdMarkChatUnread, MdDeleteOutline, MdDoneAll, MdDone,
-    MdGroupAdd, MdShield, MdPersonAddAlt1, MdStar, MdImage, MdInsertDriveFile, MdMic,
-    MdNotificationsActive, MdNotificationsOff, MdNotificationsNone, MdBolt,
+    MdBolt, MdGroupAdd, MdNotificationsActive, MdNotificationsNone, MdNotificationsOff, MdPersonAddAlt1,
+    MdPushPin, MdShield, MdStarBorder, MdVolumeOff, MdVolumeUp, MdFavoriteBorder, MdMic, MdImage,
+    MdInsertDriveFile,
 } from "react-icons/md";
-import { C, scrollbarSx } from "./theme";
+import { C, FONT_LATO, menuPaperSx, scrollbarSx, t } from "./theme";
 import type { Chat, MessageMap, User } from "./types";
 import type { PermissionState } from "./notifications";
 import { lastMessageOf, previewOf, stripHtml } from "./helpers";
 import ChatAvatar from "./ChatAvatar";
+import ChatIcon, { StatusTicks } from "./ChatIcon";
 
-const TABS = ["All", "Unread", "Groups", "Communities", "Favourites"] as const;
+const TABS = ["All", "Unread", "Communities"] as const;
 type Tab = (typeof TABS)[number];
 
 type Props = {
@@ -26,8 +26,13 @@ type Props = {
     onSelect: (chatId: string) => void;
     onTogglePin: (chatId: string) => void;
     onToggleMute: (chatId: string) => void;
-    onMarkUnread: (chatId: string) => void;
+    onToggleRead: (chatId: string) => void;
+    onToggleArchive: (chatId: string) => void;
+    onToggleBlock: (chatId: string) => void;
+    onReport: (chatId: string) => void;
     onDeleteChat: (chatId: string) => void;
+    onMarkAllRead: () => void;
+    onOpenProfile: () => void;
     onNewChat: (type: "personal" | "group" | "community") => void;
     onOpenStarred: () => void;
     permission: PermissionState;
@@ -38,23 +43,33 @@ type Props = {
     onToggleLive: () => void;
 };
 
+type RowMenu = { chatId: string; el?: HTMLElement; pos?: { top: number; left: number } };
+
+const menuIcon = { color: C.textMuted, display: "flex", flexShrink: 0 } as const;
+const menuHint = { ...t("lato", 12, 18, 500, C.textMuted), ml: "auto", pl: "16px" } as const;
+
 export default function ChatListPanel({
     chats, users, messages, activeChatId, onSelect,
-    onTogglePin, onToggleMute, onMarkUnread, onDeleteChat, onNewChat, onOpenStarred,
+    onTogglePin, onToggleMute, onToggleRead, onToggleArchive, onToggleBlock, onReport, onDeleteChat,
+    onMarkAllRead, onOpenProfile, onNewChat, onOpenStarred,
     permission, soundOn, liveOn, onEnableNotifications, onToggleSound, onToggleLive,
 }: Props) {
     const [tab, setTab] = useState<Tab>("All");
     const [query, setQuery] = useState("");
+    const [showArchived, setShowArchived] = useState(false);
+    const [favouritesOnly, setFavouritesOnly] = useState(false);
     const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
-    const [rowMenu, setRowMenu] = useState<{ el: HTMLElement; chatId: string } | null>(null);
+    const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
+
+    const archivedCount = chats.filter((c) => c.archived).length;
 
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
         const byTab = chats.filter((c) => {
+            if (showArchived ? !c.archived : c.archived) return false;
+            if (favouritesOnly && !c.favorite) return false;
             if (tab === "Unread") return c.unreadCount > 0;
-            if (tab === "Groups") return c.type === "group";
-            if (tab === "Communities") return c.type === "community";
-            if (tab === "Favourites") return Boolean(c.favorite);
+            if (tab === "Communities") return c.type !== "personal";
             return true;
         });
         const byQuery = q
@@ -65,117 +80,109 @@ export default function ChatListPanel({
             )
             : byTab;
         return [...byQuery].sort((a, b) => Number(b.pinned) - Number(a.pinned));
-    }, [chats, tab, query, messages]);
+    }, [chats, tab, query, messages, showArchived, favouritesOnly]);
 
-    const unreadTotal = chats.reduce((n, c) => n + c.unreadCount, 0);
     const rowChat = rowMenu ? chats.find((c) => c.id === rowMenu.chatId) : null;
+    const closeRowMenu = () => setRowMenu(null);
+    const runRow = (fn: (id: string) => void) => () => {
+        if (rowMenu) fn(rowMenu.chatId);
+        closeRowMenu();
+    };
+    const runHeader = (fn: () => void) => () => {
+        setMenuEl(null);
+        fn();
+    };
+
+    const notificationHint =
+        permission === "granted" ? "On" : permission === "denied" ? "Blocked" : permission === "unsupported" ? "N/A" : "Off";
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: C.panel, backdropFilter: "blur(14px)" }}>
+        <Box
+            sx={{
+                display: "flex", flexDirection: "column", gap: "32px", height: "100%", minHeight: 0,
+                py: "32px", pr: "32px", overflow: "hidden",
+            }}
+        >
             {/* Header */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 1.6, pt: 1.6, pb: 1 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                    <Typography sx={{ fontWeight: 700, fontSize: "1rem", color: C.text }}>Chats</Typography>
-                    {unreadTotal > 0 && (
-                        <Box sx={{ px: 0.7, py: 0.1, borderRadius: "8px", background: C.accentDark }}>
-                            <Typography sx={{ fontSize: "0.6rem", fontWeight: 700, color: C.text }}>{unreadTotal}</Typography>
-                        </Box>
-                    )}
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+                <Box component="h2" sx={{ m: 0, ...t("poppins", 20, 30, 500, C.text) }}>
+                    {showArchived ? "Archived" : "Chats"}
                 </Box>
-                <Box sx={{ display: "flex", gap: 0.2 }}>
-                    <Tooltip
-                        arrow
-                        title={
-                            permission === "granted" ? "Desktop notifications on"
-                                : permission === "denied" ? "Blocked in browser settings"
-                                    : permission === "unsupported" ? "Not supported in this browser"
-                                        : "Enable desktop notifications"
-                        }
-                    >
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={onEnableNotifications}
-                                disabled={permission === "unsupported"}
-                                sx={{
-                                    color: permission === "granted" ? C.online : permission === "denied" ? C.danger : C.textSoft,
-                                    "&:hover": { color: C.text },
-                                }}
-                            >
-                                {permission === "granted" ? <MdNotificationsActive size={17} />
-                                    : permission === "denied" ? <MdNotificationsOff size={17} />
-                                        : <MdNotificationsNone size={17} />}
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                    <Tooltip title={soundOn ? "Mute message sound" : "Unmute message sound"} arrow>
-                        <IconButton
-                            size="small"
-                            onClick={onToggleSound}
-                            sx={{ color: soundOn ? C.accentSoft : C.textMuted, "&:hover": { color: C.text } }}
-                        >
-                            {soundOn ? <MdVolumeUp size={17} /> : <MdVolumeOff size={17} />}
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="New chat" arrow>
-                        <IconButton size="small" onClick={() => onNewChat("personal")} sx={{ color: C.textSoft, "&:hover": { color: C.text } }}>
-                            <MdPersonAddAlt1 size={17} />
-                        </IconButton>
-                    </Tooltip>
-                    <IconButton size="small" onClick={(e) => setMenuEl(e.currentTarget)} sx={{ color: C.textSoft, "&:hover": { color: C.text } }}>
-                        <MdMoreVert size={18} />
-                    </IconButton>
+                <Box
+                    component="button"
+                    type="button"
+                    aria-label="Chat list options"
+                    onClick={(e: React.MouseEvent<HTMLElement>) => setMenuEl(e.currentTarget)}
+                    sx={{ display: "flex", p: 0, border: "none", background: "transparent", cursor: "pointer", borderRadius: "8px" }}
+                >
+                    <ChatIcon name="more-vertical" size={28} />
                 </Box>
             </Box>
 
-            {/* Search */}
-            <Box sx={{ px: 1.4, pb: 1 }}>
+            {/* Search + filters */}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", flexShrink: 0 }}>
                 <Box
                     sx={{
-                        display: "flex", alignItems: "center", gap: 1,
-                        background: C.panelAlt, borderRadius: "9px",
-                        px: 1.2, py: 0.5, border: `1px solid ${C.border}`,
-                        "&:focus-within": { borderColor: C.accent },
+                        display: "flex", alignItems: "center", gap: "8px", height: 48, px: "16px", py: "8px",
+                        borderRadius: "99px", border: `1px solid ${C.chipBorder}`,
+                        backdropFilter: "blur(2px)",
+                        background: "linear-gradient(180deg, rgba(187,201,237,0.1) 0%, rgba(106,114,135,0.06) 100%)",
                     }}
                 >
-                    <MdSearch size={16} color={C.textMuted} />
+                    <ChatIcon name="search-24" size={24} />
                     <InputBase
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search chats and messages"
-                        sx={{ fontSize: "0.74rem", color: C.text, flex: 1 }}
+                        placeholder="Search or start a new chat"
+                        sx={{
+                            flex: 1, minWidth: 0, ...t("inter", 16, 25, 400, C.text),
+                            "& input": { p: 0, height: 25 },
+                            "& input::placeholder": { color: C.textMuted, opacity: 1 },
+                        }}
                     />
                     {query && (
-                        <IconButton size="small" onClick={() => setQuery("")} sx={{ color: C.textMuted, p: 0.2 }}>
-                            <MdClose size={14} />
-                        </IconButton>
+                        <Box
+                            component="button"
+                            type="button"
+                            aria-label="Clear search"
+                            onClick={() => setQuery("")}
+                            sx={{ display: "flex", p: 0, border: "none", background: "transparent", cursor: "pointer" }}
+                        >
+                            <ChatIcon name="x" size={20} />
+                        </Box>
                     )}
+                </Box>
+
+                <Box sx={{ display: "flex", gap: "12px" }}>
+                    {TABS.map((tabName) => {
+                        const active = tab === tabName;
+                        return (
+                            <Box
+                                key={tabName}
+                                component="button"
+                                type="button"
+                                onClick={() => setTab(tabName)}
+                                sx={{
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    px: "12px", py: "4px", borderRadius: "8px", cursor: "pointer",
+                                    backdropFilter: "blur(12px)",
+                                    border: active ? "1px solid transparent" : `1px solid ${C.chipBorder}`,
+                                    background: active ? C.chipActive : "transparent",
+                                    ...t("lato", 14, 21, 500, active ? C.text : C.textSoft),
+                                    whiteSpace: "nowrap",
+                                    transition: "background 0.15s ease, color 0.15s ease",
+                                    "&:hover": { color: C.text },
+                                }}
+                            >
+                                {tabName}
+                            </Box>
+                        );
+                    })}
                 </Box>
             </Box>
 
-            {/* Filter tabs */}
-            <Box sx={{ display: "flex", gap: 0.5, px: 1.4, pb: 1, overflowX: "auto", ...scrollbarSx }}>
-                {TABS.map((t) => (
-                    <Box
-                        key={t}
-                        onClick={() => setTab(t)}
-                        sx={{
-                            px: 1.1, py: 0.35, borderRadius: "14px", cursor: "pointer", whiteSpace: "nowrap",
-                            fontSize: "0.68rem", fontWeight: 600,
-                            background: tab === t ? C.accentDark : C.panelAlt,
-                            color: tab === t ? C.text : C.textSoft,
-                            border: `1px solid ${tab === t ? C.accentSoft : C.border}`,
-                            "&:hover": { color: C.text },
-                            transition: "all 0.15s",
-                        }}
-                    >
-                        {t}
-                    </Box>
-                ))}
-            </Box>
-
             {/* Rows */}
-            <Box sx={{ flex: 1, overflowY: "auto", ...scrollbarSx }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", ...scrollbarSx }}>
                 <AnimatePresence initial={false}>
                     {visible.map((chat) => {
                         const last = lastMessageOf(messages[chat.id]);
@@ -186,96 +193,90 @@ export default function ChatListPanel({
                         return (
                             <motion.div
                                 key={chat.id}
-                                layout
+                                layout="position"
                                 initial={{ opacity: 0, x: -8 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: -8 }}
                                 transition={{ duration: 0.16 }}
+                                style={{ flexShrink: 0 }}
                             >
                                 <Box
                                     onClick={() => onSelect(chat.id)}
-                                    onContextMenu={(e) => { e.preventDefault(); setRowMenu({ el: e.currentTarget as HTMLElement, chatId: chat.id }); }}
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        setRowMenu({ chatId: chat.id, pos: { top: e.clientY, left: e.clientX } });
+                                    }}
                                     sx={{
-                                        display: "flex", alignItems: "center", gap: 1.1, px: 1.4, py: 1,
-                                        cursor: "pointer", position: "relative",
-                                        background: active ? C.selected : "transparent",
-                                        borderLeft: `3px solid ${active ? C.accentSoft : "transparent"}`,
+                                        display: "flex", alignItems: "center", gap: "12px", p: "16px", borderRadius: "12px",
+                                        cursor: "pointer", background: active ? C.selected : "transparent",
+                                        transition: "background 0.15s ease",
                                         "&:hover": { background: active ? C.selected : C.hover },
-                                        "&:hover .row-more": { opacity: 1 },
-                                        transition: "background 0.15s",
+                                        "&:hover .row-chevron, & .row-chevron[data-open='true']": { opacity: 1 },
                                     }}
                                 >
-                                    <ChatAvatar
-                                        name={chat.name}
-                                        avatar={chat.avatar}
-                                        type={chat.type}
-                                        size={40}
-                                        online={chat.type === "personal" && users[chat.members.find((m) => m.userId !== "me")?.userId ?? ""]?.isOnline}
-                                    />
+                                    <ChatAvatar name={chat.name} avatar={chat.avatar} type={chat.type} size={44} />
 
-                                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.5 }}>
-                                            <Typography sx={{ fontWeight: 600, fontSize: "0.78rem", color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                            <Box sx={{ flex: 1, minWidth: 0, ...t("lato", 16, 24, 500, C.text), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                 {chat.name}
-                                            </Typography>
-                                            <Typography sx={{ fontSize: "0.62rem", color: chat.unreadCount > 0 ? C.accentSoft : C.textMuted, flexShrink: 0 }}>
-                                                {last?.time ?? ""}
-                                            </Typography>
+                                            </Box>
+                                            <Box sx={{ flexShrink: 0, ...t("lato", 12, 18, 500, C.textStrong), whiteSpace: "nowrap" }}>
+                                                {last?.time ?? chat.timeLabel ?? ""}
+                                            </Box>
                                         </Box>
 
-                                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 0.5, mt: 0.15 }}>
-                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, minWidth: 0 }}>
+                                        <Box sx={{ display: "flex", alignItems: "center", gap: "4px", minWidth: 0 }}>
+                                            <Box sx={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "4px", ...t("lato", 12, 18, 500, C.textMuted) }}>
                                                 {typingUser ? (
-                                                    <Typography sx={{ fontSize: "0.7rem", color: C.online, fontWeight: 600 }}>
+                                                    <Box component="span" sx={{ color: C.accentSoft, whiteSpace: "nowrap" }}>
                                                         {chat.type === "personal" ? "typing…" : `${typingUser.name.split(" ")[0]} is typing…`}
-                                                    </Typography>
+                                                    </Box>
                                                 ) : (
                                                     <>
                                                         {last?.senderId === "me" && !last.system && (
-                                                            last.status === "read"
-                                                                ? <MdDoneAll size={13} color={C.tick} />
-                                                                : last.status === "delivered"
-                                                                    ? <MdDoneAll size={13} color={C.textMuted} />
-                                                                    : <MdDone size={13} color={C.textMuted} />
+                                                            <StatusTicks double={last.status === "delivered" || last.status === "read"} color={last.status === "read" ? C.tick : C.textMuted} />
                                                         )}
-                                                        {att?.kind === "image" && <MdImage size={12} color={C.textMuted} />}
-                                                        {att?.kind === "audio" && <MdMic size={12} color={C.textMuted} />}
-                                                        {att?.kind === "file" && <MdInsertDriveFile size={12} color={C.textMuted} />}
-                                                        <Typography sx={{ fontSize: "0.7rem", color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                        {att?.kind === "image" && <MdImage size={13} style={{ flexShrink: 0 }} />}
+                                                        {att?.kind === "audio" && <MdMic size={13} style={{ flexShrink: 0 }} />}
+                                                        {att?.kind === "file" && <MdInsertDriveFile size={13} style={{ flexShrink: 0 }} />}
+                                                        <Box component="span" sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                                             {previewOf(last, users, chat.type !== "personal")}
-                                                        </Typography>
+                                                        </Box>
                                                     </>
                                                 )}
                                             </Box>
 
-                                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, flexShrink: 0 }}>
-                                                {chat.muted && <MdVolumeOff size={12} color={C.textMuted} />}
-                                                {chat.pinned && <MdPushPin size={12} color={C.textMuted} />}
-                                                {chat.unreadCount > 0 && (
-                                                    <Box
-                                                        sx={{
-                                                            minWidth: 17, height: 17, px: 0.5, borderRadius: "9px",
-                                                            background: chat.muted ? C.textMuted : C.accentDark,
-                                                            display: "flex", alignItems: "center", justifyContent: "center",
-                                                        }}
-                                                    >
-                                                        <Typography sx={{ fontSize: "0.58rem", fontWeight: 700, color: C.text }}>
-                                                            {chat.unreadCount}
-                                                        </Typography>
-                                                    </Box>
-                                                )}
+                                            {chat.muted && <MdVolumeOff size={14} color={C.textMuted} style={{ flexShrink: 0 }} />}
+                                            {chat.pinned && <MdPushPin size={14} color={C.textMuted} style={{ flexShrink: 0 }} />}
+                                            {chat.unreadCount > 0 && (
+                                                <Box
+                                                    sx={{
+                                                        flexShrink: 0, minWidth: 20, height: 20, px: chat.unreadCount > 9 ? "4px" : 0, borderRadius: "6px",
+                                                        display: "flex", alignItems: "center", justifyContent: "center",
+                                                        background: chat.muted ? C.textFaint : C.badge,
+                                                        ...t("lato", 12, 18, 500, C.text),
+                                                    }}
+                                                >
+                                                    {chat.unreadCount}
+                                                </Box>
+                                            )}
+                                            <Box
+                                                className="row-chevron"
+                                                component="button"
+                                                type="button"
+                                                aria-label="Chat options"
+                                                data-open={rowMenu?.chatId === chat.id && Boolean(rowMenu?.el)}
+                                                onClick={(e: React.MouseEvent<HTMLElement>) => {
+                                                    e.stopPropagation();
+                                                    setRowMenu({ chatId: chat.id, el: e.currentTarget });
+                                                }}
+                                                sx={{ display: "flex", p: 0, border: "none", background: "transparent", cursor: "pointer", opacity: 0, transition: "opacity 0.15s ease", flexShrink: 0 }}
+                                            >
+                                                <ChatIcon name="chevron-16" size={16} color={C.textMuted} />
                                             </Box>
                                         </Box>
                                     </Box>
-
-                                    <IconButton
-                                        className="row-more"
-                                        size="small"
-                                        onClick={(e) => { e.stopPropagation(); setRowMenu({ el: e.currentTarget, chatId: chat.id }); }}
-                                        sx={{ opacity: 0, color: C.textMuted, p: 0.3, transition: "opacity 0.15s", "&:hover": { color: C.text } }}
-                                    >
-                                        <MdMoreVert size={15} />
-                                    </IconButton>
                                 </Box>
                             </motion.div>
                         );
@@ -283,8 +284,8 @@ export default function ChatListPanel({
                 </AnimatePresence>
 
                 {visible.length === 0 && (
-                    <Box sx={{ textAlign: "center", pt: 5, px: 2 }}>
-                        <Typography sx={{ fontSize: "0.74rem", color: C.textMuted }}>No chats found</Typography>
+                    <Box sx={{ textAlign: "center", pt: 5, ...t("lato", 14, 21, 500, C.textMuted) }}>
+                        {showArchived ? "No archived chats" : "No chats found"}
                     </Box>
                 )}
             </Box>
@@ -294,66 +295,103 @@ export default function ChatListPanel({
                 anchorEl={menuEl}
                 open={Boolean(menuEl)}
                 onClose={() => setMenuEl(null)}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            background: C.panelSolid, border: `1px solid ${C.border}`, borderRadius: "10px",
-                            color: C.text, minWidth: 190,
-                            "& .MuiMenuItem-root": { fontSize: "0.74rem", py: 0.8 },
-                            "& .MuiListItemIcon-root": { minWidth: 28 },
-                        },
-                    },
-                }}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{ paper: { sx: { ...menuPaperSx, mt: "4px", minWidth: 230 } } }}
             >
-                <MenuItem onClick={() => { setMenuEl(null); onNewChat("group"); }}>
-                    <ListItemIcon><MdGroupAdd size={16} color="#38bdf8" /></ListItemIcon>New group
+                <MenuItem onClick={runHeader(onMarkAllRead)}>
+                    <ChatIcon name="grid" size={20} color={C.textMuted} />
+                    Mark all as read
                 </MenuItem>
-                <MenuItem onClick={() => { setMenuEl(null); onNewChat("community"); }}>
-                    <ListItemIcon><MdShield size={16} color="#f59e0b" /></ListItemIcon>New community
+                <MenuItem onClick={runHeader(onOpenProfile)}>
+                    <Box sx={{ width: 24, height: 24, borderRadius: "49.5px", bgcolor: C.chipBorder, overflow: "hidden", flexShrink: 0 }}>
+                        <Box component="img" src="/chats/av-me.png" alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </Box>
+                    My Profile
                 </MenuItem>
-                <MenuItem onClick={() => { setMenuEl(null); onOpenStarred(); }}>
-                    <ListItemIcon><MdStar size={16} color={C.star} /></ListItemIcon>Starred messages
+                <Box sx={{ height: "1px", bgcolor: C.borderSoft, my: "4px" }} />
+                <MenuItem onClick={runHeader(() => onNewChat("personal"))}>
+                    <Box sx={menuIcon}><MdPersonAddAlt1 size={20} /></Box>New chat
                 </MenuItem>
-                <MenuItem onClick={onToggleLive} sx={{ gap: 1 }}>
-                    <ListItemIcon><MdBolt size={16} color={liveOn ? C.online : C.textMuted} /></ListItemIcon>
+                <MenuItem onClick={runHeader(() => onNewChat("group"))}>
+                    <Box sx={menuIcon}><MdGroupAdd size={20} /></Box>New group
+                </MenuItem>
+                <MenuItem onClick={runHeader(() => onNewChat("community"))}>
+                    <Box sx={menuIcon}><MdShield size={20} /></Box>New community
+                </MenuItem>
+                <MenuItem onClick={runHeader(onOpenStarred)}>
+                    <Box sx={menuIcon}><MdStarBorder size={20} /></Box>Starred messages
+                </MenuItem>
+                <MenuItem onClick={runHeader(() => setFavouritesOnly((v) => !v))}>
+                    <Box sx={menuIcon}><MdFavoriteBorder size={20} /></Box>Favourite chats
+                    <Box component="span" sx={menuHint}>{favouritesOnly ? "On" : "Off"}</Box>
+                </MenuItem>
+                <MenuItem onClick={runHeader(() => setShowArchived((v) => !v))}>
+                    <ChatIcon name="archive" size={20} color={C.textMuted} />
+                    {showArchived ? "Back to chats" : "Archived chats"}
+                    {!showArchived && archivedCount > 0 && <Box component="span" sx={menuHint}>{archivedCount}</Box>}
+                </MenuItem>
+                <Box sx={{ height: "1px", bgcolor: C.borderSoft, my: "4px" }} />
+                <MenuItem onClick={runHeader(onEnableNotifications)} disabled={permission === "unsupported"}>
+                    <Box sx={menuIcon}>
+                        {permission === "granted" ? <MdNotificationsActive size={20} />
+                            : permission === "denied" ? <MdNotificationsOff size={20} />
+                                : <MdNotificationsNone size={20} />}
+                    </Box>
+                    Desktop notifications
+                    <Box component="span" sx={menuHint}>{notificationHint}</Box>
+                </MenuItem>
+                <MenuItem onClick={runHeader(onToggleSound)}>
+                    <Box sx={menuIcon}>{soundOn ? <MdVolumeUp size={20} /> : <MdVolumeOff size={20} />}</Box>
+                    Message sound
+                    <Box component="span" sx={menuHint}>{soundOn ? "On" : "Off"}</Box>
+                </MenuItem>
+                <MenuItem onClick={runHeader(onToggleLive)}>
+                    <Box sx={menuIcon}><MdBolt size={20} /></Box>
                     Simulate incoming
-                    <Switch checked={liveOn} size="small" sx={{ ml: "auto", "& .MuiSwitch-thumb": { width: 12, height: 12 } }} />
+                    <Box component="span" sx={menuHint}>{liveOn ? "On" : "Off"}</Box>
                 </MenuItem>
             </Menu>
 
             {/* Row menu */}
             <Menu
-                anchorEl={rowMenu?.el ?? null}
                 open={Boolean(rowMenu)}
-                onClose={() => setRowMenu(null)}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            background: C.panelSolid, border: `1px solid ${C.border}`, borderRadius: "10px",
-                            color: C.text, minWidth: 180,
-                            "& .MuiMenuItem-root": { fontSize: "0.74rem", py: 0.7 },
-                            "& .MuiListItemIcon-root": { minWidth: 28 },
-                        },
-                    },
-                }}
+                onClose={closeRowMenu}
+                anchorEl={rowMenu?.el ?? null}
+                anchorReference={rowMenu?.el ? "anchorEl" : "anchorPosition"}
+                anchorPosition={rowMenu?.pos}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{ paper: { sx: { ...menuPaperSx, mt: "4px" } } }}
             >
-                <MenuItem onClick={() => { if (rowMenu) onTogglePin(rowMenu.chatId); setRowMenu(null); }}>
-                    <ListItemIcon>{rowChat?.pinned ? <MdPushPin size={15} color={C.accentSoft} /> : <MdOutlinePushPin size={15} color={C.textSoft} />}</ListItemIcon>
+                <MenuItem onClick={runRow(onToggleArchive)}>
+                    <ChatIcon name="archive" size={20} color={C.textMuted} />
+                    {rowChat?.archived ? "Unarchive Chat" : "Archive Chat"}
+                </MenuItem>
+                <MenuItem onClick={runRow(onToggleRead)}>
+                    <ChatIcon name="grid" size={20} color={C.textMuted} />
+                    {rowChat && rowChat.unreadCount > 0 ? "Mark as read" : "Mark as unread"}
+                </MenuItem>
+                <MenuItem onClick={runRow(onTogglePin)}>
+                    <ChatIcon name="grid" size={20} color={C.textMuted} />
                     {rowChat?.pinned ? "Unpin chat" : "Pin chat"}
                 </MenuItem>
-                <MenuItem onClick={() => { if (rowMenu) onToggleMute(rowMenu.chatId); setRowMenu(null); }}>
-                    <ListItemIcon>{rowChat?.muted ? <MdVolumeUp size={15} color={C.textSoft} /> : <MdVolumeOff size={15} color={C.textSoft} />}</ListItemIcon>
-                    {rowChat?.muted ? "Unmute" : "Mute"}
+                <MenuItem onClick={runRow(onToggleMute)}>
+                    <ChatIcon name="grid" size={20} color={C.textMuted} />
+                    {rowChat?.muted ? "Unmute notification" : "Mute notification"}
                 </MenuItem>
-                <MenuItem onClick={() => { if (rowMenu) onMarkUnread(rowMenu.chatId); setRowMenu(null); }}>
-                    <ListItemIcon><MdMarkChatUnread size={15} color={C.textSoft} /></ListItemIcon>Mark as unread
+                <MenuItem onClick={runRow(onToggleBlock)}>
+                    <ChatIcon name="grid" size={20} color={C.textMuted} />
+                    {rowChat?.blocked ? "Unblock" : "Block"}
                 </MenuItem>
-                {/* <MenuItem
-                    onClick={() => { if (rowMenu) onDeleteChat(rowMenu.chatId); setRowMenu(null); }}
-                    sx={{ color: C.danger }}
-                >
-                    <ListItemIcon><MdDeleteOutline size={15} color={C.danger} /></ListItemIcon>Delete chat
-                </MenuItem> */}
+                <MenuItem onClick={runRow(onReport)}>
+                    <ChatIcon name="thumbs-down" size={20} color={C.textMuted} />
+                    Report
+                </MenuItem>
+                <MenuItem onClick={runRow(onDeleteChat)} sx={{ fontFamily: `${FONT_LATO} !important`, fontWeight: "400 !important", color: `${C.danger} !important` }}>
+                    <ChatIcon name="trash" size={20} color={C.danger} />
+                    Delete
+                </MenuItem>
             </Menu>
         </Box>
     );

@@ -1,4 +1,4 @@
-import type { Chat, MessageMap, User } from "./types";
+import type { Attachment, Chat, MessageMap, User } from "./types";
 
 export const ME = "me";
 
@@ -10,7 +10,7 @@ export const USERS: Record<string, User> = {
     me: {
         id: "me",
         name: "You",
-        avatar: avatar("You-CCN", "c0aede"),
+        avatar: "/chats/av-me.png",
         about: "Learning never stops.",
         phone: "+91 90000 00000",
         email: "you@ccnmail.in",
@@ -18,12 +18,12 @@ export const USERS: Record<string, User> = {
     },
     u1: {
         id: "u1",
-        name: "Falguni Mam",
-        avatar: avatar("Falguni", "ffd5dc"),
+        name: "Falguni Pathak",
+        avatar: "/chats/av-falguni.png",
         about: "Available",
         designation: "Trainer · Network Security",
-        phone: "+91 98765 43210",
-        email: "falguni@ccnmail.in",
+        phone: "+91 xxxxxxxxxx",
+        email: "falgunipathak@ccnmail.in",
         isOnline: true,
     },
     u2: {
@@ -48,8 +48,8 @@ export const USERS: Record<string, User> = {
     },
     u4: {
         id: "u4",
-        name: "Fatema Mam",
-        avatar: avatar("Fatema", "d1d4f9"),
+        name: "Reema Sharma",
+        avatar: "/chats/av-reema.png",
         about: "Counselling · Admissions",
         designation: "Counsellor",
         phone: "+91 99001 12233",
@@ -78,8 +78,8 @@ export const USERS: Record<string, User> = {
     },
     u7: {
         id: "u7",
-        name: "Samreen Shaikh",
-        avatar: avatar("Samreen", "ffd5dc"),
+        name: "Hazel Desai",
+        avatar: "/chats/av-hazel.png",
         about: "At the lab",
         designation: "Student · Ethical Hacking",
         phone: "+91 91375 94684",
@@ -88,8 +88,8 @@ export const USERS: Record<string, User> = {
     },
     u8: {
         id: "u8",
-        name: "Kartik CCN",
-        avatar: avatar("Kartik", "ffdfbf"),
+        name: "Kushal Korde",
+        avatar: "/chats/av-kushal.png",
         about: "Available",
         designation: "Student · CCNA",
         phone: "+91 73049 18307",
@@ -108,8 +108,8 @@ export const USERS: Record<string, User> = {
     },
     u10: {
         id: "u10",
-        name: "Naveen Saini",
-        avatar: avatar("Naveen", "b6e3f4"),
+        name: "Harsh Rawal",
+        avatar: "/chats/av-harsh.png",
         about: "Busy",
         designation: "Student · CCNP",
         phone: "+91 98332 11445",
@@ -138,8 +138,8 @@ export const USERS: Record<string, User> = {
     },
     u13: {
         id: "u13",
-        name: "Siddhi",
-        avatar: avatar("Siddhi", "ffd5dc"),
+        name: "Aniket Pandit",
+        avatar: "/chats/av-aniket.png",
         about: "Available",
         designation: "Student · Cyber Forensics",
         phone: "+91 90820 16762",
@@ -148,8 +148,8 @@ export const USERS: Record<string, User> = {
     },
     u14: {
         id: "u14",
-        name: "Dev",
-        avatar: avatar("Dev", "d1d4f9"),
+        name: "Kirti Prajapati",
+        avatar: "/chats/av-kirti.png",
         about: "Available",
         designation: "Student · CCNA",
         phone: "+91 90040 22118",
@@ -195,9 +195,10 @@ export const CHATS: Chat[] = [
         createdOn: "02 Jan 2026",
         announcementOnly: true,
         linkedGroupIds: ["c2", "c3"],
-        unreadCount: 3,
+        timeLabel: "09:40 am",
+        unreadCount: 2,
         muted: false,
-        pinned: true,
+        pinned: false,
         favorite: true,
         members: [
             J("u5", "owner", "02 Jan 2026"),
@@ -217,9 +218,10 @@ export const CHATS: Chat[] = [
             "Batch group for CCNA 2025-2026. Session links, lab files and assignment deadlines are shared here. Keep discussions on topic.",
         createdBy: "u1",
         createdOn: "18 Feb 2026",
-        unreadCount: 2,
+        timeLabel: "09:40 am",
+        unreadCount: 0,
         muted: false,
-        pinned: true,
+        pinned: false,
         members: [
             J("u1", "owner", "18 Feb 2026"),
             J("u9", "admin", "18 Feb 2026"),
@@ -235,19 +237,21 @@ export const CHATS: Chat[] = [
         description: "Fee receipts, invoices and payment confirmations. Working hours 10:00 am – 6:30 pm.",
         createdBy: "u6",
         createdOn: "04 Mar 2026",
+        timeLabel: "09:40 am",
         unreadCount: 0,
-        muted: true,
+        muted: false,
         pinned: false,
         members: [J("u6", "owner", "04 Mar 2026"), J("u4", "admin"), J("me", "member"), J("u3", "member")],
     },
     {
         id: "c4",
         type: "personal",
-        name: "Falguni Mam",
+        name: "Falguni Pathak",
         avatar: USERS.u1.avatar,
         createdBy: "u1",
         createdOn: "24 Jul 2026",
-        unreadCount: 0,
+        timeLabel: "09:40 am",
+        unreadCount: 2,
         muted: false,
         pinned: false,
         favorite: true,
@@ -256,23 +260,24 @@ export const CHATS: Chat[] = [
     {
         id: "c5",
         type: "personal",
-        name: "Kartik CCN",
+        name: "Kushal Korde",
         avatar: USERS.u8.avatar,
         createdBy: "u8",
         createdOn: "24 Jul 2026",
-        unreadCount: 1,
+        timeLabel: "09:40 am",
+        unreadCount: 0,
         muted: false,
         pinned: false,
-        typingUserId: "u8",
         members: [J("u8", "member"), J("me", "member")],
     },
     {
         id: "c6",
         type: "personal",
-        name: "Fatema Mam",
+        name: "Reema Sharma",
         avatar: USERS.u4.avatar,
         createdBy: "u4",
         createdOn: "24 Jul 2026",
+        timeLabel: "09:40 am",
         unreadCount: 0,
         muted: false,
         pinned: false,
@@ -281,10 +286,11 @@ export const CHATS: Chat[] = [
     {
         id: "c7",
         type: "personal",
-        name: "Samreen Shaikh",
+        name: "Hazel Desai",
         avatar: USERS.u7.avatar,
         createdBy: "u7",
         createdOn: "24 Jul 2026",
+        timeLabel: "09:40 am",
         unreadCount: 0,
         muted: false,
         pinned: false,
@@ -293,10 +299,11 @@ export const CHATS: Chat[] = [
     {
         id: "c8",
         type: "personal",
-        name: "Naveen Saini",
+        name: "Harsh Rawal",
         avatar: USERS.u10.avatar,
         createdBy: "u10",
         createdOn: "24 Jul 2026",
+        timeLabel: "09:40 am",
         unreadCount: 0,
         muted: false,
         pinned: false,
@@ -305,26 +312,28 @@ export const CHATS: Chat[] = [
     {
         id: "c9",
         type: "personal",
-        name: "CA Amit Saini",
-        avatar: USERS.u6.avatar,
-        createdBy: "u6",
-        createdOn: "24 Jul 2026",
-        unreadCount: 0,
-        muted: false,
-        pinned: false,
-        members: [J("u6", "member"), J("me", "member")],
-    },
-    {
-        id: "c10",
-        type: "personal",
-        name: "Siddhi",
+        name: "Aniket Pandit",
         avatar: USERS.u13.avatar,
         createdBy: "u13",
         createdOn: "24 Jul 2026",
+        timeLabel: "09:40 am",
         unreadCount: 0,
         muted: false,
         pinned: false,
         members: [J("u13", "member"), J("me", "member")],
+    },
+    {
+        id: "c10",
+        type: "personal",
+        name: "Kirti Prajapati",
+        avatar: USERS.u14.avatar,
+        createdBy: "u14",
+        createdOn: "24 Jul 2026",
+        timeLabel: "09:40 am",
+        unreadCount: 4,
+        muted: false,
+        pinned: false,
+        members: [J("u14", "member"), J("me", "member")],
     },
 ];
 
@@ -332,11 +341,6 @@ const readers = (ids: string[], at: string) => ids.map((userId) => ({ userId, at
 
 export const MESSAGES: MessageMap = {
     c1: [
-        {
-            id: "c1m1", chatId: "c1", senderId: "u5", dayKey: "Yesterday", time: "09:40 am",
-            status: "read", system: true,
-            html: "<p>You were added to <strong>CCN Community</strong> by Ashish Sir</p>",
-        },
         {
             id: "c1m2", chatId: "c1", senderId: "u5", dayKey: "Yesterday", time: "09:41 am", status: "read",
             html: "<p><strong>Welcome to the CCN Community.</strong></p><p>Use this space to stay updated on:</p><ul><li>Placement drives &amp; interview calls</li><li>Free workshops and CTF events</li><li>Security advisories from the lab team</li></ul>",
@@ -358,6 +362,11 @@ export const MESSAGES: MessageMap = {
             attachments: [
                 { id: "a2", kind: "image", name: "lab-maintenance.png", url: "https://picsum.photos/seed/lab1/640/420" },
             ],
+        },
+        {
+            id: "c1m1", chatId: "c1", senderId: "u5", dayKey: "Today", time: "09:40 am",
+            status: "read", system: true,
+            html: "<p>You have been added to this community</p>",
         },
     ],
     c2: [
@@ -402,6 +411,16 @@ export const MESSAGES: MessageMap = {
             readBy: readers(["u8"], "Today 10:25 am"),
             starred: true,
         },
+        {
+            id: "c2m7", chatId: "c2", senderId: "u1", dayKey: "Today", time: "10:30 am", status: "read",
+            html: "",
+            attachments: [{ id: "a7", kind: "audio", name: "voice-note.ogg", url: "#", duration: 34 }],
+        },
+        {
+            id: "c2m8", chatId: "c2", senderId: "u1", dayKey: "Today", time: "09:40 am",
+            status: "read", system: true,
+            html: "<p>You have been added to this group</p>",
+        },
     ],
     c3: [
         {
@@ -425,78 +444,70 @@ export const MESSAGES: MessageMap = {
             html: "<p>Received and verified. Thank you.</p>",
             reactions: [{ emoji: "✅", userIds: ["me"] }],
         },
+        {
+            id: "c3m5", chatId: "c3", senderId: "u6", dayKey: "Today", time: "09:40 am",
+            status: "read", system: true,
+            html: "<p>You have been added to this group</p>",
+        },
     ],
     c4: [
         {
-            id: "c4m1", chatId: "c4", senderId: "u1", dayKey: "Yesterday", time: "03:55 pm", status: "read",
-            html: "<p>Connecting Cyber Networks offers <strong>Ethical Hacking, CCNP Security, CCIE Security, Checkpoint CCSA/CCSE, PALO ALTO PCNSA, Bug Bounty, Penetration Testing</strong> and <strong>Cyber Forensics</strong>.</p><blockquote><p>A career in cyber security offers high salary growth, fast advancement and continuous learning.</p></blockquote>",
+            id: "c4m1", chatId: "c4", senderId: "u1", dayKey: "24th July, 2026", time: "3:55 pm", status: "read",
+            html: "<p>Connecting Cyber Networks offers various Cyber Security courses, including Ethical Hacking, CCNP Security, CCIE Security, Checkpoint CCSA/CCSE, PALO ALTO PCNSA, Bug Bounty, Penetration Testing, and Cyber Forensic. A career in cybersecurity offers significant scope and possibilities, including high salary growth potential, career advancement opportunities, and regular industry updates.</p>",
         },
         {
-            id: "c4m2", chatId: "c4", senderId: "me", dayKey: "Yesterday", time: "04:00 pm", status: "read",
-            html: "<p>Thank you ma'am. Which track would you suggest after CCNA?</p>",
-            readBy: readers(["u1"], "Yesterday 04:01 pm"),
+            id: "c4m2", chatId: "c4", senderId: "me", dayKey: "24th July, 2026", time: "4:00 pm", status: "read",
+            html: "<p>Connecting Cyber Networks offers various Cyber Security courses, including Ethical Hacking, CCNP Security, CCIE Security, Checkpoint CCSA/CCSE, PALO ALTO PCNSA, Bug Bounty, Penetration Testing, and Cyber Forensic. A career in cybersecurity offers significant scope and possibilities, including high salary growth potential, career advancement opportunities, and regular industry updates.</p>",
+            readBy: readers(["u1"], "24th July, 2026 4:01 pm"),
         },
         {
-            id: "c4m3", chatId: "c4", senderId: "u1", dayKey: "Yesterday", time: "04:04 pm", status: "read",
-            html: "<p>Go for <em>CCNP Security</em>, then Checkpoint. Full roadmap here:</p><p><a href=\"https://www.connectingcybernetworks.com/\" target=\"_blank\" rel=\"noopener noreferrer nofollow\">https://www.connectingcybernetworks.com/</a></p>",
-            reactions: [{ emoji: "❤️", userIds: ["me"] }],
+            id: "c4m3", chatId: "c4", senderId: "me", dayKey: "24th July, 2026", time: "4:00 pm", status: "read",
+            html: "<p><a href=\"https://www.connectingcybernetworks.com/\" target=\"_blank\" rel=\"noopener noreferrer nofollow\">https://www.connectingcybernetworks.com/</a></p>",
+            readBy: readers(["u1"], "24th July, 2026 4:01 pm"),
         },
         {
-            id: "c4m4", chatId: "c4", senderId: "u1", dayKey: "Today", time: "11:15 am", status: "read",
-            html: "",
-            attachments: [{ id: "a7", kind: "audio", name: "voice-note.ogg", url: "#", duration: 34 }],
+            id: "c4m4", chatId: "c4", senderId: "u1", dayKey: "Today", time: "09:40 am", status: "read",
+            html: "<p>Okay</p>",
         },
         {
-            id: "c4m5", chatId: "c4", senderId: "me", dayKey: "Today", time: "11:20 am", status: "read",
-            html: "<p>Understood, I'll prepare the notes tonight.</p>",
-            replyTo: { messageId: "c4m4", senderId: "u1", preview: "Voice message", kind: "audio" },
-            readBy: readers(["u1"], "Today 11:21 am"),
-        },
-        {
-            id: "c4m6", chatId: "c4", senderId: "u1", dayKey: "Today", time: "11:34 am", status: "read",
-            html: "<p>Here are the lab shots from yesterday's session.</p>",
-            attachments: [
-                { id: "a8", kind: "image", name: "lab-a.jpg", url: "https://picsum.photos/seed/ccn1/600/420" },
-                { id: "a9", kind: "image", name: "lab-b.jpg", url: "https://picsum.photos/seed/ccn2/600/420" },
-                { id: "a10", kind: "image", name: "lab-c.jpg", url: "https://picsum.photos/seed/ccn3/600/420" },
-                { id: "a11", kind: "image", name: "lab-d.jpg", url: "https://picsum.photos/seed/ccn4/600/420" },
-            ],
-            reactions: [{ emoji: "👏", userIds: ["me"] }],
+            id: "c4m5", chatId: "c4", senderId: "u1", dayKey: "Today", time: "09:40 am", status: "read",
+            html: "<p>Let me check and get back to you</p>",
         },
     ],
-    c5: [
-        {
-            id: "c5m1", chatId: "c5", senderId: "u8", dayKey: "Today", time: "09:40 am", status: "delivered",
-            html: "<p>Bro, did you complete the subnetting worksheet?</p>",
-        },
-    ],
-    c6: [
-        {
-            id: "c6m1", chatId: "c6", senderId: "u4", dayKey: "Today", time: "08:10 am", status: "read",
-            html: "<p>Your counselling session is confirmed for Friday 4 pm.</p>",
-        },
-        {
-            id: "c6m2", chatId: "c6", senderId: "me", dayKey: "Today", time: "08:12 am", status: "read",
-            html: "<p>Noted, thank you.</p>",
-            readBy: readers(["u4"], "Today 08:13 am"),
-        },
-    ],
+    c5: [],
+    c6: [],
     c7: [],
     c8: [],
     c9: [],
-    c10: [],
+    c10: [
+        {
+            id: "c10m1", chatId: "c10", senderId: "u14", dayKey: "Today", time: "09:40 am", status: "read",
+            html: "<p>You can see in Community for the news</p>",
+        },
+    ],
 };
-
 /** Media shown in the info panel gallery, per chat. */
 export const CHAT_MEDIA: Record<string, string[]> = {
     c1: ["https://picsum.photos/seed/lab1/200/200"],
     c2: ["https://picsum.photos/seed/err1/200/200", "https://picsum.photos/seed/err2/200/200"],
-    c4: [
-        "https://picsum.photos/seed/ccn1/200/200",
-        "https://picsum.photos/seed/ccn2/200/200",
-        "https://picsum.photos/seed/ccn3/200/200",
-        "https://picsum.photos/seed/ccn4/200/200",
-        "https://picsum.photos/seed/ccn5/200/200",
-        "https://picsum.photos/seed/ccn6/200/200",
-    ],
+    c4: Array.from({ length: 5 }, () => "/chats/media-thumb.png"),
+};
+
+/** Documents shared in a chat but older than the loaded history. */
+export const CHAT_DOCS: Record<string, Attachment[]> = {
+    c4: Array.from({ length: 3 }, (_, i) => ({
+        id: `doc-c4-${i}`,
+        kind: "file" as const,
+        name: "CCNA.pdf",
+        url: "#",
+        size: "28kb",
+        ext: "PDF",
+        pages: 2,
+        preview: "/chats/doc-preview.png",
+    })),
+};
+
+/** Links shared in a chat but older than the loaded history. */
+export const CHAT_LINKS: Record<string, string[]> = {
+    c4: ["https://www.connectingcybernetworks.com/"],
 };

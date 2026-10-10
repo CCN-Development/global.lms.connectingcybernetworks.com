@@ -2,23 +2,25 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Box, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import { MdChat } from "react-icons/md";
 import toast from "react-hot-toast";
 
-import { C } from "@/components/chats/theme";
-import { CHAT_MEDIA, CHATS, MESSAGES, USERS } from "@/components/chats/data";
+import StudentLayout from "@/layouts/StudentLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { C, t } from "@/components/chats/theme";
+import { CHAT_DOCS, CHAT_LINKS, CHAT_MEDIA, CHATS, MESSAGES, USERS } from "@/components/chats/data";
 import type { Attachment, Chat, MediaItem, Message, MessageMap } from "@/components/chats/types";
 import {
-    attachmentKind, clockTime, fileExt, formatBytes, isAdmin, isHtmlEmpty, stripHtml, uid,
+    attachmentKind, clockTime, escapeHtml, fileExt, formatBytes, isAdmin, isHtmlEmpty, stripHtml, uid,
 } from "@/components/chats/helpers";
 import ChatListPanel from "@/components/chats/ChatListPanel";
 import ChatWindow from "@/components/chats/ChatWindow";
-import InfoPanel from "@/components/chats/InfoPanel";
+import InfoPanel, { type DeletePayload, type ForwardPayload } from "@/components/chats/InfoPanel";
 import type { BubbleActions } from "@/components/chats/MessageBubble";
 import {
-    AddMembersDialog, DocumentPreviewDialog, ForwardDialog, MediaLightbox,
+    AddMembersDialog, ConfirmDialog, DocumentPreviewDialog, ForwardDialog, MediaLightbox,
     MessageInfoDialog, NewChatDialog, StarredDialog,
 } from "@/components/chats/ChatDialogs";
 import InAppNotifications, { type ChatToast } from "@/components/chats/InAppNotifications";
@@ -42,6 +44,7 @@ export default function ChatsPage() {
     const [unreadAnchorId, setUnreadAnchorId] = useState<string | null>(null);
 
     const [replyTo, setReplyTo] = useState<Message | null>(null);
+    const [editMessage, setEditMessage] = useState<Message | null>(null);
     const [pending, setPending] = useState<Attachment[]>([]);
 
     const [lightbox, setLightbox] = useState<{ items: MediaItem[]; index: number }>({ items: [], index: -1 });
@@ -52,11 +55,16 @@ export default function ChatsPage() {
     const [addMembersChat, setAddMembersChat] = useState<Chat | null>(null);
     const [starredOpen, setStarredOpen] = useState(false);
     const [callTarget, setCallTarget] = useState<CallTarget | null>(null);
+    const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
 
     const [permission, setPermission] = useState<PermissionState>("default");
     const [soundOn, setSoundOn] = useState(true);
     const [liveOn, setLiveOn] = useState(true);
     const [toasts, setToasts] = useState<ChatToast[]>([]);
+
+    const { user } = useAuth();
+    /* Students get the LMS rail from the design; other roles keep their own navigation. */
+    const showRail = !user || user.role === "Student";
 
     const objectUrls = useRef<string[]>([]);
     const activeChatIdRef = useRef<string | null>(activeChatId);
@@ -76,7 +84,14 @@ export default function ChatsPage() {
         () => (activeChatId ? messages[activeChatId] ?? [] : []),
         [messages, activeChatId],
     );
-    const canSend = activeChat ? !activeChat.announcementOnly || isAdmin(activeChat, "me") : false;
+    const lockReason: "announcement" | "blocked" | null = !activeChat
+        ? null
+        : activeChat.blocked
+            ? "blocked"
+            : activeChat.announcementOnly && !isAdmin(activeChat, "me")
+                ? "announcement"
+                : null;
+    const canSend = Boolean(activeChat) && lockReason === null;
     const unreadTotal = chats.reduce((n, c) => n + c.unreadCount, 0);
 
     /* Mirror the unread count in the browser tab. */
@@ -90,6 +105,7 @@ export default function ChatsPage() {
         setActiveChatId(chatId);
         setShowSidebar(false);
         setReplyTo(null);
+        setEditMessage(null);
         setPending([]);
         setChats((prev) => {
             const chat = prev.find((c) => c.id === chatId);
@@ -201,9 +217,26 @@ export default function ChatsPage() {
         setPending((p) => p.filter((a) => a.id !== id));
     }, []);
 
+    /* ── messages ───────────────────────────────────────────────── */
+    const patchMessage = useCallback((chatId: string, messageId: string, patch: (m: Message) => Message) => {
+        setMessages((prev) => ({
+            ...prev,
+            [chatId]: (prev[chatId] ?? []).map((m) => (m.id === messageId ? patch(m) : m)),
+        }));
+    }, []);
+
     /* ── sending ────────────────────────────────────────────────── */
     const handleSend = useCallback((html: string) => {
         if (!activeChat) return;
+
+        if (editMessage) {
+            if (!isHtmlEmpty(html)) {
+                patchMessage(editMessage.chatId, editMessage.id, (m) => ({ ...m, html, edited: true }));
+            }
+            setEditMessage(null);
+            return;
+        }
+
         if (isHtmlEmpty(html) && pending.length === 0) return;
 
         const chatId = activeChat.id;
@@ -253,16 +286,9 @@ export default function ChatsPage() {
             }),
             2600,
         );
-    }, [activeChat, pending, replyTo]);
+    }, [activeChat, pending, replyTo, editMessage, patchMessage]);
 
     /* ── message actions ────────────────────────────────────────── */
-    const patchMessage = useCallback((chatId: string, messageId: string, patch: (m: Message) => Message) => {
-        setMessages((prev) => ({
-            ...prev,
-            [chatId]: (prev[chatId] ?? []).map((m) => (m.id === messageId ? patch(m) : m)),
-        }));
-    }, []);
-
     const actions: BubbleActions = useMemo(() => ({
         onReact: (messageId, emoji) => {
             if (!activeChatId) return;
@@ -279,7 +305,9 @@ export default function ChatsPage() {
                 return { ...m, reactions };
             });
         },
-        onReply: (message) => setReplyTo(message),
+        onReply: (message) => { setEditMessage(null); setReplyTo(message); },
+        onEdit: (message) => { setReplyTo(null); setEditMessage(message); },
+        onReport: () => toast.success("Message reported. Our team will review it."),
         onForward: (message) => setForwardMessage(message),
         onStar: (messageId) => {
             if (!activeChatId) return;
@@ -371,6 +399,7 @@ export default function ChatsPage() {
                 { userId: "me", role: type === "personal" ? "member" : "owner", joinedOn: "Today" },
                 ...memberIds.map((userId) => ({ userId, role: "member" as const, joinedOn: "Today" })),
             ],
+            timeLabel: clockTime(),
             unreadCount: 0,
             muted: false,
             pinned: false,
@@ -423,6 +452,81 @@ export default function ChatsPage() {
     };
 
     const toggleMute = (id: string) => patchChat(id, (c) => ({ ...c, muted: !c.muted }));
+
+    const closeConversation = () => {
+        setActiveChatId(null);
+        setInfoOpen(false);
+        setShowSidebar(true);
+    };
+
+    const handleToggleRead = (id: string) => patchChat(id, (c) => ({ ...c, unreadCount: c.unreadCount > 0 ? 0 : 1 }));
+
+    const handleMarkAllRead = () => {
+        setChats((prev) => prev.map((c) => ({ ...c, unreadCount: 0 })));
+        setUnreadAnchorId(null);
+        toast.success("All chats marked as read");
+    };
+
+    const handleToggleArchive = (id: string) => {
+        const chat = chats.find((c) => c.id === id);
+        if (!chat) return;
+        patchChat(id, (c) => ({ ...c, archived: !c.archived }));
+        toast.success(chat.archived ? "Chat unarchived" : "Chat archived");
+        if (!chat.archived && activeChatId === id) closeConversation();
+    };
+
+    const handleToggleBlock = (id: string) => {
+        const chat = chats.find((c) => c.id === id);
+        if (!chat) return;
+        patchChat(id, (c) => ({ ...c, blocked: !c.blocked }));
+        toast.success(chat.blocked ? `${chat.name} unblocked` : `${chat.name} blocked`);
+    };
+
+    const handleReportChat = () => toast.success("Report submitted. Our team will review this conversation.");
+
+    const confirmDeleteChat = () => {
+        if (!deleteChatId) return;
+        const id = deleteChatId;
+        setChats((prev) => prev.filter((c) => c.id !== id));
+        setMessages((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        if (activeChatId === id) closeConversation();
+        setDeleteChatId(null);
+        toast.success("Chat deleted");
+    };
+
+    /* ── shared media actions (contact info) ────────────────────── */
+    const handleStarItems = (messageIds: string[]) => {
+        if (!activeChatId) return;
+        messageIds.forEach((id) => patchMessage(activeChatId, id, (m) => ({ ...m, starred: true })));
+        toast.success(`Starred ${messageIds.length} message${messageIds.length > 1 ? "s" : ""}`);
+    };
+
+    const handleDeleteItems = ({ messageIds, mediaUrls }: DeletePayload) => {
+        if (!activeChatId) return;
+        messageIds.forEach((id) => actions.onDelete(id));
+        if (mediaUrls.length > 0) {
+            setMedia((prev) => ({ ...prev, [activeChatId]: (prev[activeChatId] ?? []).filter((url) => !mediaUrls.includes(url)) }));
+        }
+        toast.success("Deleted from this chat");
+    };
+
+    const handleForwardItems = ({ text, attachments }: ForwardPayload) => {
+        if (!activeChat) return;
+        setForwardMessage({
+            id: uid("m"),
+            chatId: activeChat.id,
+            senderId: "me",
+            html: text ? text.split("\n").map((line) => `<p>${escapeHtml(line)}</p>`).join("") : "",
+            time: clockTime(),
+            dayKey: "Today",
+            status: "sent",
+            attachments,
+        });
+    };
 
     /* ── calls & meetings ───────────────────────────────────────── */
     const appendSystemMessage = (chatId: string, html: string) => {
@@ -485,23 +589,22 @@ export default function ChatsPage() {
     };
 
     return (
-        <Box sx={{ height: "100vh", p: { xs: 0, md: 0.5}, overflow: "hidden" }}>
-            <Box
-                sx={{
-                    display: "flex", height: "100%", overflow: "hidden",
-                    borderRadius: { xs: 0, md: "14px" },
-                    border: `1px solid ${C.border}`,
-                    boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
-                }}
-            >
+        <StudentLayout
+            fullBleed
+            lockCollapsed
+            hideSidebar={!showRail}
+            headerMobileOnly
+            header={<Box sx={t("poppins", 20, 30, 500, C.text)}>Chats</Box>}
+        >
+            <Box sx={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
                 {/* Chat list */}
                 <Box
                     sx={{
-                        width: { xs: showSidebar ? "100%" : 0, md: 296 },
-                        minWidth: { xs: showSidebar ? "100%" : 0, md: 296 },
+                        width: { xs: showSidebar ? "100%" : 0, md: 380 },
+                        minWidth: { xs: showSidebar ? "100%" : 0, md: 380 },
                         display: { xs: showSidebar ? "flex" : "none", md: "flex" },
                         flexDirection: "column",
-                        borderRight: `1px solid ${C.border}`,
+                        borderRight: { md: `1px solid ${C.border}` },
                         overflow: "hidden",
                     }}
                 >
@@ -513,8 +616,13 @@ export default function ChatsPage() {
                         onSelect={handleSelect}
                         onTogglePin={(id) => patchChat(id, (c) => ({ ...c, pinned: !c.pinned }))}
                         onToggleMute={toggleMute}
-                        onMarkUnread={(id) => patchChat(id, (c) => ({ ...c, unreadCount: Math.max(1, c.unreadCount) }))}
-                        onDeleteChat={handleClearChat}
+                        onToggleRead={handleToggleRead}
+                        onToggleArchive={handleToggleArchive}
+                        onToggleBlock={handleToggleBlock}
+                        onReport={handleReportChat}
+                        onDeleteChat={setDeleteChatId}
+                        onMarkAllRead={handleMarkAllRead}
+                        onOpenProfile={() => router.push("/dashboard/chats/profile")}
                         onNewChat={(type) => setNewChatType(type)}
                         onOpenStarred={() => setStarredOpen(true)}
                         permission={permission}
@@ -534,17 +642,21 @@ export default function ChatsPage() {
                             users={USERS}
                             messages={activeMessages}
                             canSend={canSend}
+                            lockReason={lockReason}
                             infoOpen={infoOpen}
                             unreadAnchorId={unreadAnchorId}
                             replyTo={replyTo}
+                            editing={editMessage}
                             attachments={pending}
                             actions={actions}
                             onBack={() => setShowSidebar(true)}
                             onToggleInfo={() => setInfoOpen((v) => !v)}
                             onToggleMute={toggleMute}
-                            onDeleteChat={handleClearChat}
+                            onClearChat={handleClearChat}
                             onOpenStarred={() => setStarredOpen(true)}
                             onCancelReply={() => setReplyTo(null)}
+                            onCancelEdit={() => setEditMessage(null)}
+                            onUnblock={handleToggleBlock}
                             onAddFiles={handleAddFiles}
                             onAddVoiceNote={handleAddVoiceNote}
                             onRemoveAttachment={handleRemoveAttachment}
@@ -557,14 +669,12 @@ export default function ChatsPage() {
                     <Box
                         sx={{
                             flex: 1, display: { xs: showSidebar ? "none" : "flex", md: "flex" },
-                            flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                            flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px",
                         }}
                     >
-                        <MdChat size={44} color={C.textMuted} />
-                        <Typography sx={{ fontSize: "0.85rem", color: C.text, fontWeight: 600 }}>CCN Chat</Typography>
-                        <Typography sx={{ fontSize: "0.74rem", color: C.textMuted }}>
-                            Select a conversation to start messaging
-                        </Typography>
+                        <MdChat size={44} color={C.textFaint} />
+                        <Box sx={t("poppins", 20, 30, 500, C.text)}>CCN Chat</Box>
+                        <Box sx={t("lato", 14, 21, 500, C.textMuted)}>Select a conversation to start messaging</Box>
                     </Box>
                 )}
 
@@ -574,25 +684,30 @@ export default function ChatsPage() {
                         <motion.div
                             key={`info-${activeChat.id}`}
                             initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 296, opacity: 1 }}
+                            animate={{ width: 328, opacity: 1 }}
                             exit={{ width: 0, opacity: 0 }}
                             transition={{ duration: 0.22, ease: "easeInOut" }}
                             style={{ overflow: "hidden", flexShrink: 0 }}
                         >
-                            <Box sx={{ width: 296, height: "100%" }}>
+                            <Box sx={{ width: 328, height: "100%" }}>
                                 <InfoPanel
                                     chat={activeChat}
                                     chats={chats}
                                     users={USERS}
                                     messages={activeMessages}
                                     media={media[activeChat.id] ?? []}
+                                    sharedDocs={CHAT_DOCS[activeChat.id] ?? []}
+                                    sharedLinks={CHAT_LINKS[activeChat.id] ?? []}
                                     onClose={() => setInfoOpen(false)}
                                     onToggleMute={toggleMute}
                                     onToggleFavorite={(id) => patchChat(id, (c) => ({ ...c, favorite: !c.favorite }))}
-                                    onDeleteChat={handleClearChat}
+                                    onToggleBlock={handleToggleBlock}
+                                    onReport={handleReportChat}
+                                    onDeleteChat={setDeleteChatId}
                                     onOpenChat={handleSelect}
                                     onOpenMedia={(items, index) => setLightbox({ items, index })}
                                     onOpenDocument={(att) => setPreviewDoc(att)}
+                                    onOpenStarred={() => setStarredOpen(true)}
                                     onPromoteMember={(chatId, userId) =>
                                         patchChat(chatId, (c) => ({
                                             ...c,
@@ -609,6 +724,9 @@ export default function ChatsPage() {
                                     onExitChat={handleExitChat}
                                     onStartCall={handleStartCall}
                                     onStartMeeting={handleStartMeeting}
+                                    onForwardItems={handleForwardItems}
+                                    onStarItems={handleStarItems}
+                                    onDeleteItems={handleDeleteItems}
                                 />
                             </Box>
                         </motion.div>
@@ -664,6 +782,14 @@ export default function ChatsPage() {
                 onClose={() => setStarredOpen(false)}
                 onJump={handleJumpToStarred}
             />
-        </Box>
+            <ConfirmDialog
+                open={Boolean(deleteChatId)}
+                title="Delete this chat?"
+                message="The conversation and its messages will be removed from your chat list."
+                confirmLabel="Delete"
+                onClose={() => setDeleteChatId(null)}
+                onConfirm={confirmDeleteChat}
+            />
+        </StudentLayout>
     );
 }

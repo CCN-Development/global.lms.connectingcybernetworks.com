@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, Tooltip } from "@mui/material";
 import { motion } from "framer-motion";
-import {
-    MdInsertDriveFile, MdDownload, MdPlayArrow, MdPause, MdPlayCircleFilled,
-} from "react-icons/md";
-import { C } from "./theme";
+import { MdInsertDriveFile, MdPause, MdPlayArrow, MdPlayCircleFilled } from "react-icons/md";
+import { C, t } from "./theme";
 import type { Attachment, MediaItem } from "./types";
-import { canPreviewInline, fileAccent, formatDuration } from "./helpers";
+import { fileAccent, formatDuration } from "./helpers";
+import ChatIcon from "./ChatIcon";
 
 /** Deterministic pseudo-waveform so SSR and client render the same bars. */
 function waveform(seed: string, bars = 34) {
@@ -73,10 +72,10 @@ function AudioBubble({ att, mine }: { att: Attachment; mine: boolean }) {
     };
 
     const activeColor = mine ? "#ffffff" : C.accentSoft;
-    const idleColor = mine ? "#a5b4fc" : "#3c4667";
+    const idleColor = "rgba(255,255,255,0.28)";
 
     return (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 210 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 240 }}>
             {playable && (
                 <audio
                     ref={audioRef}
@@ -93,101 +92,109 @@ function AudioBubble({ att, mine }: { att: Attachment; mine: boolean }) {
                 />
             )}
 
-            <IconButton
-                size="small"
+            <Box
+                component="button"
+                type="button"
+                aria-label={playing ? "Pause voice message" : "Play voice message"}
                 onClick={toggle}
                 sx={{
-                    width: 30, height: 30, background: mine ? "#ffffff" : C.accent,
-                    color: mine ? C.accentDark : "#ffffff",
-                    "&:hover": { background: mine ? "#e0e7ff" : C.accentDark },
+                    width: 36, height: 36, flexShrink: 0, borderRadius: "50%", border: "none", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: mine ? "#ffffff" : C.accentGrad, color: mine ? "#001B79" : "#ffffff",
+                    filter: "drop-shadow(0 0 4px rgba(255,255,255,0.12))",
+                    "&:hover": { filter: "brightness(1.1) drop-shadow(0 0 4px rgba(255,255,255,0.12))" },
                 }}
             >
-                {playing ? <MdPause size={17} /> : <MdPlayArrow size={17} />}
-            </IconButton>
+                {playing ? <MdPause size={20} /> : <MdPlayArrow size={20} />}
+            </Box>
 
             <Box
                 onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     seek((e.clientX - rect.left) / rect.width);
                 }}
-                sx={{ display: "flex", alignItems: "center", gap: "2px", height: 26, flex: 1, cursor: playable ? "pointer" : "default" }}
+                sx={{ display: "flex", alignItems: "center", gap: "2px", height: 28, flex: 1, cursor: playable ? "pointer" : "default" }}
             >
                 {bars.map((h, i) => (
                     <Box
                         key={i}
                         sx={{
-                            width: 2,
-                            height: `${h}%`,
-                            borderRadius: "2px",
-                            background: i / bars.length <= progress ? activeColor : idleColor,
-                            transition: "background 0.15s",
+                            width: 2, height: `${h}%`, borderRadius: "2px",
+                            background: i / bars.length <= progress ? activeColor : idleColor, transition: "background 0.15s",
                         }}
                     />
                 ))}
             </Box>
 
-            <Typography sx={{ fontSize: "0.62rem", color: mine ? "#dbeafe" : C.textSoft, minWidth: 30 }}>
+            <Box sx={{ ...t("lato", 12, 18, 500, C.textMuted), minWidth: 32 }}>
                 {formatDuration(playing || elapsed > 0 ? elapsed : total)}
-            </Typography>
+            </Box>
         </Box>
     );
 }
 
-function FileCard({ att, mine, onOpen }: { att: Attachment; mine: boolean; onOpen: (att: Attachment) => void }) {
+/** Document card: optional page preview on top, name + meta + download underneath (Figma "Docs" cards). */
+export function DocCard({
+    att, onOpen, onDownload, minWidth = 240,
+}: { att: Attachment; onOpen?: (att: Attachment) => void; onDownload?: () => void; minWidth?: number }) {
     const downloadable = Boolean(att.url) && att.url !== "#";
-    const accent = fileAccent(att.ext);
+    const meta = [att.pages ? `${att.pages} ${att.pages === 1 ? "page" : "pages"}` : null, att.ext, att.size].filter(Boolean) as string[];
 
     return (
         <Box
-            onClick={() => onOpen(att)}
-            sx={{
-                display: "flex", alignItems: "center", gap: 1, cursor: "pointer",
-                background: mine ? "#3c31b8" : C.panelAlt,
-                border: `1px solid ${mine ? "#5b4fd6" : C.border}`,
-                borderRadius: "8px", p: 1, minWidth: 210,
-                "&:hover": { background: mine ? "#453ac9" : C.raised },
-                transition: "background 0.15s",
-            }}
+            onClick={() => onOpen?.(att)}
+            sx={{ display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "4px", cursor: onOpen ? "pointer" : "default", minWidth }}
         >
-            <Box
-                sx={{
-                    width: 32, height: 32, borderRadius: "6px", flexShrink: 0,
-                    background: accent, color: "#ffffff",
-                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                }}
-            >
-                <MdInsertDriveFile size={15} />
-                <Typography sx={{ fontSize: "0.42rem", fontWeight: 800, letterSpacing: "0.04em", mt: "-2px" }}>
-                    {(att.ext ?? "FILE").slice(0, 4)}
-                </Typography>
-            </Box>
-
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography sx={{ fontSize: "0.72rem", color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {att.name}
-                </Typography>
-                <Typography sx={{ fontSize: "0.62rem", color: mine ? "#c7d2fe" : C.textMuted }}>
-                    {[att.ext, att.size, canPreviewInline(att) ? "Tap to preview" : null].filter(Boolean).join(" · ")}
-                </Typography>
-            </Box>
-
-            <Tooltip title={downloadable ? "Download" : "Not available"} arrow>
-                <Box
-                    component="a"
-                    href={att.url}
-                    download={att.name}
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                    sx={{
-                        display: "flex", p: 0.4, borderRadius: "6px",
-                        color: mine ? "#e0e7ff" : C.textSoft,
-                        pointerEvents: downloadable ? "auto" : "none",
-                        opacity: downloadable ? 1 : 0.4,
-                        "&:hover": { background: mine ? "#2f2596" : C.border, color: C.text },
-                    }}
-                >
-                    <MdDownload size={15} />
+            {att.preview && (
+                <Box sx={{ height: 89, position: "relative", overflow: "hidden", background: "#fff" }}>
+                    <Box
+                        component="img"
+                        src={att.preview}
+                        alt=""
+                        sx={{ position: "absolute", left: "-0.36%", top: "-0.56%", width: "100.69%", height: "131.22%", maxWidth: "none", display: "block" }}
+                    />
                 </Box>
-            </Tooltip>
+            )}
+            <Box sx={{ display: "flex", alignItems: "center", gap: "6px", px: "8px", py: "6px", background: C.linkCard }}>
+                {!att.preview && (
+                    <Box
+                        sx={{
+                            width: 32, height: 32, borderRadius: "6px", flexShrink: 0, background: fileAccent(att.ext), color: "#fff",
+                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        }}
+                    >
+                        <MdInsertDriveFile size={15} />
+                        <Box component="span" sx={{ fontFamily: "var(--font-sans)", fontSize: "7px", fontWeight: 800, mt: "-2px" }}>
+                            {(att.ext ?? "FILE").slice(0, 4)}
+                        </Box>
+                    </Box>
+                )}
+                <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <Box sx={{ ...t("inter", 11, 16, 400, C.textBody), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {att.name}
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: "4px", ...t("inter", 10, 15, 400, C.textPlaceholder), whiteSpace: "nowrap" }}>
+                        {meta.map((part, i) => (
+                            <React.Fragment key={`${part}-${i}`}>
+                                {i > 0 && <Box component="span" sx={{ fontSize: "8px", lineHeight: "12px" }}>•</Box>}
+                                <span>{part}</span>
+                            </React.Fragment>
+                        ))}
+                    </Box>
+                </Box>
+                <Tooltip title={downloadable ? "Download" : "Not available"} arrow>
+                    <Box
+                        component="a"
+                        href={att.url}
+                        download={att.name}
+                        aria-label={`Download ${att.name}`}
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDownload?.(); }}
+                        sx={{ display: "flex", flexShrink: 0, pointerEvents: downloadable ? "auto" : "none", opacity: downloadable ? 1 : 0.4 }}
+                    >
+                        <ChatIcon name="download-24" size={24} color={C.textSoft} />
+                    </Box>
+                </Tooltip>
+            </Box>
         </Box>
     );
 }
@@ -207,16 +214,16 @@ export default function MessageAttachments({ attachments, mine, onOpenMedia, onO
     const hidden = visuals.length - shown.length;
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.6 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {shown.length > 0 && (
                 <Box
                     sx={{
                         display: "grid",
                         gridTemplateColumns: shown.length === 1 ? "1fr" : "1fr 1fr",
-                        gap: "3px",
+                        gap: "4px",
                         borderRadius: "8px",
                         overflow: "hidden",
-                        maxWidth: 280,
+                        maxWidth: 320,
                     }}
                 >
                     {shown.map((att, i) => (
@@ -236,26 +243,27 @@ export default function MessageAttachments({ attachments, mine, onOpenMedia, onO
                                 preload="metadata"
                                 sx={{
                                     width: "100%",
-                                    height: shown.length === 1 ? "auto" : 104,
-                                    maxHeight: shown.length === 1 ? 240 : undefined,
+                                    height: shown.length === 1 ? "auto" : 116,
+                                    maxHeight: shown.length === 1 ? 260 : undefined,
                                     objectFit: "cover",
                                     display: "block",
-                                    background: "#0b1020",
+                                    background: "rgba(3,6,12,0.44)",
                                 }}
                             />
                             {att.kind === "video" && (
                                 <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <MdPlayCircleFilled size={34} color="#ffffff" />
+                                    <MdPlayCircleFilled size={36} color="#ffffff" />
                                 </Box>
                             )}
                             {i === shown.length - 1 && hidden > 0 && (
                                 <Box
                                     sx={{
-                                        position: "absolute", inset: 0, background: "rgba(8,12,24,0.68)",
+                                        position: "absolute", inset: 0, background: "rgba(9,9,21,0.7)",
                                         display: "flex", alignItems: "center", justifyContent: "center",
+                                        ...t("lato", 20, 30, 700, "#ffffff"),
                                     }}
                                 >
-                                    <Typography sx={{ fontSize: "1rem", fontWeight: 700, color: "#ffffff" }}>+{hidden}</Typography>
+                                    +{hidden}
                                 </Box>
                             )}
                         </motion.div>
@@ -266,7 +274,7 @@ export default function MessageAttachments({ attachments, mine, onOpenMedia, onO
             {others.map((att) =>
                 att.kind === "audio"
                     ? <AudioBubble key={att.id} att={att} mine={mine} />
-                    : <FileCard key={att.id} att={att} mine={mine} onOpen={onOpenDocument} />,
+                    : <DocCard key={att.id} att={att} onOpen={onOpenDocument} />,
             )}
         </Box>
     );

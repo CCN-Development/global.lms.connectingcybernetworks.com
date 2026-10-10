@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Box, IconButton, InputBase, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
+import { Box, InputBase, Menu, MenuItem } from "@mui/material";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-    MdArrowBack, MdSearch, MdMoreVert, MdClose, MdPushPin, MdVideoCall, MdPhone,
-    MdKeyboardArrowDown, MdKeyboardArrowUp, MdInfoOutline, MdVolumeOff, MdVolumeUp,
-    MdDeleteOutline, MdStar, MdCampaign, MdCloudUpload, MdLock,
+    MdArrowBack, MdCampaign, MdClose, MdCloudUpload, MdInfoOutline, MdKeyboardArrowDown,
+    MdKeyboardArrowUp, MdLock, MdPushPin, MdVolumeOff,
 } from "react-icons/md";
-import { C, scrollbarSx } from "./theme";
+import { C, menuPaperSx, scrollbarSx, t } from "./theme";
 import type { Attachment, Chat, Message, User } from "./types";
-import { chatSubtitle, counterpartOf, stripHtml } from "./helpers";
+import { counterpartOf, stripHtml } from "./helpers";
 import ChatAvatar from "./ChatAvatar";
+import ChatIcon from "./ChatIcon";
 import MessageBubble, { type BubbleActions } from "./MessageBubble";
 import MessageComposer from "./MessageComposer";
 
@@ -20,17 +20,21 @@ type Props = {
     users: Record<string, User>;
     messages: Message[];
     canSend: boolean;
+    lockReason: "announcement" | "blocked" | null;
     infoOpen: boolean;
     unreadAnchorId: string | null;
     replyTo: Message | null;
+    editing: Message | null;
     attachments: Attachment[];
     actions: BubbleActions;
     onBack: () => void;
     onToggleInfo: () => void;
     onToggleMute: (chatId: string) => void;
-    onDeleteChat: (chatId: string) => void;
+    onClearChat: (chatId: string) => void;
     onOpenStarred: () => void;
     onCancelReply: () => void;
+    onCancelEdit: () => void;
+    onUnblock: (chatId: string) => void;
     onAddFiles: (files: FileList | File[]) => void;
     onAddVoiceNote: (seconds: number, url: string) => void;
     onRemoveAttachment: (id: string) => void;
@@ -41,32 +45,37 @@ type Props = {
 
 function TypingBubble({ name }: { name?: string }) {
     return (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, pl: 0.4, pb: 0.8 }}>
+        <Box sx={{ display: "flex", mt: "16px" }}>
             <Box
                 sx={{
-                    display: "flex", alignItems: "center", gap: 0.5, px: 1.2, py: 0.8,
-                    borderRadius: "3px 12px 12px 12px", background: C.bubbleIn, border: `1px solid ${C.border}`,
+                    display: "flex", alignItems: "center", gap: "6px", px: "20px", py: "14px",
+                    borderRadius: "0 12px 12px 12px", background: C.bubbleIn,
                 }}
             >
                 {[0, 1, 2].map((i) => (
                     <Box
                         key={i}
                         sx={{
-                            width: 5, height: 5, borderRadius: "50%", background: C.accentSoft,
+                            width: 6, height: 6, borderRadius: "50%", background: C.accentSoft,
                             animation: `chat-typing-dot 1.2s ${i * 0.15}s infinite ease-in-out`,
                         }}
                     />
                 ))}
-                {name && <Typography sx={{ fontSize: "0.64rem", color: C.textMuted, ml: 0.5 }}>{name} is typing</Typography>}
+                {name && <Box component="span" sx={{ ml: "6px", ...t("lato", 12, 18, 500, C.textMuted) }}>{name} is typing</Box>}
             </Box>
         </Box>
     );
 }
 
+const iconBtn = {
+    display: "flex", p: 0, border: "none", background: "transparent", cursor: "pointer", flexShrink: 0,
+    borderRadius: "8px",
+} as const;
+
 export default function ChatWindow({
-    chat, users, messages, canSend, infoOpen, unreadAnchorId, replyTo, attachments, actions,
-    onBack, onToggleInfo, onToggleMute, onDeleteChat, onOpenStarred,
-    onCancelReply, onAddFiles, onAddVoiceNote, onRemoveAttachment, onSend,
+    chat, users, messages, canSend, lockReason, infoOpen, unreadAnchorId, replyTo, editing, attachments, actions,
+    onBack, onToggleInfo, onToggleMute, onClearChat, onOpenStarred,
+    onCancelReply, onCancelEdit, onUnblock, onAddFiles, onAddVoiceNote, onRemoveAttachment, onSend,
     onStartCall, onStartMeeting,
 }: Props) {
     const [menuEl, setMenuEl] = useState<null | HTMLElement>(null);
@@ -125,13 +134,11 @@ export default function ChatWindow({
         if (e.dataTransfer.files?.length) onAddFiles(e.dataTransfer.files);
     };
 
+    const closeMenu = () => setMenuEl(null);
+
     return (
         <Box
-            sx={{
-                flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative",
-                backgroundImage: "radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)",
-                backgroundSize: "22px 22px",
-            }}
+            sx={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}
             onDragEnter={(e) => { e.preventDefault(); dragDepth.current += 1; if (e.dataTransfer.types.includes("Files")) setDragging(true); }}
             onDragOver={(e) => e.preventDefault()}
             onDragLeave={() => { dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false); } }}
@@ -140,74 +147,51 @@ export default function ChatWindow({
             {/* Header */}
             <Box
                 sx={{
-                    display: "flex", alignItems: "center", gap: 1, px: 1.4, py: 1,
-                    borderBottom: `1px solid ${C.border}`, background: C.panel, backdropFilter: "blur(14px)", zIndex: 5,
+                    flexShrink: 0, display: "flex", alignItems: "center", gap: "20px", p: "24px",
+                    background: C.headerGrad, borderBottom: `1px solid ${C.borderSoft}`, zIndex: 5,
                 }}
             >
-                <IconButton size="small" onClick={onBack} sx={{ display: { md: "none" }, color: C.textSoft }}>
-                    <MdArrowBack size={18} />
-                </IconButton>
+                <Box component="button" type="button" aria-label="Back to chats" onClick={onBack} sx={{ ...iconBtn, display: { md: "none" } }}>
+                    <MdArrowBack size={26} color={C.textSoft} />
+                </Box>
 
                 <Box
                     onClick={onToggleInfo}
-                    sx={{
-                        display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 0, cursor: "pointer",
-                        px: 0.5, py: 0.3, borderRadius: "8px", "&:hover": { background: C.hover },
-                    }}
+                    sx={{ display: "flex", alignItems: "center", gap: "20px", flex: 1, minWidth: 0, cursor: "pointer" }}
                 >
-                    <ChatAvatar name={chat.name} avatar={chat.avatar} type={chat.type} size={36} online={other?.isOnline} />
+                    <ChatAvatar name={chat.name} avatar={chat.avatar} type={chat.type} size={44} />
                     <Box sx={{ minWidth: 0 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                            <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <Box component="h1" sx={{ m: 0, ...t("poppins", 20, 30, 600, C.text), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                 {chat.name}
-                            </Typography>
-                            {chat.muted && <MdVolumeOff size={12} color={C.textMuted} />}
-                            {chat.announcementOnly && <MdCampaign size={13} color={C.star} />}
+                            </Box>
+                            {chat.muted && <MdVolumeOff size={16} color={C.textMuted} style={{ flexShrink: 0 }} />}
+                            {chat.announcementOnly && <MdCampaign size={18} color={C.star} style={{ flexShrink: 0 }} />}
                         </Box>
-                        <Typography
-                            sx={{
-                                fontSize: "0.65rem",
-                                color: typingUser ? C.online : other?.isOnline ? C.online : C.textMuted,
-                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: { xs: 160, sm: 320 },
-                            }}
-                        >
-                            {typingUser ? `${typingUser.name.split(" ")[0]} is typing…` : chatSubtitle(chat, users)}
-                        </Typography>
+                        {typingUser && (
+                            <Box sx={{ ...t("lato", 12, 14, 500, C.accentSoft), mt: "-4px", mb: "-4px" }}>
+                                {isGroup ? `${typingUser.name.split(" ")[0]} is typing…` : "typing…"}
+                            </Box>
+                        )}
                     </Box>
                 </Box>
 
-                <Tooltip title={chat.type === "personal" ? "Start CCN Meet video call" : "Start CCN Meet for this group"} arrow>
-                    <IconButton
-                        size="small"
-                        onClick={() => onStartMeeting(chat.id)}
-                        sx={{ color: C.textSoft, "&:hover": { color: C.text } }}
-                    >
-                        <MdVideoCall size={19} />
-                    </IconButton>
-                </Tooltip>
-                {chat.type === "personal" && (
-                    <Tooltip title="Voice call" arrow>
-                        <IconButton
-                            size="small"
-                            onClick={() => onStartCall(chat.id)}
-                            sx={{ color: C.textSoft, "&:hover": { color: C.text } }}
-                        >
-                            <MdPhone size={17} />
-                        </IconButton>
-                    </Tooltip>
-                )}
-                <Tooltip title="Search in chat" arrow>
-                    <IconButton
-                        size="small"
+                <Box sx={{ display: "flex", alignItems: "center", gap: "24px", flexShrink: 0 }}>
+                    <Box
+                        component="button" type="button" aria-label="Search in chat"
                         onClick={() => { setSearchOpen((v) => !v); setTerm(""); }}
-                        sx={{ color: searchOpen ? C.accentSoft : C.textSoft, "&:hover": { color: C.text } }}
+                        sx={iconBtn}
                     >
-                        <MdSearch size={18} />
-                    </IconButton>
-                </Tooltip>
-                <IconButton size="small" onClick={(e) => setMenuEl(e.currentTarget)} sx={{ color: C.textSoft, "&:hover": { color: C.text } }}>
-                    <MdMoreVert size={18} />
-                </IconButton>
+                        <ChatIcon name="search" size={28} color={searchOpen ? C.accentSoft : C.textSoft} />
+                    </Box>
+                    <Box
+                        component="button" type="button" aria-label="Chat options"
+                        onClick={(e: React.MouseEvent<HTMLElement>) => setMenuEl(e.currentTarget)}
+                        sx={iconBtn}
+                    >
+                        <ChatIcon name="more-vertical" size={28} />
+                    </Box>
+                </Box>
             </Box>
 
             {/* In-chat search */}
@@ -218,29 +202,41 @@ export default function ChatWindow({
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.16 }}
-                        style={{ overflow: "hidden", zIndex: 4 }}
+                        style={{ overflow: "hidden", zIndex: 4, flexShrink: 0 }}
                     >
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1.6, py: 0.8, background: C.panelAlt, borderBottom: `1px solid ${C.border}` }}>
-                            <MdSearch size={16} color={C.textMuted} />
-                            <InputBase
-                                autoFocus
-                                value={term}
-                                onChange={(e) => { setTerm(e.target.value); setHitIndex(0); }}
-                                placeholder="Search in this chat"
-                                sx={{ flex: 1, fontSize: "0.74rem", color: C.text }}
-                            />
-                            <Typography sx={{ fontSize: "0.65rem", color: C.textMuted }}>
-                                {hits.length > 0 ? `${Math.min(hitIndex + 1, hits.length)}/${hits.length}` : term ? "0/0" : ""}
-                            </Typography>
-                            <IconButton size="small" disabled={hits.length === 0} onClick={() => setHitIndex((i) => (i - 1 + hits.length) % hits.length)} sx={{ color: C.textSoft }}>
-                                <MdKeyboardArrowUp size={16} />
-                            </IconButton>
-                            <IconButton size="small" disabled={hits.length === 0} onClick={() => setHitIndex((i) => (i + 1) % hits.length)} sx={{ color: C.textSoft }}>
-                                <MdKeyboardArrowDown size={16} />
-                            </IconButton>
-                            <IconButton size="small" onClick={() => { setSearchOpen(false); setTerm(""); }} sx={{ color: C.textSoft }}>
-                                <MdClose size={15} />
-                            </IconButton>
+                        <Box sx={{ px: "32px", pt: "16px" }}>
+                            <Box
+                                sx={{
+                                    display: "flex", alignItems: "center", gap: "8px", height: 48, px: "16px",
+                                    borderRadius: "99px", border: `1px solid ${C.chipBorder}`, backdropFilter: "blur(2px)",
+                                    background: "linear-gradient(180deg, rgba(187,201,237,0.1) 0%, rgba(106,114,135,0.06) 100%)",
+                                }}
+                            >
+                                <ChatIcon name="search-24" size={24} />
+                                <InputBase
+                                    autoFocus
+                                    value={term}
+                                    onChange={(e) => { setTerm(e.target.value); setHitIndex(0); }}
+                                    placeholder="Search in this chat"
+                                    sx={{
+                                        flex: 1, ...t("inter", 16, 25, 400, C.text),
+                                        "& input": { p: 0, height: 25 },
+                                        "& input::placeholder": { color: C.textMuted, opacity: 1 },
+                                    }}
+                                />
+                                <Box component="span" sx={t("lato", 12, 18, 500, C.textMuted)}>
+                                    {hits.length > 0 ? `${Math.min(hitIndex + 1, hits.length)}/${hits.length}` : term ? "0/0" : ""}
+                                </Box>
+                                <Box component="button" type="button" aria-label="Previous match" disabled={hits.length === 0} onClick={() => setHitIndex((i) => (i - 1 + hits.length) % hits.length)} sx={{ ...iconBtn, opacity: hits.length === 0 ? 0.4 : 1 }}>
+                                    <MdKeyboardArrowUp size={22} color={C.textSoft} />
+                                </Box>
+                                <Box component="button" type="button" aria-label="Next match" disabled={hits.length === 0} onClick={() => setHitIndex((i) => (i + 1) % hits.length)} sx={{ ...iconBtn, opacity: hits.length === 0 ? 0.4 : 1 }}>
+                                    <MdKeyboardArrowDown size={22} color={C.textSoft} />
+                                </Box>
+                                <Box component="button" type="button" aria-label="Close search" onClick={() => { setSearchOpen(false); setTerm(""); }} sx={iconBtn}>
+                                    <MdClose size={20} color={C.textSoft} />
+                                </Box>
+                            </Box>
                         </Box>
                     </motion.div>
                 )}
@@ -251,19 +247,19 @@ export default function ChatWindow({
                 <Box
                     onClick={() => { scrollToMessage(pinned[pinIndex % pinned.length].id); setPinIndex((i) => i + 1); }}
                     sx={{
-                        display: "flex", alignItems: "center", gap: 1, px: 1.6, py: 0.7, cursor: "pointer",
-                        background: C.panelAlt, borderBottom: `1px solid ${C.border}`,
-                        borderLeft: `3px solid ${C.accent}`, "&:hover": { background: C.raised },
+                        flexShrink: 0, display: "flex", alignItems: "center", gap: "12px", px: "32px", py: "10px", cursor: "pointer",
+                        background: C.active, borderBottom: `1px solid ${C.borderSoft}`,
+                        "&:hover": { background: "rgba(147,169,226,0.18)" },
                     }}
                 >
-                    <MdPushPin size={14} color={C.accentSoft} />
+                    <MdPushPin size={16} color={C.accentSoft} />
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography sx={{ fontSize: "0.6rem", color: C.accentSoft, fontWeight: 700 }}>
+                        <Box sx={t("lato", 12, 18, 700, C.accentSoft)}>
                             Pinned message {pinned.length > 1 ? `${(pinIndex % pinned.length) + 1}/${pinned.length}` : ""}
-                        </Typography>
-                        <Typography sx={{ fontSize: "0.7rem", color: C.textSoft, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        </Box>
+                        <Box sx={{ ...t("lato", 12, 18, 500, C.textSoft), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {stripHtml(pinned[pinIndex % pinned.length].html) || "Attachment"}
-                        </Typography>
+                        </Box>
                     </Box>
                 </Box>
             )}
@@ -272,18 +268,10 @@ export default function ChatWindow({
             <Box
                 ref={scrollRef}
                 onScroll={handleScroll}
-                sx={{ flex: 1, overflowY: "auto", px: { xs: 1, md: 2.5 }, py: 1.5, ...scrollbarSx }}
+                sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: "16px", md: "32px" }, pt: "24px", pb: "24px", ...scrollbarSx }}
             >
-                {messages.length === 0 ? (
-                    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1 }}>
-                        <ChatAvatar name={chat.name} avatar={chat.avatar} type={chat.type} size={64} />
-                        <Typography sx={{ fontSize: "0.8rem", color: C.text, fontWeight: 600 }}>{chat.name}</Typography>
-                        <Typography sx={{ fontSize: "0.72rem", color: C.textMuted }}>
-                            No messages yet — say hello to start the conversation
-                        </Typography>
-                    </Box>
-                ) : (
-                    messages.map((msg, i) => {
+                <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {messages.map((msg, i) => {
                         const prev = messages[i - 1];
                         const newDay = !prev || prev.dayKey !== msg.dayKey;
                         const grouped = Boolean(prev) && prev.senderId === msg.senderId && !newDay && !prev.system && !msg.system;
@@ -291,19 +279,13 @@ export default function ChatWindow({
                         return (
                             <React.Fragment key={msg.id}>
                                 {newDay && (
-                                    <Box sx={{ display: "flex", justifyContent: "center", my: 1.2, position: "sticky", top: 0, zIndex: 2 }}>
-                                        <Box sx={{ px: 1.4, py: 0.3, borderRadius: "10px", background: C.chipBg, border: `1px solid ${C.border}` }}>
-                                            <Typography sx={{ fontSize: "0.62rem", color: C.textSoft, fontWeight: 600 }}>{msg.dayKey}</Typography>
-                                        </Box>
-                                    </Box>
+                                    <Box sx={{ textAlign: "center", ...t("lato", 12, 18, 500, C.textFaint) }}>{msg.dayKey}</Box>
                                 )}
 
                                 {unreadAnchorId === msg.id && (
-                                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, my: 1.2 }}>
+                                    <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                         <Box sx={{ flex: 1, height: "1px", background: C.accent }} />
-                                        <Typography sx={{ fontSize: "0.6rem", color: C.accentSoft, fontWeight: 700, letterSpacing: "0.06em" }}>
-                                            UNREAD MESSAGES
-                                        </Typography>
+                                        <Box sx={{ ...t("lato", 12, 18, 700, C.accentSoft), letterSpacing: "0.06em" }}>UNREAD MESSAGES</Box>
                                         <Box sx={{ flex: 1, height: "1px", background: C.accent }} />
                                     </Box>
                                 )}
@@ -321,10 +303,10 @@ export default function ChatWindow({
                                 />
                             </React.Fragment>
                         );
-                    })
-                )}
+                    })}
 
-                {typingUser && <TypingBubble name={isGroup ? typingUser.name.split(" ")[0] : undefined} />}
+                    {typingUser && <TypingBubble name={isGroup ? typingUser.name.split(" ")[0] : undefined} />}
+                </Box>
                 <div ref={bottomRef} />
             </Box>
 
@@ -335,17 +317,19 @@ export default function ChatWindow({
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.8 }}
-                        style={{ position: "absolute", right: 18, bottom: 92, zIndex: 6 }}
+                        style={{ position: "absolute", right: 32, bottom: 120, zIndex: 6 }}
                     >
-                        <IconButton
+                        <Box
+                            component="button" type="button" aria-label="Scroll to latest message"
                             onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
                             sx={{
-                                width: 34, height: 34, background: C.raised, color: C.text,
-                                border: `1px solid ${C.border}`, "&:hover": { background: C.accentDark },
+                                width: 40, height: 40, borderRadius: "50%", border: `1px solid ${C.border}`, cursor: "pointer",
+                                background: C.menuBg, backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center",
+                                "&:hover": { background: C.active },
                             }}
                         >
-                            <MdKeyboardArrowDown size={20} />
-                        </IconButton>
+                            <MdKeyboardArrowDown size={24} color={C.text} />
+                        </Box>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -355,9 +339,13 @@ export default function ChatWindow({
                 chat={chat}
                 users={users}
                 canSend={canSend}
+                lockReason={lockReason}
                 replyTo={replyTo}
+                editing={editing}
                 attachments={attachments}
                 onCancelReply={onCancelReply}
+                onCancelEdit={onCancelEdit}
+                onUnblock={() => onUnblock(chat.id)}
                 onAddFiles={onAddFiles}
                 onAddVoiceNote={onAddVoiceNote}
                 onRemoveAttachment={onRemoveAttachment}
@@ -373,26 +361,20 @@ export default function ChatWindow({
                         exit={{ opacity: 0 }}
                         style={{
                             position: "absolute", inset: 0, zIndex: 20,
-                            background: "rgba(8,12,24,0.88)", display: "flex",
+                            background: "rgba(9,9,21,0.86)", backdropFilter: "blur(4px)", display: "flex",
                             alignItems: "center", justifyContent: "center", pointerEvents: "none",
                         }}
                     >
                         <Box
                             sx={{
-                                display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
-                                px: 5, py: 4, borderRadius: "14px", border: `2px dashed ${canSend ? C.accent : C.danger}`,
-                                background: C.panelSolid,
+                                display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
+                                px: "40px", py: "32px", borderRadius: "16px",
+                                border: `2px dashed ${canSend ? C.accentSoft : C.danger}`, background: C.panelSolid,
                             }}
                         >
                             {canSend ? <MdCloudUpload size={36} color={C.accentSoft} /> : <MdLock size={32} color={C.danger} />}
-                            <Typography sx={{ fontSize: "0.85rem", fontWeight: 700, color: C.text }}>
-                                {canSend ? "Drop files to attach" : "You cannot send here"}
-                            </Typography>
-                            {canSend && (
-                                <Typography sx={{ fontSize: "0.7rem", color: C.textMuted }}>
-                                    Photos, videos and documents supported
-                                </Typography>
-                            )}
+                            <Box sx={t("lato", 16, 24, 700, C.text)}>{canSend ? "Drop files to attach" : "You cannot send here"}</Box>
+                            {canSend && <Box sx={t("lato", 12, 18, 500, C.textMuted)}>Photos, videos and documents supported</Box>}
                         </Box>
                     </motion.div>
                 )}
@@ -402,31 +384,36 @@ export default function ChatWindow({
             <Menu
                 anchorEl={menuEl}
                 open={Boolean(menuEl)}
-                onClose={() => setMenuEl(null)}
-                slotProps={{
-                    paper: {
-                        sx: {
-                            background: C.panelSolid, border: `1px solid ${C.border}`, borderRadius: "10px",
-                            color: C.text, minWidth: 190,
-                            "& .MuiMenuItem-root": { fontSize: "0.74rem", py: 0.7 },
-                            "& .MuiListItemIcon-root": { minWidth: 28 },
-                        },
-                    },
-                }}
+                onClose={closeMenu}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{ paper: { sx: { ...menuPaperSx, mt: "4px", minWidth: 200 } } }}
             >
-                <MenuItem onClick={() => { setMenuEl(null); onToggleInfo(); }}>
-                    <ListItemIcon><MdInfoOutline size={15} color={C.textSoft} /></ListItemIcon>
+                <MenuItem onClick={() => { closeMenu(); onToggleInfo(); }}>
+                    <Box sx={{ display: "flex", color: C.textMuted }}><MdInfoOutline size={20} /></Box>
                     {infoOpen ? "Hide info" : chat.type === "personal" ? "Contact info" : `${chat.type === "group" ? "Group" : "Community"} info`}
                 </MenuItem>
-                <MenuItem onClick={() => { setMenuEl(null); onToggleMute(chat.id); }}>
-                    <ListItemIcon>{chat.muted ? <MdVolumeUp size={15} color={C.textSoft} /> : <MdVolumeOff size={15} color={C.textSoft} />}</ListItemIcon>
-                    {chat.muted ? "Unmute notifications" : "Mute notifications"}
+                <MenuItem onClick={() => { closeMenu(); onStartMeeting(chat.id); }}>
+                    <ChatIcon name="video-24" size={24} color={C.textMuted} style={{ margin: "0 -2px" }} />
+                    Video Call
                 </MenuItem>
-                <MenuItem onClick={() => { setMenuEl(null); onOpenStarred(); }}>
-                    <ListItemIcon><MdStar size={15} color={C.star} /></ListItemIcon>Starred messages
+                {other && !isGroup && (
+                    <MenuItem onClick={() => { closeMenu(); onStartCall(chat.id); }}>
+                        <ChatIcon name="phone" size={20} color={C.textMuted} />
+                        Voice Call
+                    </MenuItem>
+                )}
+                <MenuItem onClick={() => { closeMenu(); onToggleMute(chat.id); }}>
+                    <ChatIcon name="bell" size={20} color={C.textMuted} />
+                    {chat.muted ? "Unmute notification" : "Mute notification"}
                 </MenuItem>
-                <MenuItem onClick={() => { setMenuEl(null); onDeleteChat(chat.id); }} sx={{ color: C.danger }}>
-                    <ListItemIcon><MdDeleteOutline size={15} color={C.danger} /></ListItemIcon>Clear chat
+                <MenuItem onClick={() => { closeMenu(); onOpenStarred(); }}>
+                    <ChatIcon name="star" size={20} color={C.textMuted} />
+                    Starred messages
+                </MenuItem>
+                <MenuItem onClick={() => { closeMenu(); onClearChat(chat.id); }} sx={{ color: `${C.danger} !important` }}>
+                    <ChatIcon name="trash" size={20} color={C.danger} />
+                    Clear chat
                 </MenuItem>
             </Menu>
         </Box>

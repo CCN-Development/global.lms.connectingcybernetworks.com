@@ -17,6 +17,21 @@ export function isHtmlEmpty(html: string | null | undefined) {
     return !html || stripHtml(html).length === 0;
 }
 
+const URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
+
+/** URLs found in the visible text of a message (anchor hrefs are ignored so each link counts once). */
+export function extractLinks(html: string): string[] {
+    return stripHtml(html).match(URL_PATTERN) ?? [];
+}
+
+export function linkHost(url: string) {
+    try {
+        return new URL(url).hostname;
+    } catch {
+        return url;
+    }
+}
+
 /** Escapes user text before wrapping it in markup. */
 export function escapeHtml(text: string) {
     return text
@@ -94,7 +109,7 @@ export function lastMessageOf(messages: Message[] | undefined) {
 
 /** Short preview line used in the chat list and reply quotes. */
 export function previewOf(msg: Message | undefined, users: Record<string, User>, forList = false) {
-    if (!msg) return "No messages yet";
+    if (!msg) return "No Messages";
     if (msg.deleted) return "This message was deleted";
     const att = msg.attachments?.[0];
     const body = stripHtml(msg.html);

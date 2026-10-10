@@ -10,7 +10,7 @@ import {
     MdClose, MdDoneAll, MdDone, MdChevronLeft, MdChevronRight, MdSearch,
     MdStar, MdForward, MdDownload, MdInsertDriveFile, MdOpenInNew,
 } from "react-icons/md";
-import { C, scrollbarSx } from "./theme";
+import { C, FONT_LATO, scrollbarSx } from "./theme";
 import type { Attachment, Chat, MediaItem, Message, MessageMap, User } from "./types";
 import { canPreviewInline, fileAccent, stripHtml } from "./helpers";
 import ChatAvatar from "./ChatAvatar";
@@ -18,9 +18,10 @@ import ChatAvatar from "./ChatAvatar";
 const dialogPaperSx = {
     background: C.panelSolid,
     border: `1px solid ${C.border}`,
-    borderRadius: "12px",
+    borderRadius: "16px",
     color: C.text,
     backgroundImage: "none",
+    "& .MuiTypography-root, & .MuiButton-root, & .MuiInputBase-root": { fontFamily: FONT_LATO },
 };
 
 const fieldSx = {
@@ -544,6 +545,30 @@ export function StarredDialog({
                     ))
                 )}
             </DialogContent>
+        </Dialog>
+    );
+}
+
+/* ───────────────────────── Confirmation ───────────────────────── */
+export function ConfirmDialog({
+    open, title, message, confirmLabel, onClose, onConfirm,
+}: { open: boolean; title: string; message: string; confirmLabel: string; onClose: () => void; onConfirm: () => void }) {
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth slotProps={{ paper: { sx: dialogPaperSx } }}>
+            <DialogTitle sx={{ fontFamily: FONT_LATO, fontSize: "1rem", fontWeight: 700 }}>{title}</DialogTitle>
+            <DialogContent>
+                <Typography sx={{ fontSize: "0.85rem", color: C.textSoft }}>{message}</Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={onClose} sx={{ color: C.textSoft, textTransform: "none" }}>Cancel</Button>
+                <Button
+                    onClick={onConfirm}
+                    variant="contained"
+                    sx={{ textTransform: "none", background: C.danger, boxShadow: "none", "&:hover": { background: "#b3202f", boxShadow: "none" } }}
+                >
+                    {confirmLabel}
+                </Button>
+            </DialogActions>
         </Dialog>
     );
 }

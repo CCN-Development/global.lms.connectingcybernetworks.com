@@ -32,6 +32,10 @@ export interface Attachment {
     duration?: number;
     ext?: string;
     mime?: string;
+    /** Page count, shown on document cards */
+    pages?: number;
+    /** Thumbnail shown on document cards */
+    preview?: string;
 }
 
 export interface Reaction {
@@ -93,6 +97,9 @@ export interface Chat {
     muted: boolean;
     pinned: boolean;
     favorite?: boolean;
+    archived?: boolean;
+    /** Shown in the list when the chat has no messages yet */
+    timeLabel?: string;
     typingUserId?: string;
     /** Community/announcement groups: only admins can post */
     announcementOnly?: boolean;
