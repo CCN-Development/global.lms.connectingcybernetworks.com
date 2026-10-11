@@ -11,10 +11,13 @@
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.7.0",
+		"@cloudflare/stream-react": "^1.9.3",
+		"@emotion/cache": "^11.14.0",
 		"@emotion/react": "^11.14.0",
 		"@emotion/styled": "^11.14.1",
 		"@mui/icons-material": "^9.2.0",
 		"@mui/material": "^9.2.0",
+		"@mui/material-nextjs": "^9.5.0",
 		"@tiptap/extension-placeholder": "^3.30.5",
 		"@tiptap/extension-text-align": "^3.30.5",
 		"@tiptap/react": "^3.30.5",

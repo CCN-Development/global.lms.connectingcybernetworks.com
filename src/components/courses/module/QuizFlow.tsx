@@ -2,8 +2,17 @@
 
 import React, { useEffect, useEffectEvent, useState } from "react";
 import Image from "next/image";
-import { Box, ButtonBase, Dialog, Typography } from "@mui/material";
-import { COLORS, GOLD_GRADIENT, TYPE, gradientText } from "../my-courses-theme";
+import { Box, ButtonBase, CircularProgress, Dialog, Typography } from "@mui/material";
+import toast from "react-hot-toast";
+import {
+    useCourse,
+    type QuizAnswerResult,
+    type QuizAttemptView,
+    type QuizQuestionView,
+    type QuizSubmitResult,
+} from "@/contexts/CourseContext";
+import { announceRewards, formatDate, isRemoteSrc } from "../course-format";
+import { ACTIVITY_ASSETS, COLORS, GOLD_GRADIENT, TYPE, gradientText } from "../my-courses-theme";
 import {
     ACTIVITY_TYPE,
     ActivityButton,
@@ -18,16 +27,11 @@ import {
     formatDuration,
 } from "./activity-ui";
 import ResultCard, { QUIZ_BADGE } from "./ResultCard";
-import { ACTIVITY_ASSETS, type Quiz, type QuizQuestion } from "./module-data";
-
-export interface QuizOutcome {
-    score: number;
-    total: number;
-    xp: number;
-}
 
 type Stage = "intro" | "question" | "result";
 type OptionState = "idle" | "selected" | "correct" | "incorrect";
+
+const DEFAULT_INTRO = ["Ready to prove what you’ve learned?", "Test your understanding, improve your skill score, and earn XP."];
 
 const OPTION_TONE: Record<Exclude<OptionState, "idle">, { border: string; radio: string }> = {
     selected: { border: COLORS.purple, radio: "radio-selected.svg" },
@@ -44,8 +48,9 @@ function formatClock(ms: number): string {
     return `${m}:${String(s).padStart(2, "0")}:${String(cs).padStart(2, "0")}`;
 }
 
-function QuizTimer({ deadline, totalMs, onExpire }: { deadline: number; totalMs: number; onExpire: () => void }) {
-    const [remaining, setRemaining] = useState(totalMs);
+/** Counts down to the server deadline (already shifted into the local clock). */
+function QuizTimer({ deadline, onExpire }: { deadline: number; onExpire: () => void }) {
+    const [remaining, setRemaining] = useState(() => Math.max(0, deadline - Date.now()));
     const expire = useEffectEvent(onExpire);
 
     useEffect(() => {
@@ -97,7 +102,37 @@ function QuestionHeader({ index, total, timer }: { index: number; total: number;
     );
 }
 
-function QuizIntro({ quiz, onStart, onLater }: { quiz: Quiz; onStart: () => void; onLater: () => void }) {
+function CenteredSpinner() {
+    return (
+        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 320 }}>
+            <CircularProgress size={32} sx={{ color: COLORS.purple }} />
+        </Box>
+    );
+}
+
+interface IntroAction {
+    label: string;
+    disabled: boolean;
+    note: string | null;
+}
+
+function QuizIntroCard({
+    title,
+    lines,
+    tiles,
+    action,
+    note,
+    onStart,
+    onLater,
+}: {
+    title: string;
+    lines: string[];
+    tiles: { value: string; label: string }[];
+    action: IntroAction;
+    note: string | null;
+    onStart: () => void;
+    onLater: () => void;
+}) {
     return (
         <Box sx={{ display: "flex", justifyContent: "center", pt: { xs: "72px", md: "120px" }, pb: "32px" }}>
             <Box sx={{ position: "relative", width: 669, maxWidth: "100%" }}>
@@ -113,29 +148,26 @@ function QuizIntro({ quiz, onStart, onLater }: { quiz: Quiz; onStart: () => void
                     />
                     <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", maxWidth: 580, textAlign: "center" }}>
                         <Typography component="h2" sx={{ ...TYPE.headingSemibold28, fontSize: { xs: "22px", sm: "28px" }, color: COLORS.neutral100 }}>
-                            {quiz.title}
+                            {title}
                         </Typography>
                         <Box>
-                            {quiz.intro.map((line) => (
-                                <Typography key={line} sx={{ ...ACTIVITY_TYPE.latoReg16, color: COLORS.neutral200 }}>
+                            {lines.map((line, i) => (
+                                <Typography key={i} sx={{ ...ACTIVITY_TYPE.latoReg16, color: COLORS.neutral200 }}>
                                     {line}
                                 </Typography>
                             ))}
                         </Box>
                     </Box>
-                    <StatTiles
-                        caption="BEFORE YOU START"
-                        tiles={[
-                            { value: String(quiz.questions.length), label: "Questions" },
-                            { value: quiz.estimate, label: "Time" },
-                            { value: `+${quiz.points}`, label: "Points" },
-                        ]}
-                    />
+                    <StatTiles caption="BEFORE YOU START" tiles={tiles} />
+                    {note && (
+                        <Typography sx={{ position: "relative", ...TYPE.smallMed14, color: COLORS.neutral300, textAlign: "center", mt: "-16px" }}>{note}</Typography>
+                    )}
                     <CardDivider />
-                    <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", width: 200, maxWidth: "100%" }}>
-                        <ActivityButton onClick={onStart} width="100%">
-                            Start Quiz
+                    <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", width: 220, maxWidth: "100%" }}>
+                        <ActivityButton onClick={onStart} width="100%" disabled={action.disabled}>
+                            {action.label}
                         </ActivityButton>
+                        {action.note && <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral300, textAlign: "center" }}>{action.note}</Typography>}
                         <GhostButton onClick={onLater}>I will do this later</GhostButton>
                     </Box>
                 </ActivityCard>
@@ -164,11 +196,23 @@ const cardHighlight = {
     pointerEvents: "none",
 } as const;
 
-function OptionRow({ label, state, disabled, onSelect }: { label: string; state: OptionState; disabled: boolean; onSelect: () => void }) {
+function OptionRow({
+    label,
+    state,
+    multi,
+    disabled,
+    onSelect,
+}: {
+    label: string;
+    state: OptionState;
+    multi: boolean;
+    disabled: boolean;
+    onSelect: () => void;
+}) {
     const tone = state === "idle" ? null : OPTION_TONE[state];
     return (
         <ButtonBase
-            role="radio"
+            role={multi ? "checkbox" : "radio"}
             aria-checked={state !== "idle"}
             disabled={disabled}
             onClick={onSelect}
@@ -194,7 +238,13 @@ function OptionRow({ label, state, disabled, onSelect }: { label: string; state:
                 "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
             }}
         >
-            <Image src={`${ACTIVITY_ASSETS}/${tone ? tone.radio : "radio.svg"}`} alt="" width={24} height={24} style={{ flexShrink: 0 }} />
+            <Image
+                src={`${ACTIVITY_ASSETS}/${tone ? tone.radio : "radio.svg"}`}
+                alt=""
+                width={24}
+                height={24}
+                style={{ flexShrink: 0, borderRadius: multi ? 6 : undefined }}
+            />
             <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral100 }}>{label}</Typography>
         </ButtonBase>
     );
@@ -203,15 +253,16 @@ function OptionRow({ label, state, disabled, onSelect }: { label: string; state:
 /** The live question card with four faded cards fanned out behind it. */
 function QuestionStack({
     question,
-    selected,
-    result,
+    optionState,
+    locked,
     onSelect,
 }: {
-    question: QuizQuestion;
-    selected: number | null;
-    result: "correct" | "incorrect" | null;
-    onSelect: (index: number) => void;
+    question: QuizQuestionView;
+    optionState: (optionId: string) => OptionState;
+    locked: boolean;
+    onSelect: (optionId: string) => void;
 }) {
+    const multi = question.questionType === "multiple_choice";
     return (
         <Box sx={{ display: "flex", justifyContent: "center", pt: { xs: "48px", md: "120px" }, pb: "32px" }}>
             <Box sx={{ position: "relative", width: 725, maxWidth: "100%", pt: "53px" }}>
@@ -298,18 +349,44 @@ function QuestionStack({
                         inset="-6.98% -249.61%"
                     />
 
-                    <Typography
-                        component="h2"
-                        sx={{ position: "relative", ...TYPE.headingSemibold24, fontSize: { xs: "20px", sm: "24px" }, lineHeight: { xs: "30px", sm: "36px" }, color: COLORS.white, textAlign: "center" }}
-                    >
-                        {question.prompt}
-                    </Typography>
+                    <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                        <Typography
+                            component="h2"
+                            sx={{ ...TYPE.headingSemibold24, fontSize: { xs: "20px", sm: "24px" }, lineHeight: { xs: "30px", sm: "36px" }, color: COLORS.white, textAlign: "center" }}
+                        >
+                            {question.prompt}
+                        </Typography>
+                        {multi && <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>Select all that apply</Typography>}
+                    </Box>
 
-                    <Box role="radiogroup" aria-label={question.prompt} sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "24px", width: 577, maxWidth: "100%" }}>
-                        {question.options.map((option, i) => {
-                            const state: OptionState = selected !== i ? "idle" : result ?? "selected";
-                            return <OptionRow key={option} label={option} state={state} disabled={result !== null} onSelect={() => onSelect(i)} />;
-                        })}
+                    {question.imageUrl && (
+                        <Box sx={{ position: "relative", width: 577, maxWidth: "100%", aspectRatio: "16 / 9", borderRadius: "12px", overflow: "hidden" }}>
+                            <Image
+                                src={question.imageUrl}
+                                alt=""
+                                fill
+                                sizes="577px"
+                                unoptimized={isRemoteSrc(question.imageUrl)}
+                                style={{ objectFit: "contain", background: "#05050a" }}
+                            />
+                        </Box>
+                    )}
+
+                    <Box
+                        role={multi ? "group" : "radiogroup"}
+                        aria-label={question.prompt}
+                        sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "24px", width: 577, maxWidth: "100%" }}
+                    >
+                        {question.options.map((option) => (
+                            <OptionRow
+                                key={option.optionId}
+                                label={option.optionText}
+                                state={optionState(option.optionId)}
+                                multi={multi}
+                                disabled={locked}
+                                onSelect={() => onSelect(option.optionId)}
+                            />
+                        ))}
                     </Box>
                 </Box>
             </Box>
@@ -317,7 +394,8 @@ function QuestionStack({
     );
 }
 
-function AnswerPill({ correct }: { correct: boolean }) {
+function AnswerPill({ correct }: { correct: boolean | null }) {
+    const neutral = correct === null;
     return (
         <Box
             role="status"
@@ -330,14 +408,16 @@ function AnswerPill({ correct }: { correct: boolean }) {
                 py: "12px",
                 borderRadius: "99px",
                 flexShrink: 0,
-                ...(correct
-                    ? { border: `1px solid ${COLORS.lessonDone}`, backgroundImage: "linear-gradient(99.93deg, #2EC4B6 27.735%, #1B4C33 102.73%)" }
-                    : { border: "1px solid #F0B3BA", bgcolor: "#571119" }),
+                ...(neutral
+                    ? { border: `1px solid ${COLORS.primary75}`, bgcolor: "rgba(140,36,255,0.18)" }
+                    : correct
+                      ? { border: `1px solid ${COLORS.lessonDone}`, backgroundImage: "linear-gradient(99.93deg, #2EC4B6 27.735%, #1B4C33 102.73%)" }
+                      : { border: "1px solid #F0B3BA", bgcolor: "#571119" }),
             }}
         >
-            <Image src={`${ACTIVITY_ASSETS}/${correct ? "icon-check-20.svg" : "icon-x-20.svg"}`} alt="" width={20} height={20} />
+            {!neutral && <Image src={`${ACTIVITY_ASSETS}/${correct ? "icon-check-20.svg" : "icon-x-20.svg"}`} alt="" width={20} height={20} />}
             <Typography sx={{ ...(correct ? TYPE.mediumMed16 : TYPE.smallMed14), color: COLORS.white, whiteSpace: "nowrap" }}>
-                {correct ? "Correct" : "Incorrect"}
+                {neutral ? "Answer saved" : correct ? "Correct" : "Incorrect"}
             </Typography>
         </Box>
     );
@@ -346,23 +426,31 @@ function AnswerPill({ correct }: { correct: boolean }) {
 function ExplanationDialog({
     open,
     question,
-    chosen,
+    selectedIds,
+    answer,
     onClose,
     onContinue,
 }: {
     open: boolean;
-    question: QuizQuestion;
-    chosen: number | null;
+    question: QuizQuestionView;
+    selectedIds: string[];
+    answer: QuizAnswerResult;
     onClose: () => void;
     onContinue: () => void;
 }) {
-    const correct = chosen === question.answer;
+    const correct = Boolean(answer.isCorrect);
+    const textOf = (ids: string[]) =>
+        question.options
+            .filter((o) => ids.includes(o.optionId))
+            .map((o) => o.optionText)
+            .join(", ") || "No answer";
+    const explanation = answer.explanation?.trim() || "No explanation was provided for this question.";
     const fields = correct
-        ? [{ label: "EXPLANATION", text: question.explanation }]
+        ? [{ label: "EXPLANATION", text: explanation }]
         : [
-              { label: "YOUR ANSWER", text: chosen === null ? "No answer" : question.options[chosen] },
-              { label: "CORRECT ANSWER", text: question.options[question.answer] },
-              { label: "EXPLANATION", text: question.explanation },
+              { label: "YOUR ANSWER", text: textOf(selectedIds) },
+              { label: "CORRECT ANSWER", text: textOf(answer.correctOptionIds ?? []) },
+              { label: "EXPLANATION", text: explanation },
           ];
 
     return (
@@ -442,107 +530,264 @@ function ExplanationDialog({
     );
 }
 
-/** Knowledge test overlay: intro → timed questions with instant feedback → result. */
+function firstOpenIndex(attempt: QuizAttemptView): number {
+    const index = attempt.questions.findIndex((q) => !q.answer);
+    return index === -1 ? attempt.questions.length : index;
+}
+
+/**
+ * Knowledge check overlay backed by the attempts API: intro (attempt limits / cooldown / resume) →
+ * server-timed questions with per-question answers → graded result with XP and rewards.
+ */
 export default function QuizFlow({
     open,
-    quiz,
-    hasLab,
+    lessonId,
     onClose,
-    onComplete,
     onContinueToLab,
+    onCourseMap,
 }: {
     open: boolean;
-    quiz: Quiz;
-    /** Whether the section has a lab to point the learner at next. */
-    hasLab: boolean;
+    lessonId: string;
     onClose: () => void;
-    onComplete: (outcome: QuizOutcome) => void;
-    onContinueToLab: () => void;
+    /** Opens the lab in the same section ("Continue to Lab"). */
+    onContinueToLab: (labLessonId: string) => void;
+    onCourseMap: () => void;
 }) {
+    const { quizIntro, quizAttempt, getQuizIntro, startQuizAttempt, answerQuizQuestion, submitQuizAttempt, getQuizAttempt } = useCourse();
     const [stage, setStage] = useState<Stage>("intro");
+    const [error, setError] = useState<string | null>(null);
+    const [attemptId, setAttemptId] = useState<string | null>(null);
     const [index, setIndex] = useState(0);
-    const [selected, setSelected] = useState<number | null>(null);
-    const [answers, setAnswers] = useState<(number | null)[]>([]);
-    const [submitted, setSubmitted] = useState(false);
+    const [selected, setSelected] = useState<string[]>([]);
+    const [answer, setAnswer] = useState<QuizAnswerResult | null>(null);
     const [explaining, setExplaining] = useState(false);
-    const [clock, setClock] = useState<{ start: number; deadline: number } | null>(null);
-    const [elapsed, setElapsed] = useState(0);
+    const [deadline, setDeadline] = useState<number | null>(null);
+    const [result, setResult] = useState<QuizSubmitResult | null>(null);
+    const [busy, setBusy] = useState(false);
 
-    const total = quiz.questions.length;
-    const question = quiz.questions[index];
-    const score = answers.reduce<number>((sum, a, i) => sum + (a === quiz.questions[i].answer ? 1 : 0), 0);
-    const ratio = total ? score / total : 0;
-    const bonus = ratio >= quiz.accuracyBonus.threshold ? quiz.accuracyBonus.xp : 0;
-    const xp = Math.round(quiz.points * ratio);
+    const intro = quizIntro?.lessonId === lessonId ? quizIntro : null;
+    const attempt = attemptId && quizAttempt?.attemptId === attemptId ? quizAttempt : null;
+    const question = attempt?.questions[index] ?? null;
+    const total = attempt?.totalQuestions ?? 0;
 
-    const start = () => {
-        const now = Date.now();
-        setClock({ start: now, deadline: now + quiz.timeLimitSec * 1000 });
-        setStage("question");
-    };
-
-    const finish = (finalAnswers: (number | null)[]) => {
-        setElapsed(clock ? Math.min(Date.now() - clock.start, quiz.timeLimitSec * 1000) : 0);
-        setExplaining(false);
-        setStage("result");
-        const finalScore = finalAnswers.reduce<number>((sum, a, i) => sum + (a === quiz.questions[i].answer ? 1 : 0), 0);
-        const finalRatio = total ? finalScore / total : 0;
-        onComplete({
-            score: finalScore,
-            total,
-            xp: Math.round(quiz.points * finalRatio) + (finalRatio >= quiz.accuracyBonus.threshold ? quiz.accuracyBonus.xp : 0),
+    useEffect(() => {
+        let cancelled = false;
+        getQuizIntro(lessonId).then((res) => {
+            if (!cancelled && !res.success) setError(res.message ?? "Failed to load the quiz");
         });
-    };
+        return () => {
+            cancelled = true;
+        };
+    }, [lessonId, getQuizIntro]);
 
-    const submit = () => {
-        if (selected === null) return;
-        const next = [...answers];
-        next[index] = selected;
-        setAnswers(next);
-        setSubmitted(true);
-    };
-
-    const advance = () => {
+    const finish = async (id: string) => {
+        setBusy(true);
         setExplaining(false);
-        if (index + 1 < total) {
-            setIndex(index + 1);
-            setSelected(null);
-            setSubmitted(false);
-        } else {
-            finish(answers);
+        try {
+            const res = await submitQuizAttempt(id);
+            if (!res.success || !res.data) {
+                toast.error(res.message ?? "Failed to submit the quiz");
+                return;
+            }
+            setResult(res.data);
+            setStage("result");
+            announceRewards(res.data.rewards, res.data.xpAwarded);
+        } finally {
+            setBusy(false);
         }
     };
 
-    const correct = submitted && selected === question.answer;
+    const begin = (view: QuizAttemptView) => {
+        // Drive the timer from the server deadline, corrected for this device's clock skew.
+        const offset = Date.parse(view.serverTime) - Date.now();
+        setDeadline(view.deadlineAt ? Date.parse(view.deadlineAt) - offset : null);
+        setAttemptId(view.attemptId);
+        setSelected([]);
+        setAnswer(null);
+        setResult(null);
+        const next = firstOpenIndex(view);
+        setIndex(next);
+        if (view.attemptStatus !== "in_progress" || next >= view.questions.length) {
+            finish(view.attemptId);
+            return;
+        }
+        setStage("question");
+    };
+
+    const start = async () => {
+        setBusy(true);
+        try {
+            const res = await startQuizAttempt(lessonId);
+            if (!res.success || !res.data) {
+                toast.error(res.message ?? "Failed to start the quiz");
+                await getQuizIntro(lessonId);
+                return;
+            }
+            begin(res.data);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitAnswer = async () => {
+        if (!attempt || !question || !selected.length || busy) return;
+        setBusy(true);
+        try {
+            const res = await answerQuizQuestion(attempt.attemptId, { questionId: question.questionId, selectedOptionIds: selected });
+            if (res.success && res.data) {
+                setAnswer(res.data);
+                return;
+            }
+            const message = res.message ?? "Failed to submit the answer";
+            if (/time is up/i.test(message)) {
+                toast.error("Time is up — your attempt has been submitted");
+                await finish(attempt.attemptId);
+            } else if (/already/i.test(message)) {
+                // Another tab answered first: resync and move on.
+                const fresh = await getQuizAttempt(attempt.attemptId);
+                if (fresh.success && fresh.data) begin(fresh.data);
+            } else {
+                toast.error(message);
+            }
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const advance = () => {
+        if (!attempt) return;
+        setExplaining(false);
+        if (answer?.isLast || index + 1 >= attempt.questions.length) {
+            finish(attempt.attemptId);
+            return;
+        }
+        setIndex(index + 1);
+        setSelected([]);
+        setAnswer(null);
+    };
+
+    const retake = async () => {
+        setStage("intro");
+        setAttemptId(null);
+        setResult(null);
+        await getQuizIntro(lessonId);
+    };
+
+    const toggle = (optionId: string) => {
+        if (!question || answer) return;
+        if (question.questionType === "multiple_choice") {
+            setSelected((prev) => (prev.includes(optionId) ? prev.filter((id) => id !== optionId) : [...prev, optionId]));
+        } else {
+            setSelected([optionId]);
+        }
+    };
+
+    const revealed = answer?.isCorrect !== undefined;
+    const optionState = (optionId: string): OptionState => {
+        const chosen = selected.includes(optionId);
+        if (answer && revealed) {
+            const right = answer.correctOptionIds?.includes(optionId) ?? false;
+            if (right) return "correct";
+            return chosen ? "incorrect" : "idle";
+        }
+        return chosen ? "selected" : "idle";
+    };
+
+    /* ------------------------------------------------------------ intro */
 
     if (stage === "intro") {
+        let body: React.ReactNode;
+        if (!intro) {
+            body = error ? (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", pt: "120px", textAlign: "center" }}>
+                    <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral100 }}>{error}</Typography>
+                    <GhostButton onClick={onClose}>Back to module</GhostButton>
+                </Box>
+            ) : (
+                <CenteredSpinner />
+            );
+        } else {
+            // The API only sends cooldownUntil while the cooldown is still running.
+            const cooldown = intro.cooldownUntil;
+            const action: IntroAction =
+                intro.questionCount === 0
+                    ? { label: "Quiz coming soon", disabled: true, note: null }
+                    : intro.inProgressAttemptId
+                      ? { label: busy ? "Resuming…" : "Resume Quiz", disabled: busy, note: "You have an unfinished attempt." }
+                      : intro.attemptsLeft === 0
+                        ? { label: "No attempts left", disabled: true, note: null }
+                        : cooldown
+                          ? {
+                                label: "Retake locked",
+                                disabled: true,
+                                note: `Available ${formatDate(cooldown)} at ${new Date(cooldown).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+                            }
+                          : { label: busy ? "Starting…" : intro.attemptsUsed > 0 ? "Retake Quiz" : "Start Quiz", disabled: busy, note: null };
+            const notes = [
+                intro.bestScorePct !== null ? `Best score ${Math.round(intro.bestScorePct)}%` : null,
+                `Pass mark ${Math.round(intro.passingScorePct)}%`,
+                intro.maxAttempts ? `Attempts ${intro.attemptsUsed}/${intro.maxAttempts}` : null,
+                intro.accuracyBonus.xp > 0 ? `+${intro.accuracyBonus.xp} XP bonus at ${Math.round(intro.accuracyBonus.thresholdPct)}%` : null,
+            ].filter(Boolean);
+            body = (
+                <QuizIntroCard
+                    title={intro.title || "Knowledge Test"}
+                    lines={intro.introLines.length ? intro.introLines : DEFAULT_INTRO}
+                    tiles={[
+                        { value: String(intro.questionCount), label: "Questions" },
+                        { value: intro.timeLimitSec ? `~${intro.estimateMinutes} min` : "No limit", label: "Time" },
+                        { value: `+${intro.points}`, label: "Points" },
+                    ]}
+                    note={notes.join(" · ")}
+                    action={action}
+                    onStart={start}
+                    onLater={onClose}
+                />
+            );
+        }
         return (
-            <ActivityPanel open={open} onClose={onClose} ariaLabel={quiz.title}>
-                <QuizIntro quiz={quiz} onStart={start} onLater={onClose} />
+            <ActivityPanel open={open} onClose={onClose} ariaLabel={intro?.title ?? "Knowledge check"}>
+                {body}
             </ActivityPanel>
         );
     }
 
-    if (stage === "result") {
+    /* ----------------------------------------------------------- result */
+
+    if (stage === "result" && result) {
+        const canRetake = Boolean(intro) && !intro?.inProgressAttemptId && intro?.attemptsLeft !== 0 && !intro?.cooldownUntil;
+        const next = result.nextStep;
+        const primary = next
+            ? { label: "Continue to Lab", onClick: () => onContinueToLab(next.labLessonId) }
+            : !result.passed && canRetake
+              ? { label: "Retake Quiz", onClick: retake }
+              : { label: "Back to Module", onClick: onClose };
+        const secondary = primary.label === "Back to Module" ? { label: "Go back to Course Map", onClick: onCourseMap } : { label: "Back to Module", onClick: onClose };
         return (
             <ActivityPanel open={open} onClose={onClose} ariaLabel="Knowledge check result">
                 <ResultCard
                     badge={QUIZ_BADGE}
-                    title="Knowledge Check Complete"
-                    subtitle={ratio >= 0.5 ? "Great work! You’ve cleared the knowledge check." : "Keep going! Review the lesson and retake the quiz to lift your score."}
+                    title={result.attemptStatus === "expired" ? "Time's Up" : "Knowledge Check Complete"}
+                    subtitle={
+                        result.passed
+                            ? "Great work! You’ve cleared the knowledge check."
+                            : `You scored ${Math.round(result.scorePct)}%. Review the lesson and retake the quiz to lift your score.`
+                    }
                     tiles={[
-                        { value: `${score}/${total}`, label: "Score" },
-                        { value: formatDuration(elapsed), label: "Time taken" },
-                        { value: `+${xp}`, label: "XP Earned" },
+                        { value: `${result.correctCount}/${result.totalQuestions}`, label: "Score" },
+                        { value: formatDuration((result.timeTakenSec ?? 0) * 1000), label: "Time taken" },
+                        { value: `+${result.xpAwarded}`, label: "XP Earned" },
                     ]}
-                    bonus={bonus ? { label: "Hurray! You get a Accuracy bonus", xp: bonus } : undefined}
-                    nextStep={hasLab ? "NEXT STEP : Complete the Lab Challenge to finish this level." : undefined}
-                    primary={hasLab ? { label: "Continue to Lab", onClick: onContinueToLab } : { label: "Back to Module", onClick: onClose }}
-                    secondary={{ label: "Go back to Home", onClick: onClose }}
+                    bonus={result.bonusXp ? { label: "Hurray! You get a Accuracy bonus", xp: result.bonusXp } : undefined}
+                    nextStep={next ? `NEXT STEP : Complete the Lab Challenge “${next.title}” to finish this task.` : undefined}
+                    primary={primary}
+                    secondary={secondary}
                 />
             </ActivityPanel>
         );
     }
+
+    /* --------------------------------------------------------- question */
 
     return (
         <ActivityPanel
@@ -550,36 +795,56 @@ export default function QuizFlow({
             onClose={onClose}
             ariaLabel={`Question ${index + 1} of ${total}`}
             header={
-                <QuestionHeader
-                    index={index}
-                    total={total}
-                    timer={clock && <QuizTimer deadline={clock.deadline} totalMs={quiz.timeLimitSec * 1000} onExpire={() => finish(answers)} />}
-                />
+                attempt && (
+                    <QuestionHeader
+                        index={Math.min(index, Math.max(0, total - 1))}
+                        total={total}
+                        timer={deadline !== null && <QuizTimer deadline={deadline} onExpire={() => finish(attempt.attemptId)} />}
+                    />
+                )
             }
             footer={
-                submitted ? (
+                question &&
+                (answer ? (
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", width: "100%" }}>
-                        <AnswerPill correct={correct} />
+                        <AnswerPill correct={revealed ? Boolean(answer.isCorrect) : null} />
                         <Box sx={{ display: "flex", alignItems: "center", gap: "12px", ml: "auto" }}>
-                            <GhostButton size="lg" onClick={() => setExplaining(true)}>
-                                {correct ? "See Explanation" : "See Why?"}
-                            </GhostButton>
-                            <ActivityButton onClick={advance} width={185}>
-                                Continue
+                            {revealed && (
+                                <GhostButton size="lg" onClick={() => setExplaining(true)}>
+                                    {answer.isCorrect ? "See Explanation" : "See Why?"}
+                                </GhostButton>
+                            )}
+                            <ActivityButton onClick={advance} width={185} disabled={busy}>
+                                {answer.isLast || index + 1 >= total ? "Finish Quiz" : "Continue"}
                             </ActivityButton>
                         </Box>
                     </Box>
                 ) : (
                     <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
-                        <ActivityButton onClick={submit} width={185} disabled={selected === null}>
-                            Submit
+                        <ActivityButton onClick={submitAnswer} width={185} disabled={!selected.length || busy}>
+                            {busy ? "Submitting…" : "Submit"}
                         </ActivityButton>
                     </Box>
-                )
+                ))
             }
         >
-            <QuestionStack question={question} selected={selected} result={submitted ? (correct ? "correct" : "incorrect") : null} onSelect={setSelected} />
-            <ExplanationDialog open={explaining} question={question} chosen={selected} onClose={() => setExplaining(false)} onContinue={advance} />
+            {question ? (
+                <>
+                    <QuestionStack question={question} optionState={optionState} locked={Boolean(answer) || busy} onSelect={toggle} />
+                    {answer && revealed && (
+                        <ExplanationDialog
+                            open={explaining}
+                            question={question}
+                            selectedIds={selected}
+                            answer={answer}
+                            onClose={() => setExplaining(false)}
+                            onContinue={advance}
+                        />
+                    )}
+                </>
+            ) : (
+                <CenteredSpinner />
+            )}
         </ActivityPanel>
     );
 }

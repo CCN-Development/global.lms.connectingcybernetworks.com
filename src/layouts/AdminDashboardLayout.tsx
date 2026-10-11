@@ -16,13 +16,17 @@ type Props = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-    { label: 'Overview',         link: '/dashboard/admin/overview',          icon: <MdOutlineDashboard /> },
-    { label: 'CRM Requests',     link: '/dashboard/admin/crm-requests',      icon: <MdOutlineHandshake /> },
-    { label: 'Payment Requests', link: '/dashboard/admin/payment-requests',  icon: <MdOutlinePayment /> },
-    { label: 'CRM Users',        link: '/dashboard/admin/crm-users',         icon: <MdOutlinePeople /> },
-    { label: 'LMS Users',        link: '/dashboard/admin/lms-users',         icon: <MdOutlineSchool /> },
-    { label: 'HRMS Users',       link: '/dashboard/admin/hrms-users',        icon: <MdOutlineBadge /> },
-    { label: 'Chats',            link: '/dashboard/chats',             icon: <MdOutlineChat /> },
+    { label: 'Overview', link: '/dashboard/admin/overview', icon: <MdOutlineDashboard /> },
+    { label: 'CRM Management', link: '/dashboard/admin/crm-management', icon: <MdOutlineHandshake /> },
+    { label: 'HRMS Management', link: '/dashboard/admin/hrms-management', icon: <MdOutlineBadge /> },
+    { label: 'Onboarding', link: '/dashboard/admin/onboarding', icon: <MdOutlinePayment /> },
+    { label: 'LMS Users', link: '/dashboard/admin/lms-users', icon: <MdOutlineSchool /> },
+    {
+        label: "Course Management",
+        link: '/dashboard/admin/course-management',
+        icon: <MdOutlineSchool />
+    },
+    { label: 'Chats', link: '/dashboard/chats', icon: <MdOutlineChat /> },
 ]
 
 export default function AdminDashboardLayout({ children, title }: Props) {

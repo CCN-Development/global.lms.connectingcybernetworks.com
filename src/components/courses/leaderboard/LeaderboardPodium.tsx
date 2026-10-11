@@ -4,7 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { Box, Typography } from "@mui/material";
 import { COLORS, GOLD_GRADIENT, TYPE, gradientText } from "../my-courses-theme";
-import { AVATAR_PLACEHOLDER, displayName, type LeaderboardEntry } from "./leaderboard-data";
+import { AVATAR_PLACEHOLDER, displayName, type LeaderboardEntry } from "./leaderboard-utils";
 
 const ASSETS = "/my-courses/leaderboard";
 

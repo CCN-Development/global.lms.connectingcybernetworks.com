@@ -1,43 +1,126 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { Box, ButtonBase, Typography } from "@mui/material";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Box, ButtonBase, CircularProgress, Typography } from "@mui/material";
+import toast from "react-hot-toast";
 import StudentLayout from "@/layouts/StudentLayout";
-import { COURSES, LEARNER_RANK, activeCourse } from "@/components/courses/course-data";
+import { MY_COURSES_PATH, MY_GOALS_PATH, courseDetailPath } from "@/components/courses/course-format";
 import { COLORS, MY_COURSES_ASSETS, TYPE } from "@/components/courses/my-courses-theme";
+import { NoticePanel } from "@/components/courses/my-courses-ui";
 import GoalStepper from "@/components/courses/set-goal/GoalStepper";
 import { GoalTypeStep, PaceStep, ReviewStep, ScheduleStep, TargetStep } from "@/components/courses/set-goal/GoalSteps";
 import { SET_GOAL_ASSETS } from "@/components/courses/set-goal/GoalUI";
-import { DEFAULT_GOAL_DRAFT, GOAL_STEPS, saveLearningGoal, type GoalDraft } from "@/components/courses/set-goal/set-goal-data";
+import { GOAL_STEPS, toGoalInput, type GoalDraft } from "@/components/courses/set-goal/set-goal-utils";
+import { useCourse, type GoalOptions, type GoalProjection } from "@/contexts/CourseContext";
 
-const MY_COURSES_PATH = "/dashboard/student/my-courses";
+function defaultDraft(options: GoalOptions, preferredCourseId: string | null): GoalDraft {
+    const preferred = options.courses.find((c) => c.courseId === preferredCourseId)?.courseId;
+    return {
+        goalType: options.defaults.goalType,
+        courseId: preferred ?? options.defaults.courseId ?? options.courses[0]?.courseId ?? "",
+        targetLevel: options.rank.suggestedTargetLevel,
+        paceKey: options.defaults.paceKey,
+        customMinutes: options.paces.find((p) => p.key === "custom")?.minutesPerDay ?? 45,
+        learningDays: options.defaults.learningDays,
+        reminderEnabled: false,
+        reminderTime: "19:00",
+    };
+}
 
-export default function SetGoalPage() {
+function SetGoalContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const preferredCourseId = searchParams?.get("courseId") ?? null;
+    const { goalOptions, myCourses, getGoalOptions, getMyCourses, previewGoal, createGoal, saving } = useCourse();
     const [step, setStep] = useState(0);
-    const [draft, setDraft] = useState<GoalDraft>(() => ({ ...DEFAULT_GOAL_DRAFT, courseId: activeCourse().courseId }));
-    const [saving, setSaving] = useState(false);
+    const [edits, setEdits] = useState<GoalDraft | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [projection, setProjection] = useState<GoalProjection | null>(null);
+    const [previewError, setPreviewError] = useState<string | null>(null);
 
-    const course = COURSES.find((c) => c.courseId === draft.courseId) ?? activeCourse();
-    const update = (patch: Partial<GoalDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
-    const next = () => setStep((s) => Math.min(s + 1, GOAL_STEPS.length - 1));
-    const exit = () => router.push(MY_COURSES_PATH);
-    const back = () => (step > 0 ? setStep(step - 1) : exit());
+    useEffect(() => {
+        getGoalOptions().then((res) => setLoadError(res.success ? null : (res.message ?? "Failed to load goal options")));
+        // Only used to show locked missions on the Target step.
+        getMyCourses();
+    }, [getGoalOptions, getMyCourses]);
 
-    const confirm = async () => {
-        if (saving) return;
-        setSaving(true);
-        try {
-            await saveLearningGoal(draft);
-            exit();
-        } finally {
-            setSaving(false);
-        }
+    const draft = edits ?? (goalOptions ? defaultDraft(goalOptions, preferredCourseId) : null);
+    const stepKey = GOAL_STEPS[step].key;
+
+    const update = (patch: Partial<GoalDraft>) => draft && setEdits({ ...draft, ...patch });
+
+    const goTo = (index: number) => {
+        setProjection(null);
+        setPreviewError(null);
+        setStep(index);
+        if (GOAL_STEPS[index].key !== "review" || !draft) return;
+        // The projection comes from the server so it matches the goal that will be saved.
+        previewGoal(toGoalInput(draft)).then((res) => {
+            if (res.success && res.data) setProjection(res.data);
+            else setPreviewError(res.message ?? "Failed to project the goal");
+        });
     };
 
-    const stepKey = GOAL_STEPS[step].key;
+    const next = () => goTo(Math.min(step + 1, GOAL_STEPS.length - 1));
+    const exit = () => router.push(preferredCourseId ? courseDetailPath(preferredCourseId) : MY_COURSES_PATH);
+    const back = () => (step > 0 ? goTo(step - 1) : exit());
+
+    const confirm = async () => {
+        if (!draft || saving) return;
+        const res = await createGoal(toGoalInput(draft));
+        if (!res.success) {
+            toast.error(res.message ?? "Failed to save the goal");
+            return;
+        }
+        toast.success("Goal saved — let's do this!");
+        router.push(MY_GOALS_PATH);
+    };
+
+    const lockedCourses = (myCourses?.courses ?? []).filter((c) => c.status === "Locked" || c.status === "Upcoming");
+    const selectedCourse = goalOptions?.courses.find((c) => c.courseId === draft?.courseId) ?? null;
+
+    let body: React.ReactNode;
+    if (!goalOptions || !draft) {
+        body = loadError ? (
+            <Box sx={{ width: 620, maxWidth: "100%" }}>
+                <NoticePanel title="We couldn't load your goal options" message={loadError} action={{ label: "Try again", onClick: () => getGoalOptions() }} />
+            </Box>
+        ) : (
+            <CircularProgress size={32} sx={{ color: COLORS.purple }} />
+        );
+    } else if (goalOptions.courses.length === 0) {
+        body = (
+            <Box sx={{ width: 620, maxWidth: "100%" }}>
+                <NoticePanel
+                    title="No missions to set a goal for"
+                    message="Goals can be set once a course is unlocked for you."
+                    action={{ label: "Back to My Courses", onClick: () => router.push(MY_COURSES_PATH) }}
+                />
+            </Box>
+        );
+    } else {
+        body = (
+            <>
+                <GoalStepper steps={GOAL_STEPS} current={step} onSelect={goTo} />
+                {stepKey === "goal" && <GoalTypeStep options={goalOptions} draft={draft} update={update} onNext={next} />}
+                {stepKey === "target" && <TargetStep options={goalOptions} lockedCourses={lockedCourses} draft={draft} update={update} onNext={next} />}
+                {stepKey === "pace" && <PaceStep options={goalOptions} draft={draft} update={update} onNext={next} />}
+                {stepKey === "schedule" && <ScheduleStep options={goalOptions} draft={draft} update={update} onNext={next} />}
+                {stepKey === "review" && (
+                    <ReviewStep
+                        projection={projection}
+                        error={previewError}
+                        weeks={selectedCourse?.weeks ?? null}
+                        saving={saving}
+                        onConfirm={confirm}
+                        onCancel={exit}
+                    />
+                )}
+            </>
+        );
+    }
 
     return (
         <StudentLayout>
@@ -47,9 +130,9 @@ export default function SetGoalPage() {
                     <Image src={`${MY_COURSES_ASSETS}/ui/header-vector.svg`} alt="" width={901} height={831} style={{ maxWidth: "none" }} />
                 </Box>
 
-                <Box sx={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <Box sx={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
                     <ButtonBase
-                        aria-label={step > 0 ? "Previous step" : "Back to My Courses"}
+                        aria-label={step > 0 ? "Previous step" : "Back"}
                         onClick={back}
                         sx={{
                             width: 44,
@@ -63,6 +146,14 @@ export default function SetGoalPage() {
                         }}
                     >
                         <Image src={`${SET_GOAL_ASSETS}/icon-arrow-back.svg`} alt="" width={24} height={24} />
+                    </ButtonBase>
+                    <ButtonBase
+                        onClick={() => router.push(MY_GOALS_PATH)}
+                        sx={{ px: "16px", height: 40, borderRadius: "10px", border: `1px solid ${COLORS.buttonBorder}`, "&:hover": { borderColor: "rgba(227,233,248,0.64)" } }}
+                    >
+                        <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white }}>
+                            My Goals
+                        </Typography>
                     </ButtonBase>
                 </Box>
 
@@ -78,16 +169,16 @@ export default function SetGoalPage() {
                     </Box>
                 </Box>
 
-                <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "44px" }}>
-                    <GoalStepper steps={GOAL_STEPS} current={step} onSelect={setStep} />
-
-                    {stepKey === "goal" && <GoalTypeStep draft={draft} update={update} onNext={next} />}
-                    {stepKey === "target" && <TargetStep draft={draft} update={update} courses={COURSES} rank={LEARNER_RANK} onNext={next} />}
-                    {stepKey === "pace" && <PaceStep draft={draft} update={update} onNext={next} />}
-                    {stepKey === "schedule" && <ScheduleStep draft={draft} update={update} onNext={next} />}
-                    {stepKey === "review" && <ReviewStep draft={draft} course={course} onConfirm={confirm} onCancel={exit} />}
-                </Box>
+                <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "44px" }}>{body}</Box>
             </Box>
         </StudentLayout>
+    );
+}
+
+export default function SetGoalPage() {
+    return (
+        <Suspense fallback={null}>
+            <SetGoalContent />
+        </Suspense>
     );
 }

@@ -14,7 +14,8 @@ import {
     UI_ICONS,
     glassFill,
 } from "./my-courses-theme";
-import type { Course } from "./course-data";
+import type { MyCourseCard } from "@/contexts/CourseContext";
+import { splitWeeks } from "./course-format";
 
 const focusRing = { "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" } } as const;
 
@@ -178,17 +179,20 @@ export function PrimaryButton({
     onClick,
     icon,
     height = 44,
+    disabled = false,
     sx,
 }: {
     children: React.ReactNode;
     onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
     icon?: string;
     height?: number;
+    disabled?: boolean;
     sx?: SxProps<Theme>;
 }) {
     return (
         <ButtonBase
             onClick={onClick}
+            disabled={disabled}
             sx={[
                 {
                     position: "relative",
@@ -199,8 +203,9 @@ export function PrimaryButton({
                     borderRadius: "10px",
                     backgroundImage: PRIMARY_BUTTON_FILL,
                     filter: "drop-shadow(0px 0px 4px rgba(255,255,255,0.12))",
-                    transition: "filter .18s ease",
+                    transition: "filter .18s ease, opacity .18s ease",
                     "&:hover": { filter: "drop-shadow(0px 0px 10px rgba(140,36,255,0.55))" },
+                    "&.Mui-disabled": { opacity: 0.5, cursor: "not-allowed", pointerEvents: "auto" },
                     ...focusRing,
                 },
                 ...(Array.isArray(sx) ? sx : [sx]),
@@ -234,14 +239,8 @@ export interface MissionStat {
     unit: string;
 }
 
-/** Splits "8-10 Weeks" into its bold value and regular unit. */
-function splitDuration(label: string): { value: string; unit: string } {
-    const [value, ...rest] = label.trim().split(/\s+/);
-    return { value, unit: rest.join(" ") };
-}
-
 /** Banner ("Quick Insights") and card ("Mission Includes") stat chips derived from a course. */
-export function missionStats(course: Course, variant: "banner" | "card"): MissionStat[] {
+export function missionStats(course: MyCourseCard, variant: "banner" | "card"): MissionStat[] {
     if (variant === "banner") {
         return [
             { key: "levels", icon: UI_ICONS.layers16, iconSize: 16, value: String(course.totalLevels), unit: "levels" },
@@ -249,7 +248,7 @@ export function missionStats(course: Course, variant: "banner" | "card"): Missio
             { key: "xp", icon: UI_ICONS.zap16, iconSize: 16, value: String(course.totalXp), unit: "XP" },
         ];
     }
-    const duration = splitDuration(course.weeks);
+    const duration = splitWeeks(course.weeks);
     return [
         { key: "levels", icon: UI_ICONS.layers14, iconSize: 14, value: String(course.totalLevels), unit: "Levels" },
         { key: "badges", icon: UI_ICONS.star12, iconSize: 12, value: String(course.totalBadges), unit: "Badges" },
@@ -349,5 +348,66 @@ export function ProgressTrack({
                 }}
             />
         </Box>
+    );
+}
+
+/** Dark frame for empty, locked and error states ("This course could not be found."). */
+export function NoticePanel({
+    icon,
+    title,
+    message,
+    action,
+}: {
+    icon?: React.ReactNode;
+    title: string;
+    message?: string;
+    action?: { label: string; onClick: () => void };
+}) {
+    return (
+        <Box
+            role="status"
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "12px",
+                py: "48px",
+                px: "24px",
+                textAlign: "center",
+                borderRadius: "16px",
+                border: "1px solid #1c1c26",
+                bgcolor: "#07070d",
+            }}
+        >
+            {icon}
+            <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral100 }}>{title}</Typography>
+            {message && <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300, maxWidth: 520 }}>{message}</Typography>}
+            {action && (
+                <PrimaryButton onClick={action.onClick} sx={{ mt: "8px" }}>
+                    {action.label}
+                </PrimaryButton>
+            )}
+        </Box>
+    );
+}
+
+/** Rounded dark placeholder block used while My Courses data loads. */
+export function SkeletonBlock({ height, radius = 20, sx }: { height: number | string; radius?: number; sx?: SxProps<Theme> }) {
+    return (
+        <Box
+            aria-hidden
+            sx={[
+                {
+                    height,
+                    borderRadius: `${radius}px`,
+                    border: "1px solid rgba(255,255,255,0.06)",
+                    background: "linear-gradient(100deg, rgba(255,255,255,0.03) 30%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 70%)",
+                    backgroundSize: "200% 100%",
+                    animation: "mcShimmer 1.4s ease-in-out infinite",
+                    "@keyframes mcShimmer": { "0%": { backgroundPosition: "100% 0" }, "100%": { backgroundPosition: "-100% 0" } },
+                },
+                ...(Array.isArray(sx) ? sx : [sx]),
+            ]}
+        />
     );
 }

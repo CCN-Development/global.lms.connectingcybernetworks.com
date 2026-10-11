@@ -3,9 +3,8 @@
 import React from "react";
 import Image from "next/image";
 import { Box, Typography } from "@mui/material";
-import { COLORS, TYPE } from "../my-courses-theme";
+import { ACTIVITY_ASSETS, COLORS, TYPE } from "../my-courses-theme";
 import { ActivityButton, ActivityCard, CardDivider, CardGlows, GhostButton, StatTiles, ACTIVITY_TYPE, type StatTile } from "./activity-ui";
-import { ACTIVITY_ASSETS } from "./module-data";
 
 export interface ResultBadge {
     src: string;

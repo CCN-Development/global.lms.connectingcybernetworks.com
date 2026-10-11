@@ -3,9 +3,10 @@
 import React from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Drawer, Typography, type SxProps, type Theme } from "@mui/material";
-import { COLORS, COURSE_ASSETS, FONTS, PRIMARY_BUTTON_FILL, TYPE, glassFill } from "../my-courses-theme";
+import { ACTIVITY_ASSETS, COLORS, COURSE_ASSETS, FONTS, PRIMARY_BUTTON_FILL, TYPE, glassFill } from "../my-courses-theme";
 import { BackButton } from "../my-courses-ui";
-import { ACTIVITY_ASSETS, type ContentBlock } from "./module-data";
+import { isRemoteSrc } from "../course-format";
+import type { ContentBlock } from "@/contexts/CourseContext";
 
 const focusRing = { "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" } } as const;
 
@@ -501,7 +502,14 @@ export function ContentBlockView({ block }: { block: ContentBlock }) {
         case "image":
             return (
                 <Box sx={{ position: "relative", width: "100%", aspectRatio: String(block.ratio), flexShrink: 0 }}>
-                    <Image src={block.src} alt={block.alt} fill sizes="(max-width: 900px) 100vw, 432px" style={{ objectFit: "cover" }} />
+                    <Image
+                        src={block.src}
+                        alt={block.alt}
+                        fill
+                        sizes="(max-width: 900px) 100vw, 432px"
+                        unoptimized={isRemoteSrc(block.src)}
+                        style={{ objectFit: "cover" }}
+                    />
                 </Box>
             );
     }

@@ -3,12 +3,13 @@
 import React from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Typography } from "@mui/material";
-import type { Course, CourseContentBreakdown, LearnerRank } from "./course-data";
+import type { ActiveGoal, ContentBreakdownItem, CourseOverview } from "@/contexts/CourseContext";
+import { formatDate } from "./course-format";
 import { COLORS, CONTENT_ICON_FILL, COURSE_ASSETS, GOLD_GRADIENT, TYPE, gradientText } from "./my-courses-theme";
 import { FadeDivider, ProgressTrack, framedPanelSx } from "./my-courses-ui";
 import { COURSE_PANEL_STARS, RankCrest, RankHood, RankLevelHeading, RankStarField } from "./RankCrest";
 
-const CONTENT_ICONS: Record<CourseContentBreakdown["kind"], string> = {
+const CONTENT_ICONS: Record<ContentBreakdownItem["kind"], string> = {
     video: `${COURSE_ASSETS}/content-video.svg`,
     test: `${COURSE_ASSETS}/content-test.svg`,
     lab: `${COURSE_ASSETS}/content-lab.svg`,
@@ -44,7 +45,7 @@ function StreakFlame() {
     );
 }
 
-function ContentRow({ item }: { item: CourseContentBreakdown }) {
+function ContentRow({ item }: { item: ContentBreakdownItem }) {
     return (
         <Box
             sx={{
@@ -77,9 +78,12 @@ function ContentRow({ item }: { item: CourseContentBreakdown }) {
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                     <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral75 }}>
                         {item.label}
+                        <Box component="span" sx={{ color: COLORS.neutral300, ml: "8px" }}>
+                            {item.completed}/{item.total}
+                        </Box>
                     </Typography>
                     <Typography sx={{ ...TYPE.smallMed14, ...gradientText(GOLD_GRADIENT), flexShrink: 0 }}>
-                        +{item.xp}XP
+                        +{item.totalXp}XP
                     </Typography>
                 </Box>
                 <ProgressTrack value={item.progress} fill={COLORS.purple} minFill={3} />
@@ -89,12 +93,44 @@ function ContentRow({ item }: { item: CourseContentBreakdown }) {
 }
 
 interface Props {
-    course: Course;
-    rank: LearnerRank;
+    course: CourseOverview;
     onSetGoal: () => void;
+    onViewGoal: () => void;
 }
 
-export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
+function goalTarget(goal: ActiveGoal): string {
+    return goal.goalType === "complete_course" ? `Complete ${goal.courseLabel}` : `Reach Level ${goal.targetValue}`;
+}
+
+function GoalSummary({ goal }: { goal: ActiveGoal }) {
+    return (
+        <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "12px" }}>
+            <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral300, textTransform: "uppercase" }}>
+                Your learning goal
+            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.white }}>
+                    {goalTarget(goal)}
+                </Typography>
+                <Typography sx={{ ...TYPE.smallMed14, color: goal.onTrack ? COLORS.lessonDone : "#F59E0B", flexShrink: 0 }}>
+                    {goal.onTrack ? "On track" : "Behind"}
+                </Typography>
+            </Box>
+            <ProgressTrack value={goal.progressPct} fill={COLORS.purple} minFill={3} />
+            <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral200 }}>
+                {goal.today.isLearningDay
+                    ? `Today: ${goal.today.minutesLearned}/${goal.today.minutesPlanned} min`
+                    : "Rest day today"}
+                {` · Projected ${formatDate(goal.projectedDate)}`}
+            </Typography>
+        </Box>
+    );
+}
+
+export default function CourseSidePanel({ course, onSetGoal, onViewGoal }: Props) {
+    const { rank, activeGoal } = course;
+    const streak = rank.currentStreak;
+    const canSetGoal = course.status !== "Locked";
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <Box
@@ -126,7 +162,7 @@ export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
                         </Typography>
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                             {course.content.map((item) => (
-                                <ContentRow key={item.label} item={item} />
+                                <ContentRow key={item.kind} item={item} />
                             ))}
                         </Box>
                     </Box>
@@ -145,9 +181,13 @@ export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
             >
                 <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px" }}>
                     <StreakFlame />
-                    <Typography sx={{ ...TYPE.largeSemibold18, color: COLORS.white, textAlign: "center" }}>Start your Streak</Typography>
+                    <Typography sx={{ ...TYPE.largeSemibold18, color: COLORS.white, textAlign: "center" }}>
+                        {streak > 0 ? `${streak} Day Streak` : "Start your Streak"}
+                    </Typography>
                     <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral75, textAlign: "center", width: "100%" }}>
-                        Complete your first learning activity today and start building your streak.
+                        {streak > 0
+                            ? `Learn something today to keep it going. Your best streak is ${Math.max(rank.highestStreak, streak)} days.`
+                            : "Complete your first learning activity today and start building your streak."}
                     </Typography>
                 </Box>
 
@@ -155,8 +195,11 @@ export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
                     <FadeDivider variant="rank" />
                 </Box>
 
+                {activeGoal && <GoalSummary goal={activeGoal} />}
+
                 <ButtonBase
-                    onClick={onSetGoal}
+                    onClick={activeGoal ? onViewGoal : onSetGoal}
+                    disabled={!activeGoal && !canSetGoal}
                     sx={{
                         position: "relative",
                         width: "100%",
@@ -167,11 +210,12 @@ export default function CourseSidePanel({ course, rank, onSetGoal }: Props) {
                         boxShadow: "0px 0px 8px 0px rgba(255,255,255,0.12)",
                         transition: "border-color .18s ease, box-shadow .18s ease",
                         "&:hover": { borderColor: "#4608AC", boxShadow: "0px 0px 12px 0px rgba(140,36,255,0.35)" },
+                        "&.Mui-disabled": { opacity: 0.45 },
                         "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
                     }}
                 >
                     <Typography component="span" sx={{ ...TYPE.buttonMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
-                        Set Learning Goal
+                        {activeGoal ? "View My Goal" : "Set Learning Goal"}
                     </Typography>
                 </ButtonBase>
             </Box>

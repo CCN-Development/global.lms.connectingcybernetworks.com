@@ -3,7 +3,8 @@
 import React from "react";
 import Image from "next/image";
 import { Box, Typography } from "@mui/material";
-import { courseStatusBadge, type Course } from "./course-data";
+import type { MyCourseCard } from "@/contexts/CourseContext";
+import { courseEmblem, courseStatusLabel, isRemoteSrc } from "./course-format";
 import {
     COLORS,
     COURSE_THEMES,
@@ -16,14 +17,21 @@ import {
 import { FadeDivider, PrimaryButton, ProgressTrack, StatChip, StatusPill, missionStats } from "./my-courses-ui";
 
 interface Props {
-    course: Course;
+    course: MyCourseCard;
     onStart: () => void;
     onOpen: () => void;
+    starting?: boolean;
 }
 
-export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) {
-    const theme = COURSE_THEMES[course.theme];
+function startLabel(course: MyCourseCard): string {
+    if (course.status === "Completed") return "Review Mission";
+    return course.progress > 0 ? "Continue Learning" : "Start Learning";
+}
+
+export default function ActiveMissionBanner({ course, onStart, onOpen, starting = false }: Props) {
+    const theme = COURSE_THEMES[course.theme] ?? COURSE_THEMES.violet;
     const stats = missionStats(course, "banner");
+    const emblem = courseEmblem(course);
 
     return (
         <Box
@@ -68,7 +76,7 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                 }}
             >
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
-                    <StatusPill label={courseStatusBadge(course.status).label} />
+                    <StatusPill label={courseStatusLabel(course.status)} />
 
                     <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", width: "100%", minWidth: 0 }}>
                         <Typography
@@ -83,7 +91,7 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                             {course.title}
                         </Typography>
                         <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral200 }}>
-                            {course.tagline}
+                            {course.tagline ?? ""}
                         </Typography>
                     </Box>
                 </Box>
@@ -116,7 +124,7 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                     zIndex: 2,
                 }}
             >
-                <Image src={course.emblem} alt="" fill sizes="182px" style={{ objectFit: "cover" }} priority />
+                <Image src={emblem} alt="" fill sizes="182px" unoptimized={isRemoteSrc(emblem)} style={{ objectFit: "cover" }} priority />
             </Box>
 
             {/* Continue strip */}
@@ -162,7 +170,7 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                         </Box>
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
                             <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral75 }}>
-                                {course.currentLevelLabel}
+                                {course.currentLevelLabel ?? "Levels coming soon"}
                             </Typography>
                             <ProgressTrack value={course.progress} fill={COLORS.neutral200} minFill={3} width={284} />
                         </Box>
@@ -171,12 +179,13 @@ export default function ActiveMissionBanner({ course, onStart, onOpen }: Props) 
                     <PrimaryButton
                         height={40}
                         icon={UI_ICONS.play18}
+                        disabled={starting}
                         onClick={(e) => {
                             e.stopPropagation();
                             onStart();
                         }}
                     >
-                        {course.progress > 0 ? "Continue Learning" : "Start Learning"}
+                        {starting ? "Opening…" : startLabel(course)}
                     </PrimaryButton>
                 </Box>
             </Box>

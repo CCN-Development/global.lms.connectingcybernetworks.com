@@ -115,6 +115,8 @@ export interface CourseTheme {
     art: string;
     /** CSS fallback shown while the art loads; mirrors the art's base radial gradient. */
     fallback: string;
+    /** Mission emblem used when the course has no uploaded emblem. */
+    emblem: string;
 }
 
 const radial = (stops: string) => `radial-gradient(97.27% 97.27% at 50% 50%, ${stops})`;
@@ -124,26 +126,31 @@ export const COURSE_THEMES: Record<CourseThemeKey, CourseTheme> = {
         border: "#5E03C5",
         art: `${MY_COURSES_ASSETS}/art/cisco-art.png`,
         fallback: radial("#6101CB 0%, #460D98 25%, #2A1865 50%, #20124C 62.5%, #150C33 75%, #0B0619 87.5%, #05030D 93.75%, #000 100%"),
+        emblem: `${MY_COURSES_ASSETS}/emblems/ccna.png`,
     },
     crimson: {
         border: "#921F23",
         art: `${MY_COURSES_ASSETS}/art/red-art.png`,
         fallback: radial("#C8292A 0%, #8A1D20 25%, #6B171B 37.5%, #4C1116 50%, #360F15 75%, #1F0D14 100%"),
+        emblem: `${MY_COURSES_ASSETS}/emblems/bug-bounty.png`,
     },
     amber: {
         border: "#A1501F",
         art: `${MY_COURSES_ASSETS}/art/orange-art.png`,
         fallback: radial("#DB6921 0%, #B6571C 12.5%, #904516 25%, #6B3211 37.5%, #45200B 50%, #612909 62.5%, #7D3208 75%, #B64505 100%"),
+        emblem: `${MY_COURSES_ASSETS}/emblems/soft-skill.png`,
     },
     indigo: {
         border: "#5D72F3",
         art: `${MY_COURSES_ASSETS}/art/blue-art.png`,
         fallback: radial("#131366 0%, #1E1068 50%, #16144E 75%, #0E1934 100%"),
+        emblem: `${MY_COURSES_ASSETS}/emblems/ethical-hacking.png`,
     },
     teal: {
         border: "#057F88",
         art: `${MY_COURSES_ASSETS}/art/teal-art.png`,
         fallback: radial("#008080 0%, #0F6971 50%, #008080 100%"),
+        emblem: `${MY_COURSES_ASSETS}/emblems/cloud-security.png`,
     },
 };
 
@@ -165,3 +172,7 @@ export const UI_ICONS = {
 
 /** Assets for the course detail ("dedicated course") page. */
 export const COURSE_ASSETS = `${MY_COURSES_ASSETS}/course`;
+/** Module page artwork (hero poster, kind icons, dividers). */
+export const MODULE_ASSETS = `${MY_COURSES_ASSETS}/module`;
+/** Quiz / lab overlay artwork. */
+export const ACTIVITY_ASSETS = `${MY_COURSES_ASSETS}/activity`;

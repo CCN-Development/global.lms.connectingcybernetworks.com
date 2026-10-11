@@ -2,15 +2,20 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { Box, ButtonBase, Tooltip, Typography } from "@mui/material";
+import { Box, ButtonBase, CircularProgress, Tooltip, Typography } from "@mui/material";
 import { BookOpen } from "lucide-react";
-import { COLORS, COURSE_ASSETS, LESSON_CARD_FILL, LEVEL_CARD_FILL, TYPE, glassFill } from "../my-courses-theme";
+import toast from "react-hot-toast";
+import type { StandardResponse } from "@/contexts/AuthContext";
+import type { ModuleLessonView, ModuleSectionView, ModuleView, PlaybackInfo } from "@/contexts/CourseContext";
+import { formatClockDuration, formatHoursMinutes, isRemoteSrc } from "../course-format";
+import { COLORS, COURSE_ASSETS, LESSON_CARD_FILL, LEVEL_CARD_FILL, MODULE_ASSETS, TYPE, UI_ICONS, glassFill } from "../my-courses-theme";
 import { StatusPill, framedPanelSx } from "../my-courses-ui";
 import { LevelStatus } from "../CourseLevelsTab";
-import { ContentBlocks } from "./activity-ui";
-import { MODULE_ASSETS, sectionProgress, type CourseModule, type ModuleLesson, type ModuleSection, type ModuleVideo } from "./module-data";
+import StreamPlayer from "../StreamPlayer";
 
 const LEVEL_ASSETS = `${COURSE_ASSETS}/levels`;
+export const MODULE_HERO_POSTER = `${MODULE_ASSETS}/hero-thumb.png`;
+export const LESSON_VIDEO_POSTER = `${MODULE_ASSETS}/lesson-video-thumb.png`;
 
 const focusRing = { "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" } } as const;
 
@@ -46,20 +51,34 @@ const POSTER = {
     },
 } as const;
 
-/** Poster frame with the gold-ruled title card; swaps to a native player once a source exists and play is pressed. */
-function VideoPoster({
-    video,
+/**
+ * Poster frame with the gold-ruled title card. Renders `children` (the live Stream player) instead of the
+ * poster once playback has started.
+ */
+export function VideoPoster({
+    poster,
+    caption,
     variant,
-    onProgress,
+    available,
+    busy = false,
+    message,
+    onPlay,
+    children,
 }: {
-    video: ModuleVideo;
+    poster: string;
+    caption: string;
     variant: keyof typeof POSTER;
-    /** 0 - 100 playback progress. */
-    onProgress?: (pct: number) => void;
+    available: boolean;
+    busy?: boolean;
+    /** Replaces the "Video coming soon" hint (e.g. a playback error). */
+    message?: string | null;
+    onPlay?: () => void;
+    children?: React.ReactNode;
 }) {
     const p = POSTER[variant];
-    const [playing, setPlaying] = useState(false);
     const center = (dx: number, dy: number) => `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const playable = available && Boolean(onPlay) && !busy;
+    const hint = message ?? (available ? "" : "Video coming soon");
 
     return (
         <Box
@@ -75,23 +94,17 @@ function VideoPoster({
                 "&::after": { content: '""', position: "absolute", inset: 0, borderRadius: "inherit", boxShadow: p.highlight, pointerEvents: "none" },
             }}
         >
-            {playing && video.src ? (
-                <Box
-                    component="video"
-                    src={video.src}
-                    poster={video.poster}
-                    controls
-                    autoPlay
-                    onTimeUpdate={(e: React.SyntheticEvent<HTMLVideoElement>) => {
-                        const el = e.currentTarget;
-                        if (el.duration) onProgress?.(Math.round((el.currentTime / el.duration) * 100));
-                    }}
-                    onEnded={() => onProgress?.(100)}
-                    sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", bgcolor: "#000" }}
-                />
-            ) : (
+            {children ?? (
                 <>
-                    <Image src={video.poster} alt="" fill sizes="(max-width: 1200px) 100vw, 766px" style={{ objectFit: "cover" }} priority={variant === "hero"} />
+                    <Image
+                        src={poster}
+                        alt=""
+                        fill
+                        sizes="(max-width: 1200px) 100vw, 766px"
+                        unoptimized={isRemoteSrc(poster)}
+                        style={{ objectFit: "cover" }}
+                        priority={variant === "hero"}
+                    />
                     <Box sx={{ position: "absolute", inset: 0, backgroundImage: p.scrim }} />
                     <Box
                         sx={{
@@ -116,97 +129,181 @@ function VideoPoster({
                                 color: COLORS.white,
                             }}
                         >
-                            {video.caption}
+                            {caption}
                         </Typography>
                     </Box>
                     <Box sx={{ position: "absolute", inset: 0, backgroundImage: p.fade }} />
-                    <Tooltip title={video.src ? "" : "Video coming soon"} placement="top">
-                        <ButtonBase
-                            aria-label={`Play ${video.caption}`}
-                            aria-disabled={!video.src}
-                            onClick={() => video.src && setPlaying(true)}
+                    {busy ? (
+                        <Box sx={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
+                            <CircularProgress size={44} sx={{ color: COLORS.white }} />
+                        </Box>
+                    ) : (
+                        <Tooltip title={hint} placement="top">
+                            <ButtonBase
+                                aria-label={`Play ${caption}`}
+                                aria-disabled={!playable}
+                                onClick={() => playable && onPlay?.()}
+                                sx={{
+                                    position: "absolute",
+                                    left: "50%",
+                                    top: "50%",
+                                    transform: center(p.play.dx, p.play.dy),
+                                    width: p.play.size,
+                                    height: p.play.size,
+                                    borderRadius: "50%",
+                                    opacity: playable ? 1 : 0.55,
+                                    transition: "transform .2s ease",
+                                    cursor: playable ? "pointer" : "default",
+                                    "&:hover": playable ? { transform: `${center(p.play.dx, p.play.dy)} scale(1.06)` } : {},
+                                    ...focusRing,
+                                }}
+                            >
+                                <Image src={p.play.src} alt="" width={p.play.size} height={p.play.size} />
+                            </ButtonBase>
+                        </Tooltip>
+                    )}
+                    {message && (
+                        <Typography
+                            role="status"
                             sx={{
                                 position: "absolute",
-                                left: "50%",
-                                top: "50%",
-                                transform: center(p.play.dx, p.play.dy),
-                                width: p.play.size,
-                                height: p.play.size,
-                                borderRadius: "50%",
-                                transition: "transform .2s ease",
-                                cursor: video.src ? "pointer" : "default",
-                                "&:hover": video.src ? { transform: `${center(p.play.dx, p.play.dy)} scale(1.06)` } : {},
-                                ...focusRing,
+                                left: 0,
+                                right: 0,
+                                bottom: "16px",
+                                px: "16px",
+                                textAlign: "center",
+                                ...TYPE.smallMed14,
+                                color: COLORS.neutral100,
                             }}
                         >
-                            <Image src={p.play.src} alt="" width={p.play.size} height={p.play.size} />
-                        </ButtonBase>
-                    </Tooltip>
+                            {message}
+                        </Typography>
+                    )}
                 </>
             )}
         </Box>
     );
 }
 
-function moduleStatus(sections: ModuleSection[]): string {
-    const lessons = sections.flatMap((s) => s.lessons);
-    const done = lessons.filter((l) => l.completed).length;
-    if (lessons.length > 0 && done === lessons.length) return "Module completed";
-    if (done > 0 || lessons.some((l) => (l.watched ?? 0) > 0)) return "Module in progress";
-    return "Module not started";
+function moduleStatus(module: ModuleView): string {
+    const { completedLessons, totalLessons } = module.stats;
+    if (totalLessons > 0 && completedLessons >= totalLessons) return "Module completed";
+    const started = completedLessons > 0 || module.sections.some((s) => s.progress > 0);
+    return started ? "Module in progress" : "Module not started";
 }
 
-export function ModuleHero({ module, sections }: { module: CourseModule; sections: ModuleSection[] }) {
+/** Intro video poster that swaps to the signed Stream player when played. */
+function IntroVideo({ module, loadIntro }: { module: ModuleView; loadIntro: () => Promise<StandardResponse<PlaybackInfo>> }) {
+    const [playback, setPlayback] = useState<PlaybackInfo | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const play = async () => {
+        setBusy(true);
+        try {
+            const res = await loadIntro();
+            if (res.success && res.data) setPlayback(res.data);
+            else toast.error(res.message ?? "Intro video is not available");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <VideoPoster
+            poster={module.intro.posterUrl || module.thumbnailUrl || MODULE_HERO_POSTER}
+            caption={module.title}
+            variant="hero"
+            available={module.intro.available}
+            busy={busy}
+            onPlay={play}
+        >
+            {playback ? <StreamPlayer playback={playback} title={`${module.title} — Introduction`} /> : undefined}
+        </VideoPoster>
+    );
+}
+
+export function ModuleHero({ module, loadIntro }: { module: ModuleView; loadIntro: () => Promise<StandardResponse<PlaybackInfo>> }) {
     return (
         <Box sx={{ position: "relative", display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: { xs: "24px", lg: "44px" }, alignItems: { lg: "stretch" } }}>
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "24px" }}>
-                <StatusPill label={moduleStatus(sections)} size="md" color={COLORS.lessonDone} />
+                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                    <StatusPill label={moduleStatus(module)} size="md" color={COLORS.lessonDone} />
+                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>
+                        Level {module.level.levelNo} · {module.level.title}
+                    </Typography>
+                </Box>
                 <Typography
                     component="h1"
-                    sx={{ ...TYPE.displayReg44, fontSize: { xs: "32px", sm: "44px" }, lineHeight: { xs: "48px", sm: "66px" }, color: COLORS.white, maxWidth: 406 }}
+                    sx={{ ...TYPE.displayReg44, fontSize: { xs: "32px", sm: "44px" }, lineHeight: { xs: "48px", sm: "66px" }, color: COLORS.white, maxWidth: 520 }}
                 >
-                    {module.title}{" "}
-                    <Box component="span" sx={{ color: COLORS.purple }}>
-                        {module.titleAccent}
-                    </Box>
+                    {module.title}
+                    {module.titleAccent && (
+                        <Box component="span" sx={{ color: COLORS.purple }}>
+                            {` ${module.titleAccent}`}
+                        </Box>
+                    )}
                 </Typography>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "27px" }}>
-                    {module.description.map((paragraph) => (
-                        <Typography key={paragraph} sx={{ ...TYPE.largeMed18, fontSize: { xs: "16px", sm: "18px" }, color: COLORS.neutral100 }}>
+                    {module.description.map((paragraph, i) => (
+                        <Typography key={i} sx={{ ...TYPE.largeMed18, fontSize: { xs: "16px", sm: "18px" }, color: COLORS.neutral100 }}>
                             {paragraph}
                         </Typography>
                     ))}
                 </Box>
             </Box>
             <Box sx={{ width: { xs: "100%", lg: "min(650px, 48%)" }, flexShrink: 0, aspectRatio: { xs: "650 / 371", lg: "auto" }, minHeight: { lg: 320 } }}>
-                <VideoPoster video={module.intro} variant="hero" />
+                <IntroVideo module={module} loadIntro={loadIntro} />
             </Box>
         </Box>
     );
 }
 
-export function ModuleStats({ module }: { module: CourseModule }) {
+export function ModuleStats({ module }: { module: ModuleView }) {
+    const lead = module.instructors.find((i) => i.isLead) ?? module.instructors[0];
+    const extra = Math.max(0, module.instructors.length - 1);
     const items: { label: string; value: React.ReactNode }[] = [
-        { label: "Video Content", value: module.videoContent },
-        { label: "Hands on Activity", value: module.handsOnActivity },
-        { label: "Points earned", value: `${module.pointsEarned.toLocaleString("en-US")} XP` },
+        { label: "Video Content", value: formatHoursMinutes(module.stats.videoDurationSec, true) },
+        { label: "Hands on Activity", value: formatHoursMinutes(module.stats.activityDurationSec, true) },
+        { label: "Points earned", value: `${module.stats.pointsEarned.toLocaleString("en-US")} XP` },
         {
             label: "Instructor",
-            value: (
+            value: lead ? (
                 <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
                     <Box
                         component="span"
-                        sx={{ position: "relative", width: 24, height: 24, flexShrink: 0, borderRadius: "50%", overflow: "hidden", border: "1.375px solid rgba(255,255,255,0.88)" }}
+                        sx={{
+                            position: "relative",
+                            width: 24,
+                            height: 24,
+                            flexShrink: 0,
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            border: "1.375px solid rgba(255,255,255,0.88)",
+                            bgcolor: "#93A9E2",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "12px",
+                            color: "#0A0A10",
+                        }}
                     >
-                        <Image src={module.instructor.avatar} alt="" fill sizes="24px" style={{ objectFit: "cover" }} />
+                        {lead.avatar ? (
+                            <Image src={lead.avatar} alt="" fill sizes="24px" unoptimized={isRemoteSrc(lead.avatar)} style={{ objectFit: "cover" }} />
+                        ) : (
+                            lead.name.charAt(0).toUpperCase()
+                        )}
                     </Box>
-                    {module.instructor.name}
-                    {module.extraInstructors > 0 && (
-                        <Box component="span" sx={{ ...TYPE.smallMed14, color: COLORS.milestoneBorder, textDecoration: "underline" }}>
-                            +{module.extraInstructors}
-                        </Box>
+                    {lead.name}
+                    {extra > 0 && (
+                        <Tooltip title={module.instructors.slice(1).map((i) => i.name).join(", ")}>
+                            <Box component="span" sx={{ ...TYPE.smallMed14, color: COLORS.milestoneBorder, textDecoration: "underline", cursor: "default" }}>
+                                +{extra}
+                            </Box>
+                        </Tooltip>
                     )}
                 </Box>
+            ) : (
+                "—"
             ),
         },
     ];
@@ -249,30 +346,30 @@ export function ModuleStats({ module }: { module: CourseModule }) {
     );
 }
 
-const KIND_ICON: Record<Exclude<ModuleLesson["kind"], "theory">, { tile: string; button: string }> = {
+const KIND_ICON: Record<Exclude<ModuleLessonView["kind"], "theory">, { tile: string; button: string }> = {
     video: { tile: `${MODULE_ASSETS}/icon-video-28.svg`, button: `${LEVEL_ASSETS}/icon-play-16.svg` },
     quiz: { tile: `${MODULE_ASSETS}/icon-file-text-28.svg`, button: `${MODULE_ASSETS}/icon-file-text-16.svg` },
     lab: { tile: `${MODULE_ASSETS}/icon-flask-28.svg`, button: `${MODULE_ASSETS}/icon-flask-16.svg` },
 };
 
-function actionLabel(lesson: ModuleLesson, expanded: boolean): string {
+function actionLabel(lesson: ModuleLessonView, expanded: boolean): string {
     switch (lesson.kind) {
         case "video": {
-            const watched = lesson.watched ?? 0;
-            if (watched >= 100) return "Restart Video";
-            return watched > 0 ? "Resume Video" : "Play Video";
+            if (expanded) return "Hide Video";
+            if (lesson.completed) return "Restart Video";
+            return (lesson.watched ?? 0) > 0 ? "Resume Video" : "Play Video";
         }
         case "quiz":
-            return lesson.completed ? "Retake Quiz" : "Start Quiz";
+            return lesson.completed ? "Retake Quiz" : lesson.status === "in_progress" ? "Continue Quiz" : "Start Quiz";
         case "lab":
-            return lesson.completed ? "Revisit Lab" : "Start Lab";
+            return lesson.completed ? "Revisit Lab" : lesson.status === "in_progress" ? "Continue Lab" : "Start Lab";
         case "theory":
             if (expanded) return "Hide Theory";
             return lesson.completed ? "Read Again" : "Read Theory";
     }
 }
 
-function KindTile({ lesson }: { lesson: ModuleLesson }) {
+function KindTile({ lesson }: { lesson: ModuleLessonView }) {
     return (
         <Box
             aria-hidden
@@ -294,22 +391,38 @@ function KindTile({ lesson }: { lesson: ModuleLesson }) {
                     <Image src={KIND_ICON[lesson.kind].tile} alt="" width={28} height={28} />
                 )}
             </Box>
+            {lesson.kind === "video" && (lesson.watched ?? 0) > 0 && (
+                <Box sx={{ position: "absolute", left: 0, bottom: 0, height: 3, width: `${Math.min(100, lesson.watched ?? 0)}%`, bgcolor: COLORS.purple }} />
+            )}
         </Box>
     );
 }
 
-function LessonMeta({ lesson }: { lesson: ModuleLesson }) {
+function LessonMeta({ lesson }: { lesson: ModuleLessonView }) {
+    const xpLabel = lesson.xpEarned > 0 && lesson.xpEarned < lesson.xp ? `${lesson.xpEarned}/${lesson.xp} XP` : `${lesson.xp} XP`;
     return (
         <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Image src={`${LEVEL_ASSETS}/icon-clock-16.svg`} alt="" width={16} height={16} />
-                <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral200, whiteSpace: "nowrap" }}>{lesson.duration}</Typography>
-            </Box>
-            <Image src={`${LEVEL_ASSETS}/meta-dot.svg`} alt="" width={6} height={6} />
+            {lesson.durationSec > 0 && (
+                <>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Image src={`${LEVEL_ASSETS}/icon-clock-16.svg`} alt="" width={16} height={16} />
+                        <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral200, whiteSpace: "nowrap" }}>
+                            {formatClockDuration(lesson.durationSec)}
+                        </Typography>
+                    </Box>
+                    <Image src={`${LEVEL_ASSETS}/meta-dot.svg`} alt="" width={6} height={6} />
+                </>
+            )}
             <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Image src={`${LEVEL_ASSETS}/icon-zap-16.svg`} alt="" width={16} height={16} />
-                <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral200, whiteSpace: "nowrap" }}>{lesson.xp} XP</Typography>
+                <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral200, whiteSpace: "nowrap" }}>{xpLabel}</Typography>
             </Box>
+            {!lesson.isMandatory && (
+                <>
+                    <Image src={`${LEVEL_ASSETS}/meta-dot.svg`} alt="" width={6} height={6} />
+                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300, whiteSpace: "nowrap" }}>Optional</Typography>
+                </>
+            )}
         </Box>
     );
 }
@@ -317,26 +430,30 @@ function LessonMeta({ lesson }: { lesson: ModuleLesson }) {
 function LessonRow({
     lesson,
     expanded,
+    locked,
+    inline,
     onAction,
-    onProgress,
 }: {
-    lesson: ModuleLesson;
+    lesson: ModuleLessonView;
     expanded: boolean;
+    locked: boolean;
+    /** Video player / theory reader rendered under the row while expanded. */
+    inline: React.ReactNode;
     onAction: () => void;
-    onProgress: (pct: number) => void;
 }) {
-    const inline = expanded && ((lesson.kind === "video" && lesson.video) || (lesson.kind === "theory" && lesson.theory));
-    const label = actionLabel(lesson, expanded);
+    const label = locked ? "Locked" : actionLabel(lesson, expanded);
     const narrowButton = lesson.kind === "quiz" || lesson.kind === "lab";
 
     return (
         <Box
+            id={`lesson-${lesson.lessonId}`}
             sx={{
                 ...framedPanelSx({ angle: "177.21deg", radius: 16, fill: LESSON_CARD_FILL }),
                 display: "flex",
                 flexDirection: "column",
                 gap: "24px",
                 p: { xs: "16px", sm: "24px" },
+                scrollMarginTop: "16px",
             }}
         >
             <Box sx={{ position: "relative", display: "flex", alignItems: "center", flexWrap: { xs: "wrap", sm: "nowrap" }, gap: { xs: "16px", sm: "24px" } }}>
@@ -353,6 +470,7 @@ function LessonRow({
                 </Box>
                 <ButtonBase
                     onClick={onAction}
+                    disabled={locked}
                     aria-expanded={lesson.kind === "video" || lesson.kind === "theory" ? expanded : undefined}
                     sx={{
                         flexShrink: 0,
@@ -365,10 +483,13 @@ function LessonRow({
                         border: `1px solid ${COLORS.outlineButton}`,
                         transition: "border-color .18s ease, background-color .18s ease",
                         "&:hover": { borderColor: COLORS.neutral300, bgcolor: "rgba(255,255,255,0.04)" },
+                        "&.Mui-disabled": { opacity: 0.6, cursor: "not-allowed", pointerEvents: "auto" },
                         ...focusRing,
                     }}
                 >
-                    {lesson.kind === "theory" ? (
+                    {locked ? (
+                        <Image src={UI_ICONS.lock16} alt="" width={16} height={16} />
+                    ) : lesson.kind === "theory" ? (
                         <BookOpen size={16} strokeWidth={1.5} color={COLORS.white} />
                     ) : (
                         <Image src={KIND_ICON[lesson.kind].button} alt="" width={16} height={16} />
@@ -379,20 +500,12 @@ function LessonRow({
                 </ButtonBase>
             </Box>
 
-            {inline && (
+            {expanded && inline && (
                 <>
                     <Box aria-hidden sx={{ position: "relative", height: "1px", lineHeight: 0 }}>
                         <Box component="img" src={`${MODULE_ASSETS}/divider-lesson.svg`} alt="" sx={{ display: "block", width: "100%", height: "1px", maxWidth: "none" }} />
                     </Box>
-                    {lesson.kind === "video" && lesson.video ? (
-                        <Box sx={{ position: "relative", height: { xs: 200, sm: 320 } }}>
-                            <VideoPoster video={lesson.video} variant="inline" onProgress={onProgress} />
-                        </Box>
-                    ) : (
-                        <Box sx={{ position: "relative" }}>
-                            <ContentBlocks blocks={lesson.theory ?? []} />
-                        </Box>
-                    )}
+                    <Box sx={{ position: "relative" }}>{inline}</Box>
                 </>
             )}
         </Box>
@@ -402,13 +515,15 @@ function LessonRow({
 export function ModuleSectionCard({
     section,
     expandedId,
+    locked,
     onAction,
-    onProgress,
+    renderInline,
 }: {
-    section: ModuleSection;
+    section: ModuleSectionView;
     expandedId: string | null;
-    onAction: (lesson: ModuleLesson) => void;
-    onProgress: (lesson: ModuleLesson, pct: number) => void;
+    locked: boolean;
+    onAction: (lesson: ModuleLessonView) => void;
+    renderInline: (lesson: ModuleLessonView) => React.ReactNode;
 }) {
     return (
         <Box
@@ -440,19 +555,26 @@ export function ModuleSectionCard({
                         {section.title}
                     </Typography>
                 </Box>
-                <LevelStatus progress={sectionProgress(section.lessons)} />
+                <LevelStatus progress={section.progress} locked={locked} />
             </Box>
 
             <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "16px", minWidth: 0 }}>
-                {section.lessons.map((lesson) => (
-                    <LessonRow
-                        key={lesson.lessonId}
-                        lesson={lesson}
-                        expanded={expandedId === lesson.lessonId}
-                        onAction={() => onAction(lesson)}
-                        onProgress={(pct) => onProgress(lesson, pct)}
-                    />
-                ))}
+                {section.lessons.length === 0 && (
+                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>Lessons for this task are on their way.</Typography>
+                )}
+                {section.lessons.map((lesson) => {
+                    const expanded = expandedId === lesson.lessonId;
+                    return (
+                        <LessonRow
+                            key={lesson.lessonId}
+                            lesson={lesson}
+                            expanded={expanded}
+                            locked={locked}
+                            inline={expanded ? renderInline(lesson) : null}
+                            onAction={() => onAction(lesson)}
+                        />
+                    );
+                })}
             </Box>
         </Box>
     );

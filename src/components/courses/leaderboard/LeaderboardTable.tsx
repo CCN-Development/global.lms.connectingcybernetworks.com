@@ -3,7 +3,7 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { COLORS, TYPE, glassFill } from "../my-courses-theme";
-import { AVATAR_PLACEHOLDER, displayName, type LeaderboardEntry } from "./leaderboard-data";
+import { AVATAR_PLACEHOLDER, displayName, type LeaderboardEntry } from "./leaderboard-utils";
 
 const COLUMNS = {
     rank: 31,
@@ -71,7 +71,7 @@ function Row({ entry, currentLearnerId, pinned = false }: { entry: LeaderboardEn
                         {displayName(entry, currentLearnerId)}
                     </Typography>
                     <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral200 }}>
-                        {entry.batchName}
+                        {entry.batchName ?? "Independent learner"}
                     </Typography>
                 </Box>
             </Box>

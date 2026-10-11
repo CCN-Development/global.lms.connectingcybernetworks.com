@@ -10,7 +10,9 @@ import { BatchProvider } from "@/contexts/BatchContext";
 import { StudentProvider } from "@/contexts/StudentContext";
 import { TrainerProvider } from "@/contexts/TrainerContext";
 import { AssignmentProvider } from "@/contexts/AssignmentContext";
+import { CourseProvider } from "@/contexts/CourseContext";
 import { cn } from "@/lib/utils";
+import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -40,6 +42,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={cn("h-full", "antialiased", lato.variable, "font-sans", inter.variable, poppins.variable)}>
       <body className="min-h-full">
+        {/* Collects MUI/Emotion styles during SSR so they hydrate without mismatches. */}
+        <AppRouterCacheProvider>
         <AuthProvider>
           <RMProvider>
             <ContentProvider>
@@ -48,9 +52,11 @@ export default function RootLayout({
                   <StudentProvider>
                     <TrainerProvider>
                       <AssignmentProvider>
-                        {/* <CyberSecurityProvider> */}
-                        {children}
-                        {/* </CyberSecurityProvider> */}
+                        <CourseProvider>
+                          {/* <CyberSecurityProvider> */}
+                          {children}
+                          {/* </CyberSecurityProvider> */}
+                        </CourseProvider>
                       </AssignmentProvider>
                     </TrainerProvider>
                   </StudentProvider>
@@ -59,6 +65,7 @@ export default function RootLayout({
             </ContentProvider>
           </RMProvider>
         </AuthProvider>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );

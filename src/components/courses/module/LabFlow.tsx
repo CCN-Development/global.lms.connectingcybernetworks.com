@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useEffect, useEffectEvent, useState } from "react";
-import { Box, ButtonBase, Modal, Typography } from "@mui/material";
-import { COLORS, TYPE } from "../my-courses-theme";
+import { Box, ButtonBase, CircularProgress, InputBase, Modal, Typography } from "@mui/material";
+import toast from "react-hot-toast";
+import { useCourse, type LabAttemptView, type LabBrief, type LabCompleteResult } from "@/contexts/CourseContext";
+import { announceRewards, formatClockDuration } from "../course-format";
+import { ACTIVITY_ASSETS, COLORS, TYPE } from "../my-courses-theme";
 import { BackButton } from "../my-courses-ui";
 import {
     ACTIVITY_TYPE,
@@ -11,7 +14,6 @@ import {
     ActivityPanel,
     CardDivider,
     CardGlows,
-    ContentBlockView,
     ContentBlocks,
     GhostButton,
     IconTile,
@@ -19,16 +21,16 @@ import {
     formatDuration,
 } from "./activity-ui";
 import ResultCard, { LAB_BADGE } from "./ResultCard";
-import { ACTIVITY_ASSETS, type Lab } from "./module-data";
 
 type Tab = "overview" | "task" | "solution";
-type Stage = "brief" | "building" | "running" | "result";
 
 const TABS: { key: Tab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "task", label: "Task" },
     { key: "solution", label: "Solutions" },
 ];
+
+const DEFAULT_INTRO = ["Put your knowledge into practice.", "Complete the hands-on task, solve the challenge, and prove your skills."];
 
 function LabTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
     return (
@@ -61,8 +63,19 @@ function LabTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void
     );
 }
 
+/** Blurred stand-in for the hidden solution — the real blocks are only sent once unlocked. */
+function SolutionPlaceholder() {
+    return (
+        <Box aria-hidden sx={{ display: "flex", flexDirection: "column", gap: "16px", userSelect: "none" }}>
+            {[92, 70, 84, 40, 76, 88, 60].map((width, i) => (
+                <Box key={i} sx={{ height: i % 3 === 0 ? 22 : 14, width: `${width}%`, borderRadius: "6px", bgcolor: "rgba(255,255,255,0.12)" }} />
+            ))}
+        </Box>
+    );
+}
+
 /** Frosted cover over the solution until the learner gives up on solving it alone. */
-function SolutionLock({ onReveal }: { onReveal: () => void }) {
+function SolutionLock({ penalty, busy, onReveal }: { penalty: number; busy: boolean; onReveal: () => void }) {
     return (
         <Box
             sx={{
@@ -75,7 +88,7 @@ function SolutionLock({ onReveal }: { onReveal: () => void }) {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "flex-start",
-                pt: { xs: "48px", lg: "162px" },
+                pt: { xs: "48px", lg: "120px" },
                 px: "16px",
                 backgroundImage: `url("${ACTIVITY_ASSETS}/locked-scrim.svg")`,
                 backgroundSize: "100% 100%",
@@ -90,20 +103,22 @@ function SolutionLock({ onReveal }: { onReveal: () => void }) {
                             Solution Locked
                         </Typography>
                         <Typography sx={{ ...ACTIVITY_TYPE.latoReg16, color: COLORS.neutral200 }}>
-                            Give it one more try before revealing the solution. You’ll lose points if you choose to view it.
+                            Give it one more try before revealing the solution.
+                            {penalty > 0 ? ` You’ll lose ${penalty} XP if you choose to view it.` : ""}
                         </Typography>
                     </Box>
                 </Box>
                 <CardDivider src={`${ACTIVITY_ASSETS}/divider-373.svg`} maxWidth={373} />
-                <ActivityButton onClick={onReveal}>Give Up &amp; View Solution</ActivityButton>
+                <ActivityButton onClick={onReveal} disabled={busy}>
+                    {busy ? "Unlocking…" : "Give Up & View Solution"}
+                </ActivityButton>
             </Box>
         </Box>
     );
 }
 
-function LabDetails({ lab, tab, onTab, unlocked, onUnlock }: { lab: Lab; tab: Tab; onTab: (tab: Tab) => void; unlocked: boolean; onUnlock: () => void }) {
-    const locked = tab === "solution" && !unlocked;
-    const [firstStep, ...rest] = lab.solution;
+function LabDetails({ brief, tab, onTab, unlocking, onUnlock }: { brief: LabBrief; tab: Tab; onTab: (tab: Tab) => void; unlocking: boolean; onUnlock: () => void }) {
+    const locked = tab === "solution" && brief.solutionLocked;
     const pad = { xs: "16px", sm: "24px" };
     const negPad = { xs: "-16px", sm: "-24px" };
 
@@ -144,28 +159,126 @@ function LabDetails({ lab, tab, onTab, unlocked, onUnlock }: { lab: Lab; tab: Ta
                     "&::-webkit-scrollbar": { display: "none" },
                 }}
             >
-                {tab === "overview" && <Typography sx={{ ...ACTIVITY_TYPE.interReg16, color: COLORS.white }}>{lab.overview}</Typography>}
-                {tab === "task" && <ContentBlocks blocks={lab.task} />}
-                {tab === "solution" &&
-                    (unlocked || !firstStep ? (
-                        <ContentBlocks blocks={lab.solution} />
-                    ) : (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", flex: 1 }}>
-                            <ContentBlockView block={firstStep} />
-                            <Box sx={{ position: "relative", flex: 1 }}>
-                                <Box aria-hidden sx={{ userSelect: "none" }}>
-                                    <ContentBlocks blocks={rest} />
+                {tab === "overview" && (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <Typography sx={{ ...ACTIVITY_TYPE.interReg16, color: COLORS.white, whiteSpace: "pre-line" }}>
+                            {brief.overview || "Your instructor hasn’t added an overview for this lab yet."}
+                        </Typography>
+                        {brief.tools.length > 0 && (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                <Typography sx={{ ...ACTIVITY_TYPE.latoReg14, color: COLORS.neutral400 }}>TOOLS</Typography>
+                                <Box component="ul" sx={{ m: 0, pl: "24px", ...ACTIVITY_TYPE.interReg16, color: COLORS.white }}>
+                                    {brief.tools.map((tool) => (
+                                        <li key={tool}>{tool}</li>
+                                    ))}
                                 </Box>
-                                <SolutionLock onReveal={onUnlock} />
                             </Box>
+                        )}
+                        {brief.verificationMode === "flag" && brief.totalFlags > 0 && (
+                            <Typography sx={{ ...ACTIVITY_TYPE.interReg16, color: COLORS.neutral200 }}>
+                                Capture {brief.totalFlags} flag{brief.totalFlags === 1 ? "" : "s"} to complete this lab.
+                            </Typography>
+                        )}
+                    </Box>
+                )}
+                {tab === "task" &&
+                    (brief.taskBlocks.length ? (
+                        <ContentBlocks blocks={brief.taskBlocks} />
+                    ) : (
+                        <Typography sx={{ ...ACTIVITY_TYPE.interReg16, color: COLORS.neutral200 }}>No task steps were added for this lab.</Typography>
+                    ))}
+                {tab === "solution" &&
+                    (brief.solutionLocked ? (
+                        <Box sx={{ position: "relative", flex: 1, minHeight: 420 }}>
+                            <SolutionPlaceholder />
+                            <SolutionLock penalty={brief.solutionPenaltyXp} busy={unlocking} onReveal={onUnlock} />
                         </Box>
+                    ) : brief.solutionBlocks?.length ? (
+                        <ContentBlocks blocks={brief.solutionBlocks} />
+                    ) : (
+                        <Typography sx={{ ...ACTIVITY_TYPE.interReg16, color: COLORS.neutral200 }}>No solution was published for this lab.</Typography>
                     ))}
             </Box>
         </ActivityCard>
     );
 }
 
-function LabChallengeCard({ lab, running, onLaunch, onFinish, onLater }: { lab: Lab; running: boolean; onLaunch: () => void; onFinish: () => void; onLater: () => void }) {
+function FlagForm({ attempt, onSubmit }: { attempt: LabAttemptView; onSubmit: (flag: string) => Promise<boolean> }) {
+    const [flag, setFlag] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    const submit = async () => {
+        if (!flag.trim() || busy) return;
+        setBusy(true);
+        try {
+            if (await onSubmit(flag.trim())) setFlag("");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: 420 }}>
+            <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral400, textAlign: "center" }}>
+                FLAGS CAPTURED {attempt.flagsCaptured}/{attempt.totalFlags}
+            </Typography>
+            <Box
+                component="form"
+                onSubmit={(e: React.FormEvent) => {
+                    e.preventDefault();
+                    submit();
+                }}
+                sx={{ display: "flex", gap: "8px" }}
+            >
+                <InputBase
+                    value={flag}
+                    onChange={(e) => setFlag(e.target.value)}
+                    placeholder="FLAG{…}"
+                    inputProps={{ "aria-label": "Flag", spellCheck: false, autoComplete: "off" }}
+                    sx={{
+                        flex: 1,
+                        height: 44,
+                        px: "14px",
+                        borderRadius: "10px",
+                        border: `1px solid ${COLORS.tileBorder}`,
+                        bgcolor: "rgba(0,0,0,0.4)",
+                        color: COLORS.white,
+                        fontFamily: "monospace",
+                        fontSize: 14,
+                    }}
+                />
+                <ActivityButton onClick={submit} width={120} disabled={!flag.trim() || busy}>
+                    {busy ? "Checking…" : "Submit Flag"}
+                </ActivityButton>
+            </Box>
+        </Box>
+    );
+}
+
+function LabChallengeCard({
+    brief,
+    attempt,
+    busy,
+    onLaunch,
+    onFinish,
+    onStop,
+    onLater,
+    onFlag,
+}: {
+    brief: LabBrief;
+    attempt: LabAttemptView | null;
+    busy: boolean;
+    onLaunch: () => void;
+    onFinish: () => void;
+    onStop: () => void;
+    onLater: () => void;
+    onFlag: (flag: string) => Promise<boolean>;
+}) {
+    const running = attempt?.attemptStatus === "running";
+    const needsFlags = brief.verificationMode === "flag" && brief.totalFlags > 0;
+    const flagsDone = !needsFlags || (attempt ? attempt.flagsCaptured >= attempt.totalFlags : false);
+    const expiresAt = running && attempt?.expiresAt ? new Date(attempt.expiresAt) : null;
+
     return (
         <ActivityCard
             angle="160.67deg"
@@ -180,30 +293,52 @@ function LabChallengeCard({ lab, running, onLaunch, onFinish, onLater }: { lab: 
             <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", width: "100%", textAlign: "center" }}>
                 <IconTile variant="lg" icon={`${ACTIVITY_ASSETS}/icon-flask-35.svg`} />
                 <Typography component="h2" sx={{ ...TYPE.headingSemibold28, fontSize: { xs: "22px", sm: "28px" }, color: COLORS.neutral100 }}>
-                    {lab.title}
+                    {brief.title || brief.lessonTitle}
                 </Typography>
                 <Box>
-                    {lab.intro.map((line) => (
-                        <Typography key={line} sx={{ ...ACTIVITY_TYPE.latoReg16, color: COLORS.neutral200 }}>
+                    {(brief.introLines.length ? brief.introLines : DEFAULT_INTRO).map((line, i) => (
+                        <Typography key={i} sx={{ ...ACTIVITY_TYPE.latoReg16, color: COLORS.neutral200 }}>
                             {line}
                         </Typography>
                     ))}
                 </Box>
+                {brief.completed && !running && (
+                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.lessonDone }}>
+                        Completed · {brief.xpEarned} XP earned. You can run the lab again to practise.
+                    </Typography>
+                )}
             </Box>
             <StatTiles
                 caption={running ? "LAB IS READY" : "BEFORE YOU START"}
                 tiles={[
-                    { value: String(lab.tasks), label: "Tasks" },
-                    { value: lab.duration, label: "Time" },
-                    { value: `+${lab.points}`, label: "Points" },
+                    { value: String(brief.taskCount), label: "Tasks" },
+                    { value: brief.durationSec ? formatClockDuration(brief.durationSec) : "Self-paced", label: "Time" },
+                    { value: `+${brief.xpIfCompleted}`, label: "Points" },
                 ]}
             />
+            {!brief.solutionLocked && brief.solutionPenaltyXp > 0 && (
+                <Typography sx={{ position: "relative", ...TYPE.xsMed12, color: COLORS.neutral300, mt: "-16px" }}>
+                    Solution viewed: −{brief.solutionPenaltyXp} XP applied to this lab.
+                </Typography>
+            )}
+            {running && needsFlags && attempt && <FlagForm attempt={attempt} onSubmit={onFlag} />}
             <CardDivider src={`${ACTIVITY_ASSETS}/divider-528.svg`} maxWidth={528} />
-            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", width: 200, maxWidth: "100%" }}>
-                <ActivityButton onClick={running ? onFinish : onLaunch} width="100%">
-                    {running ? "Complete Lab" : "Launch Lab"}
+            <Box sx={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", width: 220, maxWidth: "100%" }}>
+                <ActivityButton onClick={running ? onFinish : onLaunch} width="100%" disabled={busy || (running && !flagsDone)}>
+                    {busy ? "Please wait…" : running ? "Complete Lab" : brief.completed ? "Relaunch Lab" : "Launch Lab"}
                 </ActivityButton>
-                {running && lab.url && <GhostButton onClick={() => window.open(lab.url, "_blank", "noopener,noreferrer")}>Open Lab Environment</GhostButton>}
+                {running && !flagsDone && (
+                    <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral300, textAlign: "center" }}>Capture every flag to complete the lab.</Typography>
+                )}
+                {running && attempt?.launchUrl && (
+                    <GhostButton onClick={() => window.open(attempt.launchUrl!, "_blank", "noopener,noreferrer")}>Open Lab Environment</GhostButton>
+                )}
+                {expiresAt && (
+                    <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral300, textAlign: "center" }}>
+                        Session ends at {expiresAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </Typography>
+                )}
+                {running && <GhostButton onClick={onStop}>Stop Lab</GhostButton>}
                 <GhostButton onClick={onLater}>I will do this later</GhostButton>
             </Box>
         </ActivityCard>
@@ -254,58 +389,162 @@ function LabBuilding({ seconds, onCancel, onReady }: { seconds: number; onCancel
     );
 }
 
-/** Lab overlay: brief with Overview / Task / Solutions → environment build → run → result. */
+/**
+ * Lab overlay backed by the lab API: brief (Overview / Task / Solutions) → environment provisioning →
+ * running session (environment link, flags) → graded result pointing at the next level.
+ */
 export default function LabFlow({
     open,
-    lab,
-    nextLevelNo,
+    lessonId,
     onClose,
-    onComplete,
-    onContinue,
+    onContinueToLevel,
     onCourseMap,
 }: {
     open: boolean;
-    lab: Lab;
-    nextLevelNo: number;
+    lessonId: string;
     onClose: () => void;
-    onComplete: (xp: number) => void;
-    onContinue: () => void;
+    onContinueToLevel: (levelNo: number) => void;
     onCourseMap: () => void;
 }) {
+    const { labBrief, labAttempt, getLabBrief, unlockLabSolution, launchLab, getLabAttempt, submitLabFlag, completeLab, abandonLab } = useCourse();
     const [tab, setTab] = useState<Tab>("overview");
-    const [unlocked, setUnlocked] = useState(false);
-    const [stage, setStage] = useState<Stage>("brief");
-    const [startedAt, setStartedAt] = useState(0);
-    const [elapsed, setElapsed] = useState(0);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [unlocking, setUnlocking] = useState(false);
+    const [building, setBuilding] = useState<{ attemptId: string; seconds: number; run: number } | null>(null);
+    const [result, setResult] = useState<LabCompleteResult | null>(null);
 
-    const xp = Math.max(0, lab.points - (unlocked ? lab.solutionPenalty : 0));
-    const accuracy = Math.round((xp / lab.points) * 100);
+    const brief = labBrief?.lessonId === lessonId ? labBrief : null;
+    const attempt = brief && labAttempt && ["provisioning", "running"].includes(labAttempt.attemptStatus) ? labAttempt : null;
 
-    const ready = () => {
-        setStartedAt(Date.now());
-        setStage("running");
+    useEffect(() => {
+        let cancelled = false;
+        getLabBrief(lessonId).then((res) => {
+            if (cancelled) return;
+            if (!res.success || !res.data) {
+                setError(res.message ?? "Failed to load the lab");
+                return;
+            }
+            // Resume an environment that is still being built.
+            const active = res.data.activeAttempt;
+            if (active?.attemptStatus === "provisioning") setBuilding({ attemptId: active.attemptId, seconds: active.secondsUntilReady, run: 0 });
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [lessonId, getLabBrief]);
+
+    const unlock = async () => {
+        setUnlocking(true);
+        try {
+            const res = await unlockLabSolution(lessonId);
+            if (!res.success || !res.data) toast.error(res.message ?? "Failed to unlock the solution");
+            else if (res.data.solutionPenaltyXp > 0) toast(`Solution unlocked — this lab now awards ${res.data.xpIfCompleted} XP`);
+        } finally {
+            setUnlocking(false);
+        }
     };
 
-    const finish = () => {
-        setElapsed(Date.now() - startedAt);
-        setStage("result");
-        onComplete(xp);
+    const launch = async () => {
+        setBusy(true);
+        try {
+            const res = await launchLab(lessonId);
+            if (!res.success || !res.data) {
+                toast.error(res.message ?? "Failed to launch the lab");
+                return;
+            }
+            if (res.data.attemptStatus === "provisioning") setBuilding({ attemptId: res.data.attemptId, seconds: res.data.secondsUntilReady, run: 0 });
+        } finally {
+            setBusy(false);
+        }
     };
 
-    if (stage === "result") {
+    /** Countdown finished: ask the server to promote the attempt to running (retry briefly on clock skew). */
+    const ready = async () => {
+        if (!building) return;
+        const res = await getLabAttempt(building.attemptId);
+        if (!res.success || !res.data) {
+            toast.error(res.message ?? "Failed to start the lab");
+            setBuilding(null);
+            return;
+        }
+        if (res.data.attemptStatus === "provisioning") {
+            setBuilding({ attemptId: res.data.attemptId, seconds: Math.max(2, res.data.secondsUntilReady), run: building.run + 1 });
+            return;
+        }
+        setBuilding(null);
+        if (res.data.attemptStatus === "running") toast.success("Your lab is ready");
+        else toast.error("The lab session ended before it was ready. Launch it again.");
+    };
+
+    const cancelBuild = async () => {
+        if (!building) return;
+        const id = building.attemptId;
+        setBuilding(null);
+        await abandonLab(id);
+    };
+
+    const stop = async () => {
+        if (!attempt) return;
+        setBusy(true);
+        try {
+            const res = await abandonLab(attempt.attemptId);
+            if (!res.success) toast.error(res.message ?? "Failed to stop the lab");
+            else toast("Lab stopped. You can launch it again anytime.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const flag = async (value: string): Promise<boolean> => {
+        if (!attempt) return false;
+        const res = await submitLabFlag(attempt.attemptId, value);
+        if (!res.success || !res.data) {
+            toast.error(res.message ?? "Failed to submit the flag");
+            return false;
+        }
+        if (res.data.correct) toast.success(`Flag captured${res.data.flagLabel ? `: ${res.data.flagLabel}` : ""} (${res.data.flagsCaptured}/${res.data.totalFlags})`);
+        else toast.error("That flag isn't correct. Keep digging!");
+        return res.data.correct;
+    };
+
+    const finish = async () => {
+        if (!attempt) return;
+        setBusy(true);
+        try {
+            const res = await completeLab(attempt.attemptId);
+            if (!res.success || !res.data) {
+                toast.error(res.message ?? "Failed to complete the lab");
+                // Expired / stopped sessions: refresh so the brief shows "Launch Lab" again.
+                await getLabBrief(lessonId);
+                return;
+            }
+            setResult(res.data);
+            announceRewards(res.data.rewards, res.data.xpAwarded);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (result) {
+        const nextLevel = result.nextLevel;
         return (
             <ActivityPanel open={open} onClose={onClose} ariaLabel="Lab result">
                 <ResultCard
                     badge={LAB_BADGE}
                     title="Lab Completed"
-                    subtitle="Excellent work! You’ve successfully completed the lab."
+                    subtitle={result.solutionUsed ? "Nice work finishing the lab! Try the next one without the solution for full XP." : "Excellent work! You’ve successfully completed the lab."}
                     tiles={[
-                        { value: formatDuration(elapsed), label: "Time Taken" },
-                        { value: `${accuracy}%`, label: "Accuracy" },
-                        { value: `+${xp}`, label: "XP Earned" },
+                        { value: formatDuration((result.timeTakenSec ?? 0) * 1000), label: "Time Taken" },
+                        { value: `${Math.round(result.accuracyPct ?? 100)}%`, label: "Accuracy" },
+                        { value: `+${result.xpAwarded}`, label: "XP Earned" },
                     ]}
                     leftGlow={`${ACTIVITY_ASSETS}/lab-result-glow-left.svg`}
-                    primary={{ label: `Continue to Level ${nextLevelNo}`, onClick: onContinue }}
+                    primary={
+                        nextLevel
+                            ? { label: `Continue to Level ${nextLevel.levelNo}`, onClick: () => onContinueToLevel(nextLevel.levelNo) }
+                            : { label: "Back to Module", onClick: onClose }
+                    }
                     secondary={{ label: "Go back to Course Mapping", onClick: onCourseMap }}
                 />
             </ActivityPanel>
@@ -313,21 +552,43 @@ export default function LabFlow({
     }
 
     return (
-        <ActivityPanel open={open} onClose={onClose} ariaLabel={lab.title}>
-            <Box
-                sx={{
-                    display: "flex",
-                    flexDirection: { xs: "column-reverse", lg: "row" },
-                    alignItems: { xs: "stretch", lg: "flex-start" },
-                    gap: "24px",
-                    pt: "24px",
-                    height: { lg: "100%" },
-                }}
-            >
-                <LabDetails lab={lab} tab={tab} onTab={setTab} unlocked={unlocked} onUnlock={() => setUnlocked(true)} />
-                <LabChallengeCard lab={lab} running={stage === "running"} onLaunch={() => setStage("building")} onFinish={finish} onLater={onClose} />
-            </Box>
-            {stage === "building" && <LabBuilding seconds={lab.buildSeconds} onCancel={() => setStage("brief")} onReady={ready} />}
+        <ActivityPanel open={open} onClose={onClose} ariaLabel={brief?.title ?? "Lab"}>
+            {!brief ? (
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", minHeight: 320, textAlign: "center" }}>
+                    {error ? (
+                        <>
+                            <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral100 }}>{error}</Typography>
+                            <GhostButton onClick={onClose}>Back to module</GhostButton>
+                        </>
+                    ) : (
+                        <CircularProgress size={32} sx={{ color: COLORS.purple }} />
+                    )}
+                </Box>
+            ) : (
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: { xs: "column-reverse", lg: "row" },
+                        alignItems: { xs: "stretch", lg: "flex-start" },
+                        gap: "24px",
+                        pt: "24px",
+                        height: { lg: "100%" },
+                    }}
+                >
+                    <LabDetails brief={brief} tab={tab} onTab={setTab} unlocking={unlocking} onUnlock={unlock} />
+                    <LabChallengeCard
+                        brief={brief}
+                        attempt={attempt}
+                        busy={busy || Boolean(building)}
+                        onLaunch={launch}
+                        onFinish={finish}
+                        onStop={stop}
+                        onLater={onClose}
+                        onFlag={flag}
+                    />
+                </Box>
+            )}
+            {building && <LabBuilding key={`${building.attemptId}-${building.run}`} seconds={building.seconds} onCancel={cancelBuild} onReady={ready} />}
         </ActivityPanel>
     );
 }

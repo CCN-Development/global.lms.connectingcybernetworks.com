@@ -3,7 +3,8 @@
 import React from "react";
 import Image from "next/image";
 import { Avatar, Box, ButtonBase, Typography } from "@mui/material";
-import type { Course } from "./course-data";
+import type { CourseOverview } from "@/contexts/CourseContext";
+import { formatHoursMinutes, formatShortMinutes } from "./course-format";
 import {
     COLORS,
     COURSE_ASSETS,
@@ -16,21 +17,42 @@ import {
 import { PrimaryButton, ProgressTrack, framedPanelSx } from "./my-courses-ui";
 
 interface Props {
-    course: Course;
+    course: CourseOverview;
     onStart: () => void;
+    starting?: boolean;
     onTrailer: () => void;
+    /** Shown for unlocked courses that aren't the active mission yet. */
+    onSetActive?: () => void;
+    activating?: boolean;
 }
 
-const INSIDE: { key: string; icon: string; label: string; value: (c: Course) => string }[] = [
-    { key: "xp", icon: `${MY_COURSES_ASSETS}/rank/stat-points.svg`, label: "Total Points", value: (c) => `${c.earnedXp} XP` },
-    { key: "levels", icon: `${COURSE_ASSETS}/stat-levels.svg`, label: "Total Levels", value: (c) => String(c.totalLevels) },
-    { key: "labs", icon: `${COURSE_ASSETS}/stat-labs.svg`, label: "Total Labs", value: (c) => String(c.totalLabs) },
-    { key: "checks", icon: `${COURSE_ASSETS}/stat-knowledge.svg`, label: "Total Knowledge Checks", value: (c) => String(c.totalKnowledgeChecks) },
-    { key: "badges", icon: `${COURSE_ASSETS}/stat-badges.svg`, label: "Total Badges", value: (c) => String(c.totalBadges) },
-    { key: "rank", icon: `${COURSE_ASSETS}/stat-rank.svg`, label: "Batch Rank", value: (c) => `#${c.batchRank}` },
-    { key: "video", icon: `${COURSE_ASSETS}/stat-video.svg`, label: "Video Duration", value: (c) => c.videoDuration },
-    { key: "activity", icon: `${COURSE_ASSETS}/stat-knowledge.svg`, label: "Activity Duration", value: (c) => c.activityDuration },
+const INSIDE: { key: string; icon: string; label: string; value: (c: CourseOverview) => string }[] = [
+    { key: "xp", icon: `${MY_COURSES_ASSETS}/rank/stat-points.svg`, label: "Total Points", value: (c) => `${c.stats.earnedXp} XP` },
+    { key: "levels", icon: `${COURSE_ASSETS}/stat-levels.svg`, label: "Total Levels", value: (c) => String(c.stats.totalLevels) },
+    { key: "labs", icon: `${COURSE_ASSETS}/stat-labs.svg`, label: "Total Labs", value: (c) => String(c.stats.totalLabs) },
+    {
+        key: "checks",
+        icon: `${COURSE_ASSETS}/stat-knowledge.svg`,
+        label: "Total Knowledge Checks",
+        value: (c) => String(c.stats.totalKnowledgeChecks),
+    },
+    { key: "badges", icon: `${COURSE_ASSETS}/stat-badges.svg`, label: "Total Badges", value: (c) => String(c.stats.totalBadges) },
+    { key: "rank", icon: `${COURSE_ASSETS}/stat-rank.svg`, label: "Batch Rank", value: (c) => (c.stats.batchRank ? `#${c.stats.batchRank}` : "—") },
+    { key: "video", icon: `${COURSE_ASSETS}/stat-video.svg`, label: "Video Duration", value: (c) => formatHoursMinutes(c.stats.videoDurationSec) },
+    {
+        key: "activity",
+        icon: `${COURSE_ASSETS}/stat-knowledge.svg`,
+        label: "Activity Duration",
+        value: (c) => formatHoursMinutes(c.stats.activityDurationSec),
+    },
 ];
+
+function startLabel(course: CourseOverview): string {
+    if (course.status === "Locked") return "Mission Locked";
+    if (course.status === "Completed") return "Review Course";
+    const levelNo = course.currentLevel?.levelNo ?? 1;
+    return course.progress > 0 ? `Continue Level ${levelNo}` : `Start Level ${levelNo}`;
+}
 
 const tileSx = {
     display: "flex",
@@ -73,10 +95,26 @@ function InsideTile({ icon, value, label }: { icon: string; value: string; label
     );
 }
 
-export default function CourseOverviewTab({ course, onStart, onTrailer }: Props) {
-    const prefix = course.title.endsWith(course.titleAccent)
-        ? course.title.slice(0, course.title.length - course.titleAccent.length)
-        : `${course.title} `;
+const secondaryButtonSx = {
+    gap: "12px",
+    pl: "16px",
+    pr: "32px",
+    py: "8px",
+    borderRadius: "12px",
+    border: `1px solid ${COLORS.tileBorder}`,
+    backgroundImage: TRAILER_BUTTON_FILL,
+    transition: "border-color .18s ease, opacity .18s ease",
+    "&:hover": { borderColor: "rgba(140,36,255,0.6)" },
+    "&.Mui-disabled": { opacity: 0.5 },
+    "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
+} as const;
+
+export default function CourseOverviewTab({ course, onStart, starting = false, onTrailer, onSetActive, activating = false }: Props) {
+    const accent = course.titleAccent?.trim() ?? "";
+    const hasAccent = Boolean(accent) && course.title.endsWith(accent);
+    const prefix = hasAccent ? course.title.slice(0, course.title.length - accent.length) : course.title;
+    const locked = course.status === "Locked";
+    const trailerLength = formatShortMinutes(course.trailer.durationSec);
 
     return (
         <Box sx={{ display: "flex", flexDirection: "column", gap: "44px", minWidth: 0 }}>
@@ -92,14 +130,20 @@ export default function CourseOverviewTab({ course, onStart, onTrailer }: Props)
                         }}
                     >
                         {prefix}
-                        <Box component="span" sx={{ color: COLORS.purple }}>
-                            {course.titleAccent}
-                        </Box>
+                        {hasAccent && (
+                            <Box component="span" sx={{ color: COLORS.purple }}>
+                                {accent}
+                            </Box>
+                        )}
                     </Typography>
 
+                    {course.tagline && (
+                        <Typography sx={{ ...TYPE.mediumMed16, color: COLORS.neutral300, mt: "-12px" }}>{course.tagline}</Typography>
+                    )}
+
                     <Box sx={{ display: "flex", flexDirection: "column", gap: "27px" }}>
-                        {course.description.map((paragraph) => (
-                            <Typography key={paragraph} sx={{ ...TYPE.largeMed18, color: COLORS.neutral100 }}>
+                        {course.description.map((paragraph, i) => (
+                            <Typography key={i} sx={{ ...TYPE.largeMed18, color: COLORS.neutral100 }}>
                                 {paragraph}
                             </Typography>
                         ))}
@@ -124,38 +168,41 @@ export default function CourseOverviewTab({ course, onStart, onTrailer }: Props)
                             Course Progress
                         </Typography>
                         <Typography noWrap sx={{ ...TYPE.smallMed14, color: COLORS.neutral75, flexShrink: 0 }}>
-                            {course.progress}% completed
+                            {Math.round(course.progress)}% completed
                         </Typography>
                     </Box>
                     <ProgressTrack value={course.progress} fill={COLORS.white} minFill={3} />
                 </Box>
 
                 <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: "24px" }}>
-                    <PrimaryButton icon={UI_ICONS.play18} onClick={onStart}>
-                        Start Level 1
+                    <PrimaryButton icon={locked ? UI_ICONS.lock16 : UI_ICONS.play18} onClick={onStart} disabled={locked || starting}>
+                        {starting ? "Opening…" : startLabel(course)}
                     </PrimaryButton>
 
-                    <ButtonBase
-                        onClick={onTrailer}
-                        sx={{
-                            gap: "12px",
-                            pl: "16px",
-                            pr: "32px",
-                            py: "8px",
-                            borderRadius: "12px",
-                            border: `1px solid ${COLORS.tileBorder}`,
-                            backgroundImage: TRAILER_BUTTON_FILL,
-                            transition: "border-color .18s ease",
-                            "&:hover": { borderColor: "rgba(140,36,255,0.6)" },
-                            "&.Mui-focusVisible": { outline: `2px solid ${COLORS.white}`, outlineOffset: "2px" },
-                        }}
-                    >
-                        <Image src={`${COURSE_ASSETS}/icon-trailer.svg`} alt="" width={18} height={18} />
-                        <Typography component="span" sx={{ ...TYPE.smallMed14, color: COLORS.white, whiteSpace: "pre" }}>
-                            {`Watch the trailer  - ${course.trailerDuration}`}
-                        </Typography>
-                    </ButtonBase>
+                    {course.trailer.available && (
+                        <ButtonBase onClick={onTrailer} sx={secondaryButtonSx}>
+                            <Image src={`${COURSE_ASSETS}/icon-trailer.svg`} alt="" width={18} height={18} />
+                            <Typography component="span" sx={{ ...TYPE.smallMed14, color: COLORS.white, whiteSpace: "pre" }}>
+                                {trailerLength ? `Watch the trailer  - ${trailerLength}` : "Watch the trailer"}
+                            </Typography>
+                        </ButtonBase>
+                    )}
+
+                    {onSetActive && (
+                        <ButtonBase onClick={onSetActive} disabled={activating} sx={{ ...secondaryButtonSx, pr: "16px" }}>
+                            <Image src={UI_ICONS.zap16} alt="" width={16} height={16} />
+                            <Typography component="span" sx={{ ...TYPE.smallMed14, color: COLORS.white, whiteSpace: "nowrap" }}>
+                                {activating ? "Updating…" : "Make Active Mission"}
+                            </Typography>
+                        </ButtonBase>
+                    )}
                 </Box>
+
+                {locked && (
+                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300, mt: "-20px" }}>
+                        This mission unlocks once you complete the courses it builds on. You can still explore what&rsquo;s inside.
+                    </Typography>
+                )}
             </Box>
 
             <Box sx={{ containerType: "inline-size" }}>
@@ -191,19 +238,24 @@ export default function CourseOverviewTab({ course, onStart, onTrailer }: Props)
                         <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: "24px" }}>
                             <CardLabel>Instructors ({course.instructors.length})</CardLabel>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                                {course.instructors.length === 0 && (
+                                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>Instructors will be announced soon.</Typography>
+                                )}
                                 {course.instructors.map((instructor) => (
                                     <Box key={instructor.instructorId} sx={tileSx}>
                                         <Avatar
-                                            src={instructor.avatar}
+                                            src={instructor.avatar ?? undefined}
                                             alt={instructor.name}
                                             sx={{ width: 40, height: 40, bgcolor: "#93A9E2", border: "0.8px solid #404040" }}
-                                        />
+                                        >
+                                            {instructor.name.charAt(0).toUpperCase()}
+                                        </Avatar>
                                         <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
                                             <Typography noWrap sx={{ ...TYPE.mediumMed16, color: COLORS.neutral100 }}>
                                                 {instructor.name}
                                             </Typography>
                                             <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral300 }}>
-                                                {instructor.designation}
+                                                {instructor.designation ?? (instructor.isLead ? "Lead Instructor" : "Instructor")}
                                             </Typography>
                                         </Box>
                                     </Box>

@@ -1,22 +1,25 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import {
-    MdMenu,
-    MdClose,
-    MdChevronLeft,
-    MdChevronRight,
-    MdSearch,
-    MdNotificationsNone,
-    MdPerson,
-    MdLogout,
-    MdKeyboardArrowDown,
-} from "react-icons/md";
+import { Box, Tooltip, Typography, useMediaQuery } from "@mui/material";
+import { MdClose, MdLogout, MdMenu } from "react-icons/md";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+    ACTIVE_GRADIENT,
+    ActiveNavGlow,
+    COLLAPSE_BUTTON_BG,
+    GRADIENT_STROKE_SX,
+    NAV_HOVER_BG,
+    NAV_TEXT,
+    SIDEBAR_BG,
+    SIDEBAR_COLLAPSED,
+    SIDEBAR_EXPANDED,
+    SIDEBAR_TRANSITION,
+    SidebarAmbientGlow,
+} from "@/layouts/sidebar-theme";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type NavBadge = { label: string; color: string };
@@ -33,9 +36,8 @@ type Props = {
     children?: React.ReactNode;
     headerTitle?: React.ReactNode | string;
     navItems?: NavItem[];
-    /** Notification count shown on the bell */
+    /** Reserved for the header user menu. */
     notificationCount?: number;
-    /** Avatar URL for the top-right user menu */
     avatarSrc?: string;
     userName?: string;
     userRole?: string;
@@ -45,216 +47,312 @@ type Props = {
     onSearchClick?: () => void;
 };
 
-// ─── Constants ──────────────────────────────────────────────────────────────
-const SIDEBAR_W_EXPANDED = 220;
-const SIDEBAR_W_COLLAPSED = 68;
+const LOGOUT_COLOR = "#FF8A8A";
+
+/** Shared nav-row shape so links and the logout button line up. */
+function navRowSx(collapsed: boolean) {
+    return {
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: collapsed ? 0 : "12px",
+        justifyContent: collapsed ? "center" : "flex-start",
+        width: "100%",
+        p: "clamp(9px, 1.3vh, 16px) 16px",
+        border: "none",
+        cursor: "pointer",
+        flexShrink: 0,
+        overflow: "hidden",
+        textAlign: "left",
+        textDecoration: "none",
+        bgcolor: "transparent",
+        transition: "background 0.2s ease, border-radius 0.2s ease",
+        "&:focus-visible": { outline: "2px solid rgba(255,255,255,0.6)", outlineOffset: "-2px" },
+    } as const;
+}
+
+const iconBoxSx = {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    width: 28,
+    height: 28,
+    fontSize: 24,
+} as const;
+
+const labelSx = {
+    position: "relative",
+    fontSize: "16px",
+    fontWeight: 500,
+    lineHeight: "24px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+} as const;
 
 // ─── DashboardLayout ────────────────────────────────────────────────────────
-export default function DashboardLayout({
-    children,
-    headerTitle,
-    navItems = [],
-    notificationCount = 0,
-    avatarSrc,
-    userName = "User",
-    userRole,
-    onProfileClick,
-    onNotificationClick,
-    onSearchClick,
-}: Props) {
+// Staff dashboards (Admin / RM / Trainer / Accountant) in the same dark glass design as StudentLayout.
+export default function DashboardLayout({ children, headerTitle, navItems = [], onLogout }: Props) {
     const pathname = usePathname();
     const { logout } = useAuth();
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [profileOpen, setProfileOpen] = useState(false);
-    const profileRef = useRef<HTMLDivElement>(null);
+    const isMobile = useMediaQuery("(max-width:900px)");
 
-    // Close profile dropdown when clicking outside
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-                setProfileOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, []);
-
-    // Close mobile sidebar on route change
-    useEffect(() => {
-        setMobileOpen(false);
-    }, [pathname]);
-
-    const sidebarW = collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_EXPANDED;
+    const isCollapsed = collapsed && !isMobile;
+    const sidebarWidth = isCollapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
     return (
-        <div className="flex h-screen w-full overflow-hidden bg-[#f0f2f7]">
+        <Box sx={{ display: "flex", height: "100vh", overflow: "hidden", color: "#fff", p: "10px" }}>
+            {/* ── Sidebar ── */}
+            <Box
+                component="aside"
+                sx={{
+                    display: "flex",
+                    width: { xs: SIDEBAR_EXPANDED, md: sidebarWidth },
+                    minWidth: { xs: SIDEBAR_EXPANDED, md: sidebarWidth },
+                    position: { xs: "fixed", md: "sticky" },
+                    top: 0,
+                    left: { xs: 0, md: "auto" },
+                    height: { xs: "100vh", md: "100%" },
+                    transform: { xs: mobileOpen ? "translateX(0)" : "translateX(-110%)", md: "none" },
+                    flexDirection: "column",
+                    gap: "44px",
+                    backdropFilter: "blur(4px)",
+                    bgcolor: SIDEBAR_BG,
+                    border: "none",
+                    borderRadius: { xs: "0 32px 32px 0", md: "32px" },
+                    p: isCollapsed ? "24px 14px" : "24px",
+                    transition: SIDEBAR_TRANSITION,
+                    zIndex: { xs: 300, md: 100 },
+                    overflow: "hidden",
+                    ...GRADIENT_STROKE_SX,
+                }}
+            >
+                <SidebarAmbientGlow />
 
-            {/* ── Mobile backdrop ───────────────────────────────────────── */}
+                {/* Logo + collapse / close */}
+                <Box
+                    sx={{
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: isCollapsed ? "center" : "space-between",
+                        flexShrink: 0,
+                    }}
+                >
+                    {!isCollapsed && (
+                        <Image src="/Logo-Dark-Theme.svg" alt="Connecting Cyber Networks" width={159} height={67} priority />
+                    )}
+
+                    <Box
+                        component="button"
+                        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        onClick={() => setCollapsed((c) => !c)}
+                        sx={{
+                            width: 40,
+                            height: 40,
+                            minWidth: 40,
+                            borderRadius: "12px",
+                            display: { xs: "none", md: "flex" },
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                            border: "none",
+                            p: 0,
+                            background: COLLAPSE_BUTTON_BG,
+                        }}
+                    >
+                        <Image
+                            src="/sidebar/icon-chevron-left.svg"
+                            alt=""
+                            width={24}
+                            height={24}
+                            style={{ transform: isCollapsed ? "rotate(180deg)" : "none" }}
+                        />
+                    </Box>
+
+                    <Box
+                        component="button"
+                        aria-label="Close menu"
+                        onClick={() => setMobileOpen(false)}
+                        sx={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "12px",
+                            display: { xs: "flex", md: "none" },
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            border: "none",
+                            p: 0,
+                            color: NAV_TEXT,
+                            background: COLLAPSE_BUTTON_BG,
+                        }}
+                    >
+                        <MdClose size={22} />
+                    </Box>
+                </Box>
+
+                {/* Nav items */}
+                <Box
+                    component="nav"
+                    sx={{
+                        position: "relative",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "clamp(4px, 1vh, 24px)",
+                        flex: 1,
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        "&::-webkit-scrollbar": { display: "none" },
+                    }}
+                >
+                    {navItems.map((item) => {
+                        const isActive = item.isActive ?? (pathname === item.link || pathname?.startsWith(item.link + "/"));
+                        return (
+                            <Tooltip key={item.link} title={isCollapsed ? item.label : ""} placement="right" arrow>
+                                <Box
+                                    component={Link}
+                                    href={item.link}
+                                    aria-current={isActive ? "page" : undefined}
+                                    onClick={() => setMobileOpen(false)}
+                                    sx={{
+                                        ...navRowSx(isCollapsed),
+                                        borderRadius: isActive ? "18px" : "16px",
+                                        background: isActive ? ACTIVE_GRADIENT : "transparent",
+                                        "&:hover": { background: isActive ? ACTIVE_GRADIENT : NAV_HOVER_BG },
+                                    }}
+                                >
+                                    {isActive && <ActiveNavGlow collapsed={isCollapsed} />}
+
+                                    <Box sx={{ ...iconBoxSx, color: isActive ? "#FFFFFF" : NAV_TEXT }}>{item.icon}</Box>
+
+                                    {!isCollapsed && (
+                                        <Typography sx={{ ...labelSx, flex: 1, color: isActive ? "#FFFFFF" : NAV_TEXT }}>{item.label}</Typography>
+                                    )}
+
+                                    {!isCollapsed && item.badge && (
+                                        <Box
+                                            component="span"
+                                            sx={{
+                                                position: "relative",
+                                                ml: "auto",
+                                                flexShrink: 0,
+                                                px: "8px",
+                                                py: "2px",
+                                                borderRadius: "999px",
+                                                fontSize: "11px",
+                                                fontWeight: 700,
+                                                lineHeight: "16px",
+                                                color: item.badge.color,
+                                                bgcolor: `${item.badge.color}29`,
+                                                border: `1px solid ${item.badge.color}52`,
+                                            }}
+                                        >
+                                            {item.badge.label}
+                                        </Box>
+                                    )}
+                                </Box>
+                            </Tooltip>
+                        );
+                    })}
+                </Box>
+
+                {/* Logout */}
+                <Box sx={{ position: "relative", flexShrink: 0, mt: "-28px", pt: "16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                    <Tooltip title={isCollapsed ? "Logout" : ""} placement="right" arrow>
+                        <Box
+                            component="button"
+                            onClick={() => (onLogout ? onLogout() : logout())}
+                            sx={{
+                                ...navRowSx(isCollapsed),
+                                borderRadius: "16px",
+                                "&:hover": { background: "rgba(255,77,77,0.10)" },
+                            }}
+                        >
+                            <Box sx={{ ...iconBoxSx, color: LOGOUT_COLOR }}>
+                                <MdLogout />
+                            </Box>
+                            {!isCollapsed && <Typography sx={{ ...labelSx, color: LOGOUT_COLOR }}>Logout</Typography>}
+                        </Box>
+                    </Tooltip>
+                </Box>
+            </Box>
+
+            {/* Mobile backdrop */}
             {mobileOpen && (
-                <div
-                    className="fixed inset-0 z-298 bg-black/40 backdrop-blur-sm md:hidden"
+                <Box
                     onClick={() => setMobileOpen(false)}
+                    sx={{ display: { md: "none" }, position: "fixed", inset: 0, bgcolor: "rgba(0,0,0,0.55)", zIndex: 299 }}
                 />
             )}
 
-            {/* ── Sidebar ───────────────────────────────────────────────── */}
-            <aside
-                style={{ width: sidebarW, minWidth: sidebarW }}
-                className={cn(
-                    "fixed top-0 left-0 z-299 flex h-screen flex-col bg-[#fafafa] border-r border-gray-200/80",
-                    "shadow-[4px_0_24px_rgba(0,0,0,0.07)]",
-                    "transition-[width,min-width,transform] duration-300 ease-in-out",
-                    "md:static md:translate-x-0 md:h-full",
-                    mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-                )}
-            >
-                {/* Logo row */}
-                <div
-                    className={cn(
-                        "flex items-center border-b border-gray-200/70 bg-white px-3 py-3.5",
-                        collapsed ? "justify-center" : "justify-between",
-                    )}
-                >
-                    {!collapsed && (
-                        <Image
-                            src="/Logo-Light-Theme.svg"
-                            alt="CCN LMS Logo"
-                            width={130}
-                            height={32}
-                            priority
-                            className="object-contain"
-                        />
-                    )}
-
-                    {/* Collapse toggle — desktop only */}
-                    <button
-                        onClick={() => setCollapsed((c) => !c)}
-                        className="hidden md:flex items-center justify-center h-7 w-7 rounded-md bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors active:scale-90"
-                        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-                    >
-                        {collapsed ? <MdChevronRight size={16} /> : <MdChevronLeft size={16} />}
-                    </button>
-
-                    {/* Mobile close */}
-                    <button
-                        onClick={() => setMobileOpen(false)}
-                        className="md:hidden flex items-center justify-center h-7 w-7 rounded-md text-gray-500 hover:bg-gray-100 transition-colors active:scale-90 ml-auto"
-                        aria-label="Close menu"
-                    >
-                        <MdClose size={18} />
-                    </button>
-                </div>
-
-                {/* Nav */}
-                <nav className="flex flex-1 flex-col gap-0.75 overflow-y-auto overflow-x-hidden px-2.5 py-3">
-                    {navItems.map((item, idx) => {
-                        const isActive =
-                            item.isActive ??
-                            (pathname === item.link || pathname?.startsWith(item.link + "/"));
-                        return (
-                            <Link
-                                key={idx}
-                                href={item.link}
-                                title={collapsed ? item.label : undefined}
-                                className={cn(
-                                    "group flex items-center gap-2.5 rounded-md px-2 py-1.75 text-[13px] font-medium",
-                                    "transition-all duration-150 select-none no-underline",
-                                    "active:scale-[0.97] active:brightness-95",
-                                    collapsed && "justify-center px-1.5",
-                                    isActive
-                                        ? "bg-blue-500 text-white"
-                                        : "text-gray-600 hover:bg-white hover:text-gray-900 hover:shadow-sm",
-                                )}
-                                style={isActive ? { boxShadow: "0 2px 8px rgba(79,70,229,0.35)" } : {}}
-                            >
-                                {/* Elevated icon chip */}
-                                <span
-                                    className={cn(
-                                        "flex shrink-0 items-center justify-center w-7.5 h-7.5 rounded-md text-[17px] transition-all duration-150",
-                                        isActive
-                                            ? "bg-white/20 text-white shadow-[0_1px_3px_rgba(0,0,0,0.15)]"
-                                            : "bg-white text-gray-500 shadow-[0_1px_4px_rgba(0,0,0,0.10)] group-hover:text-indigo-600 group-hover:shadow-[0_2px_8px_rgba(79,70,229,0.18)]",
-                                    )}
-                                >
-                                    {item.icon}
-                                </span>
-
-                                {!collapsed && (
-                                    <span className="flex-1 truncate leading-none tracking-[-0.01em]">
-                                        {item.label}
-                                    </span>
-                                )}
-
-                                {/* Badge */}
-                                {!collapsed && item.badge && (
-                                    <span
-                                        className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold leading-none"
-                                        style={{
-                                            background: item.badge.color + "22",
-                                            color: item.badge.color,
-                                        }}
-                                    >
-                                        {item.badge.label}
-                                    </span>
-                                )}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                {/* Logout button */}
-                <div className="shrink-0 border-t border-gray-200/70 px-2.5 py-3">
-                    <button
-                        onClick={() => { logout(); }}
-                        title={collapsed ? "Logout" : undefined}
-                        className={cn(
-                            "group flex w-full gap-2.5   items-center  rounded-md px-2 py-1.75 text-[13px] font-medium",
-                            "text-red-500 hover:bg-red-50 hover:text-red-600 transition-all duration-150 select-none",
-                            "active:scale-[0.97]",
-                            collapsed && "justify-center px-1.5",
-                        )}
-                    >
-                        <span className="flex shrink-0 items-center justify-center w-7.5 h-7.5 rounded-md bg-white text-red-400 shadow-[0_1px_4px_rgba(0,0,0,0.10)] text-[17px] group-hover:text-red-600">
-                            <MdLogout />
-                        </span>
-                        {!collapsed && <span className="">Logout</span>}
-                    </button>
-                </div>
-            </aside>
-
-            {/* ── Main column ───────────────────────────────────────────── */}
-            <div className="flex flex-1 min-w-0 flex-col h-full overflow-hidden">
-
-                {/* ── Top header ──────────────────────────────────────── */}
-                <header className="flex shrink-0 items-center min-h-10 gap-3 bg-white border-b border-gray-100 px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.05)]">
-
-                    {/* Mobile hamburger */}
-                    <button
-                        onClick={() => setMobileOpen(true)}
-                        className="flex md:hidden items-center justify-center h-8 w-8 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+            {/* ── Main area ── */}
+            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100%", overflow: "hidden", px: 2 }}>
+                <Box component="header" sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 0.5, minHeight: 48, py: 1 }}>
+                    <Box
+                        component="button"
                         aria-label="Open menu"
+                        onClick={() => setMobileOpen(true)}
+                        sx={{
+                            display: { xs: "flex", md: "none" },
+                            alignItems: "center",
+                            cursor: "pointer",
+                            color: "rgba(255,255,255,0.8)",
+                            p: 0.75,
+                            borderRadius: "8px",
+                            border: "none",
+                            bgcolor: "transparent",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
+                            flexShrink: 0,
+                        }}
                     >
                         <MdMenu size={20} />
-                    </button>
-
-                    {/* Page title */}
-                    <div className="flex-1 min-w-0">
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
                         {typeof headerTitle === "string" ? (
-                            <h1 className="truncate text-[15px] font-bold text-gray-800 leading-none">
+                            <Typography
+                                component="h1"
+                                noWrap
+                                sx={{
+                                    fontFamily: "var(--font-poppins), sans-serif",
+                                    fontWeight: 500,
+                                    fontSize: "20px",
+                                    lineHeight: "30px",
+                                    color: "#FFFFFF",
+                                }}
+                            >
                                 {headerTitle}
-                            </h1>
+                            </Typography>
                         ) : (
                             headerTitle
                         )}
-                    </div>
-                </header>
+                    </Box>
+                </Box>
 
-                {/* ── Page content ────────────────────────────────────── */}
-                <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 md:p-2 scrollbar-thin [scrollbar-color:#e2e8f0_transparent]">
+                <Box
+                    component="main"
+                    sx={{
+                        flex: 1,
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        "&::-webkit-scrollbar": { display: "none" },
+                        p: 1,
+                    }}
+                >
                     {children}
-                </main>
-            </div>
-        </div>
+                </Box>
+            </Box>
+        </Box>
     );
 }

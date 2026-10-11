@@ -3,7 +3,8 @@
 import React from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Typography } from "@mui/material";
-import type { Course } from "./course-data";
+import type { MyCourseCard } from "@/contexts/CourseContext";
+import { courseEmblem, isRemoteSrc } from "./course-format";
 import {
     COLORS,
     COURSE_THEMES,
@@ -17,14 +18,28 @@ import {
 import { FadeDivider, StatChip, missionStats } from "./my-courses-ui";
 
 interface Props {
-    course: Course;
+    course: MyCourseCard;
     onClick: () => void;
 }
 
+function actionLabel(course: MyCourseCard): string {
+    switch (course.status) {
+        case "Locked":
+            return "Mission Locked";
+        case "Upcoming":
+            return "Coming Soon";
+        case "Completed":
+            return "Review Mission";
+        default:
+            return course.progress > 0 ? "Continue Mission" : "Start Mission";
+    }
+}
+
 export default function CourseCard({ course, onClick }: Props) {
-    const theme = COURSE_THEMES[course.theme];
-    const locked = course.status === "Locked";
+    const theme = COURSE_THEMES[course.theme] ?? COURSE_THEMES.violet;
+    const locked = course.status === "Locked" || course.status === "Upcoming";
     const stats = missionStats(course, "card");
+    const emblem = courseEmblem(course);
 
     return (
         <Box
@@ -72,11 +87,11 @@ export default function CourseCard({ course, onClick }: Props) {
                 }}
             >
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", width: "100%", minWidth: 0 }}>
-                    <Typography component="h3" noWrap sx={{ ...TYPE.missionTitle20, color: COLORS.white }}>
+                    <Typography component="h3" noWrap title={course.title} sx={{ ...TYPE.missionTitle20, color: COLORS.white, maxWidth: "calc(100% - 84px)" }}>
                         {course.title}
                     </Typography>
                     <Typography noWrap sx={{ ...TYPE.xsMed12, color: COLORS.neutral200, maxWidth: "calc(100% - 64px)" }}>
-                        {course.tagline}
+                        {course.tagline ?? ""}
                     </Typography>
                 </Box>
 
@@ -106,7 +121,7 @@ export default function CourseCard({ course, onClick }: Props) {
                     zIndex: 2,
                 }}
             >
-                <Image src={course.emblem} alt="" fill sizes="87px" style={{ objectFit: "cover" }} />
+                <Image src={emblem} alt="" fill sizes="87px" unoptimized={isRemoteSrc(emblem)} style={{ objectFit: "cover" }} />
             </Box>
 
             {/* Action strip */}
@@ -155,13 +170,13 @@ export default function CourseCard({ course, onClick }: Props) {
                     }}
                 >
                     <Box sx={{ position: "relative", width: 16, height: 16, flexShrink: 0, lineHeight: 0 }}>
-                        <Image src={locked ? UI_ICONS.lock16 : UI_ICONS.play18} alt="" width={16} height={16} />
+                        <Image src={course.status === "Upcoming" ? UI_ICONS.clock14 : locked ? UI_ICONS.lock16 : UI_ICONS.play18} alt="" width={16} height={16} />
                     </Box>
                     <Typography
                         component="span"
                         sx={{ ...TYPE.smallMed14, position: "relative", color: COLORS.neutral75, whiteSpace: "nowrap" }}
                     >
-                        {locked ? "Mission Locked" : "Continue Mission"}
+                        {actionLabel(course)}
                     </Typography>
                 </ButtonBase>
             </Box>

@@ -3,19 +3,43 @@
 import React from "react";
 import Image from "next/image";
 import { Box, Typography } from "@mui/material";
-import type { LearnerRank } from "./course-data";
+import type { LearnerRank } from "@/contexts/CourseContext";
+import { isRemoteSrc } from "./course-format";
 import { COLORS, MY_COURSES_ASSETS, STAT_ROW_FILL, TYPE, glassFill } from "./my-courses-theme";
 import { FadeDivider, ProgressTrack } from "./my-courses-ui";
 import { RankCrest, RankHood, RankLevelHeading, RankStarField } from "./RankCrest";
 
 const RANK = `${MY_COURSES_ASSETS}/rank`;
+const MILESTONE_ICON = `${RANK}/milestone-level.png`;
 
 const PERFORMANCE: { key: string; icon: string; label: string; value: (r: LearnerRank) => string }[] = [
-    { key: "points", icon: `${RANK}/stat-points.svg`, label: "Total Points Earned", value: (r) => String(r.totalPoints) },
+    { key: "points", icon: `${RANK}/stat-points.svg`, label: "Total Points Earned", value: (r) => r.totalPoints.toLocaleString("en-US") },
     { key: "badges", icon: `${RANK}/stat-badges.svg`, label: "Total Badges Earned", value: (r) => String(r.totalBadges) },
     { key: "streak", icon: `${RANK}/stat-streak.svg`, label: "Highest Streak", value: (r) => String(r.highestStreak) },
-    { key: "rank", icon: `${RANK}/stat-rank.svg`, label: "Batch Rank", value: (r) => `#${r.batchRank}` },
+    { key: "rank", icon: `${RANK}/stat-rank.svg`, label: "Batch Rank", value: (r) => (r.batchRank ? `#${r.batchRank}` : "—") },
 ];
+
+/** Next milestone card: configured milestone tier, else the next rank level, else the top-rank message. */
+export function nextMilestoneOf(rank: LearnerRank): { title: string; description: string; icon: string } {
+    if (rank.nextMilestone) {
+        return {
+            title: rank.nextMilestone.title,
+            description: rank.nextMilestone.description,
+            icon: rank.nextMilestone.icon || MILESTONE_ICON,
+        };
+    }
+    if (rank.nextLevel) {
+        return {
+            title: `Reach Level ${rank.nextLevel.level}`,
+            description: `Earn ${(rank.xpToNextLevel ?? 0).toLocaleString("en-US")} more XP to become ${rank.nextLevel.title}.`,
+            icon: MILESTONE_ICON,
+        };
+    }
+    if (rank.totalXp === 0) {
+        return { title: "Earn your first XP", description: "Complete lessons, quizzes and labs to start climbing the ranks.", icon: MILESTONE_ICON };
+    }
+    return { title: "Top rank reached", description: "You have reached the highest rank. Keep learning to climb the leaderboard.", icon: MILESTONE_ICON };
+}
 
 const PROGRESS: { key: string; label: string; done: (r: LearnerRank) => number; total: (r: LearnerRank) => number }[] = [
     { key: "courses", label: "Course Completed", done: (r) => r.coursesCompleted, total: (r) => r.coursesTotal },
@@ -91,6 +115,7 @@ function ProgressRow({ label, done, total }: { label: string; done: number; tota
 }
 
 export default function RankPanel({ rank }: { rank: LearnerRank }) {
+    const milestone = nextMilestoneOf(rank);
     return (
         <Box
             component="aside"
@@ -172,11 +197,18 @@ export default function RankPanel({ rank }: { rank: LearnerRank }) {
                         }}
                     >
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1, minWidth: 0, maxWidth: 248 }}>
-                            <Typography sx={{ ...TYPE.largeSemibold18, color: COLORS.white }}>{rank.nextMilestone.title}</Typography>
-                            <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral200 }}>{rank.nextMilestone.description}</Typography>
+                            <Typography sx={{ ...TYPE.largeSemibold18, color: COLORS.white }}>{milestone.title}</Typography>
+                            <Typography sx={{ ...TYPE.xsMed12, color: COLORS.neutral200 }}>{milestone.description}</Typography>
                         </Box>
                         <Box sx={{ position: "relative", width: 69, height: 69, flexShrink: 0, ml: "auto" }}>
-                            <Image src={rank.nextMilestone.icon} alt="" fill sizes="69px" style={{ objectFit: "cover" }} />
+                            <Image
+                                src={milestone.icon}
+                                alt=""
+                                fill
+                                sizes="69px"
+                                unoptimized={isRemoteSrc(milestone.icon)}
+                                style={{ objectFit: "cover" }}
+                            />
                         </Box>
                     </Box>
                 </Box>

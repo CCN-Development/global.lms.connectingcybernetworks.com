@@ -1,50 +1,73 @@
 "use client";
 
-import React from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Box, Typography } from "@mui/material";
+import React, { Suspense, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Box } from "@mui/material";
 import { MdOutlineSearchOff } from "react-icons/md";
 import StudentLayout from "@/layouts/StudentLayout";
-import { MY_COURSES_PATH } from "@/components/courses/CourseDetailShell";
-import { findCourse } from "@/components/courses/course-data";
-import { BackButton } from "@/components/courses/my-courses-ui";
+import { courseDetailPath } from "@/components/courses/course-format";
+import { BackButton, NoticePanel, SkeletonBlock } from "@/components/courses/my-courses-ui";
 import ModuleScreen from "@/components/courses/module/ModuleScreen";
-import { findModule } from "@/components/courses/module/module-data";
+import { useCourse } from "@/contexts/CourseContext";
 
-export default function CourseModulePage() {
+function CourseModuleContent() {
     const router = useRouter();
     const params = useParams();
-    const courseId = params?.course_id as string;
+    const searchParams = useSearchParams();
+    const courseParam = params?.course_id as string;
     const moduleId = params?.module_id as string;
-    const course = findCourse(courseId);
-    const courseModule = findModule(moduleId);
+    const lessonParam = searchParams?.get("lesson") ?? null;
+    const { moduleDetail, getModule } = useCourse();
+    const [error, setError] = useState<string | null>(null);
 
-    if (!course || !courseModule) {
+    useEffect(() => {
+        if (!courseParam || !moduleId) return;
+        getModule(courseParam, moduleId).then((res) => setError(res.success ? null : (res.message ?? "This module could not be found.")));
+    }, [courseParam, moduleId, getModule]);
+
+    const courseModule = moduleDetail?.moduleId === moduleId ? moduleDetail : null;
+    const levelsPath = courseDetailPath(courseParam, "levels");
+
+    if (!courseModule) {
         return (
             <StudentLayout hideSidebar fullBleed>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                     <Box>
-                        <BackButton label="Back to My Courses" onClick={() => router.push(MY_COURSES_PATH)} />
+                        <BackButton label="Back to Levels" onClick={() => router.push(levelsPath)} />
                     </Box>
-                    <Box
-                        sx={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 1,
-                            py: 6,
-                            borderRadius: "14px",
-                            border: "1px solid #1c1c26",
-                            bgcolor: "#07070d",
-                        }}
-                    >
-                        <MdOutlineSearchOff size={26} color="#4b4b58" />
-                        <Typography sx={{ color: "#8a8a9a", fontSize: "0.82rem" }}>This module could not be found.</Typography>
-                    </Box>
+                    {error ? (
+                        <NoticePanel
+                            icon={<MdOutlineSearchOff size={26} color="#4b4b58" />}
+                            title="This module isn't available"
+                            message={error}
+                            action={{ label: "Back to Levels", onClick: () => router.push(levelsPath) }}
+                        />
+                    ) : (
+                        <>
+                            <SkeletonBlock height={380} radius={24} />
+                            <SkeletonBlock height={80} radius={12} />
+                            <SkeletonBlock height={320} radius={24} />
+                        </>
+                    )}
                 </Box>
             </StudentLayout>
         );
     }
 
-    return <ModuleScreen key={courseModule.moduleId} course={course} module={courseModule} />;
+    return (
+        <ModuleScreen
+            key={`${courseModule.moduleId}:${lessonParam ?? ""}`}
+            courseParam={courseParam}
+            module={courseModule}
+            initialLessonId={lessonParam}
+        />
+    );
+}
+
+export default function CourseModulePage() {
+    return (
+        <Suspense fallback={null}>
+            <CourseModuleContent />
+        </Suspense>
+    );
 }

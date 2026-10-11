@@ -1,62 +1,63 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Box } from "@mui/material";
+import { MdLockOutline } from "react-icons/md";
 import StudentLayout from "@/layouts/StudentLayout";
-import { courseDetailPath } from "../CourseDetailShell";
-import type { Course } from "../course-data";
+import { useCourse, type ModuleLessonView, type ModuleView } from "@/contexts/CourseContext";
+import { courseDetailPath } from "../course-format";
 import { LEVEL_CARD_FILL, MY_COURSES_ASSETS } from "../my-courses-theme";
-import { BackButton } from "../my-courses-ui";
+import { BackButton, NoticePanel } from "../my-courses-ui";
 import LabFlow from "./LabFlow";
 import QuizFlow from "./QuizFlow";
+import TheoryPanel from "./TheoryPanel";
+import VideoLessonPlayer from "./VideoLessonPlayer";
 import { ModuleCardGlow, ModuleHero, ModuleSectionCard, ModuleStats } from "./ModuleView";
-import { findLab, findQuiz, type CourseModule, type ModuleLesson, type ModuleSection } from "./module-data";
 
-type LessonPatch = Partial<Pick<ModuleLesson, "completed" | "watched">>;
 type Activity = { kind: "quiz" | "lab"; lessonId: string; run: number };
 
-/** Module page: hero, stats and task sections; quizzes and labs open in the right-hand activity panel. */
-export default function ModuleScreen({ course, module }: { course: Course; module: CourseModule }) {
+const isPanelKind = (kind: ModuleLessonView["kind"]): kind is Activity["kind"] => kind === "quiz" || kind === "lab";
+
+/**
+ * Module page: hero, stats and task sections. Videos and theory open inline; quizzes and labs open in the
+ * right-hand activity panel. `initialLessonId` (from `?lesson=`) opens that lesson on arrival.
+ */
+export default function ModuleScreen({ courseParam, module, initialLessonId }: { courseParam: string; module: ModuleView; initialLessonId: string | null }) {
     const router = useRouter();
-    const [patches, setPatches] = useState<Record<string, LessonPatch>>({});
-    const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [activity, setActivity] = useState<Activity | null>(null);
+    const { getModuleIntroPlayback } = useCourse();
+    const locked = module.isLocked;
+    const levelsPath = courseDetailPath(courseParam, "levels");
 
-    const sections: ModuleSection[] = module.sections.map((section) => ({
-        ...section,
-        lessons: section.lessons.map((lesson) => ({ ...lesson, ...patches[lesson.lessonId] })),
-    }));
-    const lessons = sections.flatMap((s) => s.lessons);
-    const levelsPath = courseDetailPath(course.courseId, "levels");
+    const target = locked || !initialLessonId ? null : (module.sections.flatMap((s) => s.lessons).find((l) => l.lessonId === initialLessonId) ?? null);
+    const [expandedId, setExpandedId] = useState<string | null>(() => (target && !isPanelKind(target.kind) ? target.lessonId : null));
+    const [activity, setActivity] = useState<Activity | null>(() => (target && isPanelKind(target.kind) ? { kind: target.kind, lessonId: target.lessonId, run: 1 } : null));
+    const scrollTo = useRef(expandedId);
 
-    const patch = (lessonId: string, next: LessonPatch) => setPatches((prev) => ({ ...prev, [lessonId]: { ...prev[lessonId], ...next } }));
+    useEffect(() => {
+        const id = scrollTo.current;
+        if (!id) return;
+        scrollTo.current = null;
+        const frame = window.requestAnimationFrame(() => document.getElementById(`lesson-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+        return () => window.cancelAnimationFrame(frame);
+    }, []);
 
     const open = (kind: Activity["kind"], lessonId: string) => setActivity((prev) => ({ kind, lessonId, run: (prev?.run ?? 0) + 1 }));
-
-    const handleAction = (lesson: ModuleLesson) => {
-        if (lesson.kind === "quiz") return open("quiz", lesson.lessonId);
-        if (lesson.kind === "lab") return open("lab", lesson.lessonId);
-        const opening = expandedId !== lesson.lessonId;
-        setExpandedId(opening ? lesson.lessonId : null);
-        if (opening && lesson.kind === "theory") patch(lesson.lessonId, { completed: true });
-    };
-
-    const handleProgress = (lesson: ModuleLesson, pct: number) => {
-        if (pct >= 100) {
-            if (!lesson.completed) patch(lesson.lessonId, { watched: 100, completed: true });
-        } else if (pct > (lesson.watched ?? 0)) {
-            patch(lesson.lessonId, { watched: pct });
-        }
-    };
-
-    const activeLesson = activity ? lessons.find((l) => l.lessonId === activity.lessonId) : undefined;
-    const activeSection = activity ? sections.find((s) => s.lessons.some((l) => l.lessonId === activity.lessonId)) : undefined;
-    const sectionLab = activeSection?.lessons.find((l) => l.kind === "lab" && findLab(l.labId));
-    const quiz = activity?.kind === "quiz" ? findQuiz(activeLesson?.quizId) : undefined;
-    const lab = activity?.kind === "lab" ? findLab(activeLesson?.labId) : undefined;
     const close = () => setActivity(null);
+
+    const handleAction = (lesson: ModuleLessonView) => {
+        if (locked) return;
+        if (isPanelKind(lesson.kind)) return open(lesson.kind, lesson.lessonId);
+        setExpandedId((prev) => (prev === lesson.lessonId ? null : lesson.lessonId));
+    };
+
+    const renderInline = (lesson: ModuleLessonView) =>
+        lesson.kind === "video" ? (
+            <VideoLessonPlayer key={lesson.lessonId} lesson={lesson} />
+        ) : lesson.kind === "theory" ? (
+            <TheoryPanel key={lesson.lessonId} lesson={lesson} />
+        ) : null;
 
     return (
         <StudentLayout hideSidebar fullBleed>
@@ -87,36 +88,48 @@ export default function ModuleScreen({ course, module }: { course: Course; modul
                 >
                     <ModuleCardGlow />
                     <Box sx={{ position: "relative", display: "flex", flexDirection: "column", gap: { xs: "24px", md: "44px" } }}>
-                        <ModuleHero module={module} sections={sections} />
+                        {locked && (
+                            <NoticePanel
+                                icon={<MdLockOutline size={26} color="#8a8a9a" />}
+                                title="This module is locked"
+                                message={`Finish the levels before Level ${module.level.levelNo} to unlock its lessons. You can still preview what's inside.`}
+                                action={{ label: "Back to Levels", onClick: () => router.push(levelsPath) }}
+                            />
+                        )}
+                        <ModuleHero module={module} loadIntro={() => getModuleIntroPlayback(courseParam, module.moduleId)} />
                         <ModuleStats module={module} />
-                        {sections.map((section) => (
-                            <ModuleSectionCard key={section.sectionId} section={section} expandedId={expandedId} onAction={handleAction} onProgress={handleProgress} />
+                        {module.sections.map((section) => (
+                            <ModuleSectionCard
+                                key={section.sectionId}
+                                section={section}
+                                expandedId={expandedId}
+                                locked={locked}
+                                onAction={handleAction}
+                                renderInline={renderInline}
+                            />
                         ))}
                     </Box>
                 </Box>
             </Box>
 
-            {activity && quiz && (
+            {activity?.kind === "quiz" && (
                 <QuizFlow
                     key={`${activity.lessonId}-${activity.run}`}
                     open
-                    quiz={quiz}
-                    hasLab={Boolean(sectionLab)}
+                    lessonId={activity.lessonId}
                     onClose={close}
-                    onComplete={() => patch(activity.lessonId, { completed: true })}
-                    onContinueToLab={() => (sectionLab ? open("lab", sectionLab.lessonId) : close())}
+                    onContinueToLab={(labLessonId) => open("lab", labLessonId)}
+                    onCourseMap={() => router.push(levelsPath)}
                 />
             )}
 
-            {activity && lab && (
+            {activity?.kind === "lab" && (
                 <LabFlow
                     key={`${activity.lessonId}-${activity.run}`}
                     open
-                    lab={lab}
-                    nextLevelNo={module.nextLevelNo}
+                    lessonId={activity.lessonId}
                     onClose={close}
-                    onComplete={() => patch(activity.lessonId, { completed: true })}
-                    onContinue={() => router.push(`${levelsPath}#level-${module.nextLevelNo}`)}
+                    onContinueToLevel={(levelNo) => router.push(`${levelsPath}#level-${levelNo}`)}
                     onCourseMap={() => router.push(levelsPath)}
                 />
             )}
