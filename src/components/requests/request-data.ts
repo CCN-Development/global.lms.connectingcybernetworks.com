@@ -1,9 +1,12 @@
 /**
- * Static content + design tokens for the student "My Requests" screens
- * (Figma: LMS (3) › My Request). The pages currently run on this sample data
- * only — the backend `RequestContext` is intentionally not wired in.
+ * Design tokens + view helpers for the student "My Requests" screens
+ * (Figma: LMS (3) › My Request). Data comes from `RequestContext`; the helpers
+ * below map persisted requests onto what each card / drawer element shows.
  */
 import { FONT_INTER, FONT_LATO, FONT_POPPINS } from "@/components/aish/tokens";
+import { tabForStatus, type RequestStatus, type RequestTab, type StudentRequest } from "@/contexts/RequestContext";
+
+export type { RequestTab };
 
 export const requestAsset = (name: string) => `/requests/${name}`;
 
@@ -69,9 +72,7 @@ export const TEXT = {
     poppinsSemi28: { fontFamily: FONT_POPPINS, fontWeight: 600, fontSize: "28px", lineHeight: "42px", letterSpacing: 0 },
 } as const;
 
-// ─── Types ─────────────────────────────────────────────────────────────────
-export type RequestTab = "active" | "resolved" | "rejected";
-
+// ─── View types ────────────────────────────────────────────────────────────
 export type TimelineKind = "step" | "accepted" | "rejected";
 
 export interface TimelineItem {
@@ -83,61 +84,7 @@ export interface TimelineItem {
     at: string;
 }
 
-export interface RequestAttachment {
-    name: string;
-    sizeLabel: string;
-    url?: string;
-}
-
-export interface SampleRequest {
-    id: string;
-    tab: RequestTab;
-    /** Card heading, e.g. "Batch Change". */
-    category: string;
-    /** Drawer chip next to the status pill, e.g. "Academic". */
-    tag: string;
-    /** Drawer heading. */
-    title: string;
-    description: string;
-    attachment?: RequestAttachment;
-    createdAt: string;
-    /** Card status row, e.g. "Under review by RM" / "Resolved on" / "Feedback Added". */
-    statusLabel: string;
-    statusAt: string;
-    repliesIn?: string;
-    timeline: TimelineItem[];
-    expectedResponse?: string;
-    nextStep?: string;
-    rejectionReason?: string;
-    feedback?: "up" | "down" | null;
-}
-
-export const REQUEST_CATEGORIES = [
-    "Batch Change",
-    "Leave Request",
-    "Fee Query",
-    "Assignment",
-    "Lab Access",
-    "Attendance",
-    "Placement",
-    "Technical Support",
-    "Certificate",
-    "General",
-] as const;
-
-/** Drawer chip shown for each category. */
-export const CATEGORY_TAG: Record<string, string> = {
-    "Batch Change": "Academic",
-    "Leave Request": "Academic",
-    "Fee Query": "Finance",
-    Assignment: "Academic",
-    "Lab Access": "Technical",
-    Attendance: "Academic",
-    Placement: "Career",
-    "Technical Support": "Technical",
-    Certificate: "Academic",
-    General: "General",
-};
+export type FeedbackValue = "up" | "down";
 
 export type SortOption = "newest" | "oldest";
 export type DateRange = "all" | "7d" | "30d" | "90d" | "year";
@@ -155,103 +102,73 @@ export const DATE_OPTIONS: { value: DateRange; label: string }[] = [
     { value: "year", label: "This year" },
 ];
 
-// ─── Sample data (copy from the Figma screens) ─────────────────────────────
-const DESCRIPTION =
-    "I’m facing a scheduling conflict with my current batch timing, which is making it difficult for me to attend sessions regularly. I would like to request a transfer to another available batch that better matches my availability so I can continue the course without interruption.";
-const ATTACHMENT: RequestAttachment = { name: "Report name_T1.pdf", sizeLabel: "2.5MB" };
-const STEP_AT = "2026-04-12T14:30:00+05:30";
+// ─── Request → view mapping ────────────────────────────────────────────────
+const ACCEPTED_STATUSES: RequestStatus[] = ["approved", "resolved"];
+const CLOSED_NEGATIVE: RequestStatus[] = ["rejected", "withdrawn"];
 
-const submitted = (id: string): TimelineItem => ({ id: `${id}-submitted`, title: "Request Submitted", note: "Reply within 24 hours", kind: "step", at: STEP_AT });
-const review = (id: string): TimelineItem => ({ id: `${id}-review`, title: "Under review by RM", note: "RM is checking", kind: "step", at: STEP_AT });
-
-function active(id: string, category: string, createdAt: string): SampleRequest {
-    return {
-        id,
-        tab: "active",
-        category,
-        tag: "Academic",
-        title: "Request to shift morning CCNA batch to evening",
-        description: DESCRIPTION,
-        attachment: ATTACHMENT,
-        createdAt,
-        statusLabel: "Under review by RM",
-        statusAt: STEP_AT,
-        repliesIn: "24h",
-        timeline: [submitted(id), review(id)],
-        expectedResponse: "Expected response within 24 hours",
-    };
+export function requestTab(request: StudentRequest): RequestTab {
+    return tabForStatus(request.requestStatus);
 }
 
-function resolved(id: string, category: string, createdAt: string): SampleRequest {
-    return {
-        id,
-        tab: "resolved",
-        category,
-        tag: "Academic",
-        title: "Request to shift morning CCNA batch to evening",
-        description: DESCRIPTION,
-        attachment: ATTACHMENT,
-        createdAt,
-        statusLabel: "Resolved on",
-        statusAt: STEP_AT,
-        timeline: [submitted(id), review(id), { id: `${id}-accepted`, title: "Request Accepted", kind: "accepted", at: STEP_AT }],
-        nextStep: "Your batch has been successfully updated. Check your updated schedule and join the upcoming session.",
-        feedback: null,
-    };
+/**
+ * Status history rows. Only the entry that moves a request into an accepted / rejected
+ * state gets the coloured marker; later RM notes stay regular steps. The RM message on
+ * accept / reject is shown in the "Next Step" / "Reason for Rejection" callout instead.
+ */
+export function timelineItems(request: StudentRequest): TimelineItem[] {
+    let previous: RequestStatus | null = null;
+    return request.requestTimelines.map((entry) => {
+        const isTransition = entry.timelineStatus !== previous;
+        previous = entry.timelineStatus;
+        const kind: TimelineKind = !isTransition
+            ? "step"
+            : ACCEPTED_STATUSES.includes(entry.timelineStatus)
+                ? "accepted"
+                : CLOSED_NEGATIVE.includes(entry.timelineStatus)
+                    ? "rejected"
+                    : "step";
+        const hideNote = kind === "accepted" || entry.timelineStatus === "rejected";
+        return {
+            id: entry.timelineId,
+            title: entry.timelineTitle,
+            note: !hideNote && entry.timelineNote ? entry.timelineNote : undefined,
+            kind,
+            at: entry.timelineDate,
+        };
+    });
 }
 
-function rejected(id: string, category: string, createdAt: string): SampleRequest {
-    return {
-        id,
-        tab: "rejected",
-        category,
-        tag: "Academic",
-        title: "Request to shift morning CCNA batch to evening",
-        description: DESCRIPTION,
-        attachment: ATTACHMENT,
-        createdAt,
-        statusLabel: "Feedback Added",
-        statusAt: STEP_AT,
-        timeline: [submitted(id), review(id), { id: `${id}-rejected`, title: "Request Rejected", kind: "rejected", at: STEP_AT }],
-        rejectionReason:
-            "Your requested batch is currently full. We’re unable to move you to this slot at the moment. \nYou can choose another available batch or submit a new request later.",
-        feedback: null,
-    };
+/** Label + timestamp in the card's highlighted status row. */
+export function cardStatus(request: StudentRequest): { label: string; at: string } {
+    const latest = request.requestTimelines[request.requestTimelines.length - 1];
+    const closedAt = request.requestResolutionDate ?? request.updatedAt;
+    switch (request.requestStatus) {
+        case "pending":
+        case "in_review":
+            return { label: latest?.timelineTitle ?? "Request Submitted", at: latest?.timelineDate ?? request.createdAt };
+        case "approved":
+            return { label: "Accepted on", at: closedAt };
+        case "resolved":
+            return { label: "Resolved on", at: closedAt };
+        case "rejected":
+            return { label: "Feedback Added", at: closedAt };
+        case "withdrawn":
+            return { label: "Withdrawn on", at: request.withdrawnAt ?? request.updatedAt };
+    }
 }
 
-export const SAMPLE_REQUESTS: SampleRequest[] = [
-    active("req-batch-change", "Batch Change", "2026-07-10T16:00:00+05:30"),
-    active("req-leave", "Leave Request", "2026-07-10T15:00:00+05:30"),
-    active("req-fee", "Fee Query", "2026-07-10T14:00:00+05:30"),
-    active("req-assignment", "Assignment", "2026-07-10T13:00:00+05:30"),
-    active("req-lab-access", "Lab Access", "2026-07-10T12:00:00+05:30"),
-    resolved("req-attendance", "Attendance", "2026-07-10T16:00:00+05:30"),
-    resolved("req-placement-resolved", "Placement", "2026-07-10T15:00:00+05:30"),
-    resolved("req-tech-support", "Technical Support", "2026-07-10T14:00:00+05:30"),
-    rejected("req-general", "General", "2026-07-10T16:00:00+05:30"),
-    rejected("req-placement-rejected", "Placement", "2026-07-10T15:00:00+05:30"),
-    rejected("req-certificate", "Certificate", "2026-07-10T14:00:00+05:30"),
-];
+/** "24h" while the promised reply window is still running, otherwise null. */
+export function repliesIn(request: StudentRequest, now = Date.now()): string | null {
+    if (requestTab(request) !== "active") return null;
+    const deadline = new Date(request.createdAt).getTime() + request.expectedResponseHours * 3_600_000;
+    const left = deadline - now;
+    if (left <= 0) return null;
+    return `${Math.max(1, Math.ceil(left / 3_600_000))}h`;
+}
 
-/** Builds a new active request from the Create Request form. */
-export function makeRequest(category: string, description: string, attachment?: RequestAttachment): SampleRequest {
-    const now = new Date().toISOString();
-    const id = `req-${Date.now()}`;
-    return {
-        id,
-        tab: "active",
-        category,
-        tag: CATEGORY_TAG[category] ?? "General",
-        title: category,
-        description,
-        attachment,
-        createdAt: now,
-        statusLabel: "Request Submitted",
-        statusAt: now,
-        repliesIn: "24h",
-        timeline: [{ ...submitted(id), at: now }],
-        expectedResponse: "Expected response within 24 hours",
-    };
+export function feedbackValue(request: StudentRequest): FeedbackValue | null {
+    if (request.isSatisfied === null) return null;
+    return request.isSatisfied ? "up" : "down";
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -271,16 +188,17 @@ export function formatCreated(iso: string) {
     return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
-export function formatFileSize(bytes: number) {
+export function formatFileSize(bytes?: number | null) {
+    if (!bytes || bytes <= 0) return "";
     if (bytes < 1024) return `${bytes}B`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function inDateRange(iso: string, range: DateRange, now = Date.now()) {
-    if (range === "all") return true;
-    const ts = new Date(iso).getTime();
-    if (range === "year") return new Date(ts).getFullYear() === new Date(now).getFullYear();
+/** Start of the selected "Date" filter window as an ISO string (undefined = all time). */
+export function dateRangeStart(range: DateRange, now = new Date()): string | undefined {
+    if (range === "all") return undefined;
+    if (range === "year") return new Date(now.getFullYear(), 0, 1).toISOString();
     const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
-    return now - ts <= days * 24 * 60 * 60 * 1000;
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 }

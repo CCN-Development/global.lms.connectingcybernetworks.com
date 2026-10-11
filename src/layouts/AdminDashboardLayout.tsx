@@ -26,6 +26,11 @@ const NAV_ITEMS: NavItem[] = [
         link: '/dashboard/admin/course-management',
         icon: <MdOutlineSchool />
     },
+    {
+        label: 'Exam Management',
+        link: '/dashboard/admin/exam-management',
+        icon: <MdOutlineSchool />
+    },
     { label: 'Chats', link: '/dashboard/chats', icon: <MdOutlineChat /> },
 ]
 

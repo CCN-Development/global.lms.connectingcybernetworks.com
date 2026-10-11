@@ -24,13 +24,13 @@ const PILL_TONE: Record<PillTone, { bg: string; color: string; dot: string; labe
 };
 
 /** Card pill ("Active" / "Resolved" / "Rejected") — 12px, compact. */
-export function CardStatusPill({ tab }: { tab: RequestTab }) {
+export function CardStatusPill({ tab, label }: { tab: RequestTab; label?: string }) {
     const tone = PILL_TONE[tab];
     return (
         <Box sx={{ display: "inline-flex", alignItems: "center", gap: "6px", px: "8px", py: "2px", borderRadius: "999px", bgcolor: tone.bg, flexShrink: 0 }}>
             <Icon name={tone.dot} size={5} />
             <Typography component="span" sx={{ ...TEXT.reg12, color: tone.color, whiteSpace: "nowrap" }}>
-                {tone.label}
+                {label ?? tone.label}
             </Typography>
         </Box>
     );
@@ -48,13 +48,13 @@ export function RepliesPill({ label }: { label: string }) {
 }
 
 /** Drawer pills — 32px tall, 14px text. Open requests read "Pending". */
-export function DrawerStatusPill({ tab }: { tab: RequestTab }) {
+export function DrawerStatusPill({ tab, label }: { tab: RequestTab; label?: string }) {
     const tone = PILL_TONE[tab === "active" ? "pending" : tab];
     return (
         <Box sx={{ display: "inline-flex", alignItems: "center", gap: "6px", height: 32, px: "12px", borderRadius: "999px", bgcolor: tone.bg, flexShrink: 0 }}>
             <Icon name={tab === "rejected" ? "dot-rejected-lg.svg" : tone.dot} size={5} />
             <Typography component="span" sx={{ ...TEXT.med14, color: tone.color, whiteSpace: "nowrap" }}>
-                {tone.label}
+                {label ?? tone.label}
             </Typography>
         </Box>
     );

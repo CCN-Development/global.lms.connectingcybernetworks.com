@@ -3,8 +3,18 @@
 import React from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Drawer, Typography } from "@mui/material";
-import toast from "react-hot-toast";
-import { RQ, TEXT, requestAsset, type SampleRequest, type TimelineItem } from "./request-data";
+import { requestTypeGroup, type StudentRequest } from "@/contexts/RequestContext";
+import {
+    RQ,
+    TEXT,
+    feedbackValue,
+    formatFileSize,
+    requestAsset,
+    requestTab,
+    timelineItems,
+    type FeedbackValue,
+    type TimelineItem,
+} from "./request-data";
 import { DateStamp, DrawerStatusPill, Icon, TagPill } from "./request-parts";
 
 const hiddenScrollbar = {
@@ -94,19 +104,21 @@ function Callout({ label, text, tone }: { label: string; text: string; tone: "ne
 
 export interface RequestDetailDrawerProps {
     open: boolean;
-    request: SampleRequest | null;
+    request: StudentRequest | null;
+    /** Disables withdraw / feedback while a call for this request is in flight. */
+    busy?: boolean;
     onClose: () => void;
-    onWithdraw: (request: SampleRequest) => void;
-    onFeedback: (request: SampleRequest, value: "up" | "down") => void;
+    onWithdraw: (request: StudentRequest) => void;
+    onFeedback: (request: StudentRequest, value: FeedbackValue) => void;
 }
 
-export default function RequestDetailDrawer({ open, request, onClose, onWithdraw, onFeedback }: RequestDetailDrawerProps) {
-    const isActive = request?.tab === "active";
-
-    const openAttachment = () => {
-        if (request?.attachment?.url) window.open(request.attachment.url, "_blank", "noopener,noreferrer");
-        else toast("Preview isn’t available for sample attachments.");
-    };
+export default function RequestDetailDrawer({ open, request, busy = false, onClose, onWithdraw, onFeedback }: RequestDetailDrawerProps) {
+    const tab = request ? requestTab(request) : null;
+    const isActive = tab === "active";
+    const isWithdrawn = request?.requestStatus === "withdrawn";
+    const feedback = request ? feedbackValue(request) : null;
+    const nextStep = tab === "resolved" ? request?.responseMessage : null;
+    const rejectionReason = request?.requestStatus === "rejected" ? request.rejectionReason : null;
 
     return (
         <Drawer
@@ -134,7 +146,7 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                 },
             }}
         >
-            {request && (
+            {request && tab && (
                 <>
                     {/* Ellipse 697 / 698 glows */}
                     <Box aria-hidden sx={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
@@ -188,26 +200,27 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                                 <Box sx={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                                     <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                                        <DrawerStatusPill tab={request.tab} />
-                                        <TagPill label={request.tag} />
+                                        <DrawerStatusPill tab={tab} label={isWithdrawn ? "Withdrawn" : undefined} />
+                                        <TagPill label={requestTypeGroup(request.requestType)} />
                                     </Box>
                                     <Typography
                                         component="h2"
                                         sx={{ ...TEXT.poppinsSemi28, fontSize: { xs: "24px", sm: "28px" }, lineHeight: { xs: "36px", sm: "42px" }, color: RQ.white, overflowWrap: "anywhere" }}
                                     >
-                                        {request.title}
+                                        {request.requestTitle}
                                     </Typography>
                                 </Box>
 
                                 <Box sx={{ ...glassPanelSx, display: "flex", flexDirection: "column", gap: "16px", p: "20px" }}>
                                     <SectionLabel>Description</SectionLabel>
                                     <Typography sx={{ ...TEXT.reg16, color: RQ.n75, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
-                                        {request.description}
+                                        {request.requestDescription}
                                     </Typography>
                                 </Box>
 
-                                {request.attachment && (
+                                {request.requestSupportingDocuments.map((document) => (
                                     <Box
+                                        key={document.documentId}
                                         sx={{
                                             display: "flex",
                                             alignItems: "center",
@@ -225,14 +238,19 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                                             </Box>
                                             <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
                                                 <Typography sx={{ ...TEXT.med16, color: RQ.n75, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                                    {request.attachment.name}
+                                                    {document.documentName}
                                                 </Typography>
-                                                <Typography sx={{ ...TEXT.interReg14, color: RQ.n400 }}>{request.attachment.sizeLabel}</Typography>
+                                                {document.documentSize ? (
+                                                    <Typography sx={{ ...TEXT.interReg14, color: RQ.n400 }}>{formatFileSize(document.documentSize)}</Typography>
+                                                ) : null}
                                             </Box>
                                         </Box>
                                         <ButtonBase
-                                            aria-label="View attachment"
-                                            onClick={openAttachment}
+                                            component="a"
+                                            href={document.documentUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            aria-label={`View ${document.documentName}`}
                                             sx={{
                                                 width: 40,
                                                 height: 40,
@@ -247,7 +265,7 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                                             <Icon name="icon-eye.svg" size={20} />
                                         </ButtonBase>
                                     </Box>
-                                )}
+                                ))}
                             </Box>
                         </Box>
 
@@ -255,35 +273,40 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                             <SectionLabel>Status History</SectionLabel>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                                {request.timeline.map((item) => (
+                                {timelineItems(request).map((item) => (
                                     <TimelineRow key={item.id} item={item} />
                                 ))}
-                                {request.nextStep && <Callout label="Next Step" text={request.nextStep} tone="next" />}
-                                {request.rejectionReason && <Callout label="Reason for Rejection" text={request.rejectionReason} tone="rejection" />}
+                                {nextStep && <Callout label="Next Step" text={nextStep} tone="next" />}
+                                {rejectionReason && <Callout label="Reason for Rejection" text={rejectionReason} tone="rejection" />}
                             </Box>
-                            {isActive && request.expectedResponse && (
-                                <Typography sx={{ ...TEXT.med14, color: RQ.warning }}>{request.expectedResponse}</Typography>
+                            {isActive && (
+                                <Typography sx={{ ...TEXT.med14, color: RQ.warning }}>
+                                    Expected response within {request.expectedResponseHours} hours
+                                </Typography>
                             )}
                         </Box>
 
-                        {/* Feedback (closed requests) */}
-                        {!isActive && (
+                        {/* Feedback (closed requests the RM actually handled) */}
+                        {!isActive && !isWithdrawn && (
                             <Box sx={{ ...glassPanelSx, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", p: "20px", backgroundImage: RQ.glassPanel.replace("169deg", "176.78deg") }}>
                                 <Typography sx={{ ...TEXT.reg16, color: RQ.n75 }}>
-                                    {request.feedback ? "Thanks for your feedback!" : "Was this request handled satisfactorily?"}
+                                    {feedback ? "Thanks for your feedback!" : "Was this request handled satisfactorily?"}
                                 </Typography>
                                 <Box sx={{ display: "flex", gap: "12px", flexShrink: 0 }}>
                                     {(["up", "down"] as const).map((value) => {
-                                        const selected = request.feedback === value;
+                                        const selected = feedback === value;
                                         return (
                                             <ButtonBase
                                                 key={value}
                                                 aria-label={value === "up" ? "Yes, satisfied" : "No, not satisfied"}
                                                 aria-pressed={selected}
-                                                onClick={() => onFeedback(request, value)}
+                                                disabled={busy}
+                                                onClick={() => {
+                                                    if (!selected) onFeedback(request, value);
+                                                }}
                                                 sx={{
                                                     borderRadius: "6px",
-                                                    opacity: request.feedback && !selected ? 0.4 : 1,
+                                                    opacity: feedback && !selected ? 0.4 : 1,
                                                     outline: selected ? `1px solid ${RQ.n300}` : "none",
                                                     outlineOffset: "3px",
                                                     transition: "opacity .15s ease",
@@ -302,6 +325,7 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                         {isActive && (
                             <ButtonBase
                                 onClick={() => onWithdraw(request)}
+                                disabled={busy}
                                 sx={{
                                     mt: "auto",
                                     width: "100%",
@@ -312,11 +336,12 @@ export default function RequestDetailDrawer({ open, request, onClose, onWithdraw
                                     border: `1px solid ${RQ.n700}`,
                                     ...TEXT.interMed14,
                                     color: RQ.n100,
-                                    transition: "border-color .15s ease, background-color .15s ease",
+                                    transition: "border-color .15s ease, background-color .15s ease, opacity .15s ease",
                                     "&:hover": { borderColor: RQ.n500, bgcolor: "rgba(255,255,255,0.04)" },
+                                    "&.Mui-disabled": { opacity: 0.55, color: RQ.n100 },
                                 }}
                             >
-                                Withdraw Request
+                                {busy ? "Withdrawing…" : "Withdraw Request"}
                             </ButtonBase>
                         )}
                     </Box>

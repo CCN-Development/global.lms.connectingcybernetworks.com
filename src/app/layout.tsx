@@ -11,6 +11,7 @@ import { StudentProvider } from "@/contexts/StudentContext";
 import { TrainerProvider } from "@/contexts/TrainerContext";
 import { AssignmentProvider } from "@/contexts/AssignmentContext";
 import { CourseProvider } from "@/contexts/CourseContext";
+import { ExamProvider } from "@/contexts/ExamContext";
 import { cn } from "@/lib/utils";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 
@@ -53,9 +54,11 @@ export default function RootLayout({
                     <TrainerProvider>
                       <AssignmentProvider>
                         <CourseProvider>
+                          <ExamProvider>
                           {/* <CyberSecurityProvider> */}
                           {children}
                           {/* </CyberSecurityProvider> */}
+                          </ExamProvider>
                         </CourseProvider>
                       </AssignmentProvider>
                     </TrainerProvider>

@@ -6,60 +6,62 @@ import { Box, ButtonBase, Dialog, InputBase, Menu, MenuItem, Typography } from "
 import toast from "react-hot-toast";
 import { LmsButton } from "@/components/community/community-ui";
 import {
-    REQUEST_CATEGORIES,
-    RQ,
-    TEXT,
-    formatFileSize,
-    makeRequest,
-    requestAsset,
-    type RequestAttachment,
-    type SampleRequest,
-} from "./request-data";
+    REQUEST_ATTACHMENT_MAX_BYTES,
+    REQUEST_ATTACHMENT_TYPES,
+    REQUEST_TYPES,
+    useRequests,
+    type RequestDocumentInput,
+    type RequestType,
+    type StudentRequest,
+} from "@/contexts/RequestContext";
+import { RQ, TEXT, formatFileSize, requestAsset } from "./request-data";
 import { Icon, dropdownItemSx, dropdownPaperSx } from "./request-parts";
-
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 
 export interface CreateRequestModalProps {
     open: boolean;
     onClose: () => void;
-    onCreated: (request: SampleRequest) => void;
+    onCreated: (request: StudentRequest) => void;
 }
 
 export default function CreateRequestModal({ open, onClose, onCreated }: CreateRequestModalProps) {
-    const [category, setCategory] = useState("");
+    const { createRequest, uploadRequestDocument } = useRequests();
+    const [category, setCategory] = useState<RequestType | "">("");
     const [description, setDescription] = useState("");
-    const [attachment, setAttachment] = useState<RequestAttachment | null>(null);
+    const [file, setFile] = useState<File | null>(null);
+    const [uploadPct, setUploadPct] = useState<number | null>(null);
+    const [sending, setSending] = useState(false);
     const [categoryAnchor, setCategoryAnchor] = useState<HTMLElement | null>(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
     const reset = () => {
         setCategory("");
         setDescription("");
-        setAttachment(null);
+        setFile(null);
+        setUploadPct(null);
     };
 
     const handleClose = () => {
+        if (sending) return;
         reset();
         onClose();
     };
 
     const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+        const picked = event.target.files?.[0];
         event.target.value = "";
-        if (!file) return;
-        if (!ACCEPTED_TYPES.includes(file.type)) {
+        if (!picked) return;
+        if (!REQUEST_ATTACHMENT_TYPES.includes(picked.type)) {
             toast.error("Only JPEG, PNG and PDF files are allowed");
             return;
         }
-        if (file.size > MAX_FILE_BYTES) {
+        if (picked.size > REQUEST_ATTACHMENT_MAX_BYTES) {
             toast.error("File must be 5MB or smaller");
             return;
         }
-        setAttachment({ name: file.name, sizeLabel: formatFileSize(file.size), url: URL.createObjectURL(file) });
+        setFile(picked);
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!category) {
             toast.error("Select a category");
             return;
@@ -68,11 +70,36 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
             toast.error("Describe your issue or request");
             return;
         }
-        onCreated(makeRequest(category, description.trim(), attachment ?? undefined));
-        toast.success("Request submitted");
-        reset();
-        onClose();
+
+        setSending(true);
+        try {
+            let documents: RequestDocumentInput[] | undefined;
+            if (file) {
+                setUploadPct(0);
+                const uploaded = await uploadRequestDocument(file, setUploadPct);
+                if (!uploaded.success || !uploaded.data) {
+                    toast.error(uploaded.message ?? "Failed to upload attachment");
+                    return;
+                }
+                documents = [uploaded.data];
+            }
+
+            const res = await createRequest({ requestType: category, requestDescription: description.trim(), documents });
+            if (!res.success || !res.data) {
+                toast.error(res.message ?? "Failed to create request");
+                return;
+            }
+            toast.success("Request submitted");
+            onCreated(res.data);
+            reset();
+            onClose();
+        } finally {
+            setSending(false);
+            setUploadPct(null);
+        }
     };
+
+    const sendLabel = uploadPct !== null && uploadPct < 100 ? `Uploading… ${uploadPct}%` : sending ? "Sending…" : "Send Request";
 
     return (
         <Dialog
@@ -166,7 +193,7 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
                             paper: { sx: { ...dropdownPaperSx, width: categoryAnchor?.offsetWidth, maxHeight: 320 } },
                         }}
                     >
-                        {REQUEST_CATEGORIES.map((option) => (
+                        {REQUEST_TYPES.map((option) => (
                             <MenuItem
                                 key={option}
                                 selected={option === category}
@@ -217,15 +244,16 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
                             <Icon name="upload-file-icon.svg" size={36} height={38} />
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
                                 <Typography sx={{ ...TEXT.interMed16, color: RQ.n100, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    {attachment ? attachment.name : "Attachment (Optional)"}
+                                    {file ? file.name : "Attachment (Optional)"}
                                 </Typography>
                                 <Typography sx={{ fontFamily: TEXT.interReg12.fontFamily, fontWeight: 400, fontSize: "12px", lineHeight: "21px", letterSpacing: 0, color: "#7D7D7D" }}>
-                                    {attachment ? attachment.sizeLabel : "JPEG, PNG and PDF formats, up to 5MB"}
+                                    {file ? formatFileSize(file.size) : "JPEG, PNG and PDF formats, up to 5MB"}
                                 </Typography>
                             </Box>
                         </Box>
                         <ButtonBase
-                            onClick={() => (attachment ? setAttachment(null) : fileInput.current?.click())}
+                            disabled={sending}
+                            onClick={() => (file ? setFile(null) : fileInput.current?.click())}
                             sx={{
                                 height: 36,
                                 px: "16px",
@@ -244,7 +272,7 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
                                 "&:hover": { bgcolor: "#303030" },
                             }}
                         >
-                            {attachment ? "Remove" : "Select File"}
+                            {file ? "Remove" : "Select File"}
                         </ButtonBase>
                         <input ref={fileInput} hidden type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={handleFile} />
                     </Box>
@@ -252,11 +280,12 @@ export default function CreateRequestModal({ open, onClose, onCreated }: CreateR
 
                 {/* Actions */}
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "10px", py: "8px" }}>
-                    <LmsButton onClick={handleSubmit} sx={{ width: "100%" }}>
-                        Send Request
+                    <LmsButton onClick={handleSubmit} disabled={sending} sx={{ width: "100%" }}>
+                        {sendLabel}
                     </LmsButton>
                     <ButtonBase
                         onClick={handleClose}
+                        disabled={sending}
                         sx={{
                             width: "100%",
                             height: 44,

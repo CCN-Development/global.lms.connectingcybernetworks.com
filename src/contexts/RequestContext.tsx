@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import axiosHandler from "@/lib/enhanced-axios";
 import type { StandardResponse } from "./AuthContext";
 
@@ -9,17 +9,41 @@ import type { StandardResponse } from "./AuthContext";
 /* ------------------------------------------------------------------ */
 
 export const REQUEST_TYPES = [
-    "Academic",
-    "Batch",
-    "Fee",
+    "Batch Change",
+    "Leave Request",
+    "Fee Query",
+    "Assignment",
+    "Lab Access",
     "Attendance",
     "Placement",
-    "Certificate",
     "Technical Support",
+    "Certificate",
     "General",
 ] as const;
 
 export type RequestType = (typeof REQUEST_TYPES)[number];
+
+/** Broader group shown as a chip next to the status in the request drawer. */
+export const REQUEST_TYPE_GROUPS: Record<RequestType, string> = {
+    "Batch Change": "Academic",
+    "Leave Request": "Academic",
+    "Fee Query": "Finance",
+    Assignment: "Academic",
+    "Lab Access": "Technical",
+    Attendance: "Academic",
+    Placement: "Career",
+    "Technical Support": "Technical",
+    Certificate: "Academic",
+    General: "General",
+};
+
+export function requestTypeGroup(type: string): string {
+    return REQUEST_TYPE_GROUPS[type as RequestType] ?? "General";
+}
+
+/** Attachment rules enforced by POST /requests/student/upload-url. */
+export const REQUEST_ATTACHMENT_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+export const REQUEST_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 
 export type RequestStatus =
     | "pending"
@@ -170,19 +194,30 @@ export interface CreateRequestInput {
     documents?: RequestDocumentInput[];
 }
 
+export interface RequestUploadTicket {
+    key: string;
+    uploadUrl: string;
+    method: "PUT";
+    headers: Record<string, string>;
+    /** CDN URL to send as `documentUrl` once the PUT succeeds. */
+    publicUrl: string;
+}
+
 export interface GetStudentRequestsParams {
     tab?: RequestTab;
     status?: RequestStatus;
     requestType?: string;
     search?: string;
     sort?: "newest" | "oldest";
+    /** ISO date — only requests created on/after this. */
+    startDate?: string;
+    /** ISO date — only requests created on/before this. */
+    endDate?: string;
 }
 
 export interface GetBranchRequestsParams extends GetStudentRequestsParams {
     page?: number;
     limit?: number;
-    startDate?: string;
-    endDate?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -205,6 +240,8 @@ interface RequestContextValue {
     getStudentRequests: (params?: GetStudentRequestsParams) => Promise<StandardResponse<StudentRequest[]>>;
     getStudentRequest: (requestId: string) => Promise<StandardResponse<StudentRequest>>;
     getStudentRequestSummary: () => Promise<StandardResponse<RequestSummary>>;
+    /** Uploads one attachment straight to storage and returns the document payload for createRequest. */
+    uploadRequestDocument: (file: File, onProgress?: (pct: number) => void) => Promise<StandardResponse<RequestDocumentInput>>;
     createRequest: (data: CreateRequestInput) => Promise<StandardResponse<StudentRequest>>;
     withdrawRequest: (requestId: string, reason?: string) => Promise<StandardResponse<StudentRequest>>;
     submitRequestFeedback: (requestId: string, isSatisfied: boolean, comment?: string) => Promise<StandardResponse<StudentRequest>>;
@@ -227,6 +264,22 @@ function toMessage(error: unknown, fallback: string): string {
     return error instanceof Error ? error.message : fallback;
 }
 
+/** Direct PUT to the presigned storage URL — deliberately without our auth header. */
+function putFile(url: string, file: File, headers: Record<string, string>, onProgress?: (pct: number) => void) {
+    return new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", url);
+        Object.entries(headers).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+        if (onProgress) xhr.upload.onprogress = (event) => onProgress(Math.round((event.loaded / (file.size || 1)) * 100));
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`Upload failed (HTTP ${xhr.status})`));
+        };
+        xhr.onerror = () => reject(new Error("Network error during upload"));
+        xhr.send(file);
+    });
+}
+
 /* ------------------------------------------------------------------ */
 /* Provider                                                            */
 /* ------------------------------------------------------------------ */
@@ -246,16 +299,20 @@ export function RequestProvider({ children }: { children: ReactNode }) {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [loadingBranchRequests, setLoadingBranchRequests] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    /** Latest list call per tab, so a slow older response never overwrites a newer one. */
+    const latestListCall = useRef<Record<RequestTab, number>>({ active: 0, resolved: 0, rejected: 0 });
 
     /* ------------------------------ Student ------------------------------ */
 
     const getStudentRequests = useCallback(async (
         params: GetStudentRequestsParams = {},
     ): Promise<StandardResponse<StudentRequest[]>> => {
+        const tab = params.tab;
+        const callId = tab ? ++latestListCall.current[tab] : 0;
         setLoadingRequests(true);
         try {
             const res = await axiosHandler({ path: `${BASE}/student/all`, method: "GET", params }) as StudentRequest[];
-            if (params.tab) setRequestsByTab((prev) => ({ ...prev, [params.tab as RequestTab]: res }));
+            if (tab && callId === latestListCall.current[tab]) setRequestsByTab((prev) => ({ ...prev, [tab]: res }));
             return { success: true, message: null, data: res };
         } catch (error: unknown) {
             return { success: false, message: toMessage(error, "Failed to fetch requests"), data: null };
@@ -283,6 +340,27 @@ export function RequestProvider({ children }: { children: ReactNode }) {
             return { success: true, message: null, data: res };
         } catch (error: unknown) {
             return { success: false, message: toMessage(error, "Failed to fetch request summary"), data: null };
+        }
+    }, []);
+
+    const uploadRequestDocument = useCallback(async (
+        file: File,
+        onProgress?: (pct: number) => void,
+    ): Promise<StandardResponse<RequestDocumentInput>> => {
+        try {
+            const ticket = await axiosHandler({
+                path: `${BASE}/student/upload-url`,
+                method: "POST",
+                body: { fileName: file.name, contentType: file.type, fileSize: file.size },
+            }) as RequestUploadTicket;
+            await putFile(ticket.uploadUrl, file, ticket.headers, onProgress);
+            return {
+                success: true,
+                message: "File uploaded",
+                data: { documentName: file.name, documentUrl: ticket.publicUrl, documentType: file.type, documentSize: file.size },
+            };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to upload attachment"), data: null };
         }
     }, []);
 
@@ -431,14 +509,14 @@ export function RequestProvider({ children }: { children: ReactNode }) {
         requestsByTab, summary, branchRequests, branchMeta, branchSummary,
         loadingRequests, loadingDetail, loadingBranchRequests, submitting,
         getStudentRequests, getStudentRequest, getStudentRequestSummary,
-        createRequest, withdrawRequest, submitRequestFeedback,
+        uploadRequestDocument, createRequest, withdrawRequest, submitRequestFeedback,
         getBranchRequests, getBranchRequestSummary, getBranchRequest,
         markRequestInReview, approveRequest, rejectRequest, resolveRequest, addRequestTimelineNote,
     }), [
         requestsByTab, summary, branchRequests, branchMeta, branchSummary,
         loadingRequests, loadingDetail, loadingBranchRequests, submitting,
         getStudentRequests, getStudentRequest, getStudentRequestSummary,
-        createRequest, withdrawRequest, submitRequestFeedback,
+        uploadRequestDocument, createRequest, withdrawRequest, submitRequestFeedback,
         getBranchRequests, getBranchRequestSummary, getBranchRequest,
         markRequestInReview, approveRequest, rejectRequest, resolveRequest, addRequestTimelineNote,
     ]);

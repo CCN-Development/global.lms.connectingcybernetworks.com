@@ -11,6 +11,7 @@ import { LmsButton } from "@/components/community/community-ui";
 import CreateRequestModal from "@/components/requests/CreateRequestModal";
 import { DATE_OPTIONS, RQ, SORT_OPTIONS, TEXT, requestAsset } from "@/components/requests/request-data";
 import { Icon, dropdownItemSx, dropdownPaperSx } from "@/components/requests/request-parts";
+import { RequestProvider } from "@/contexts/RequestContext";
 import { RequestFiltersProvider, useRequestFilters } from "./filters";
 
 const BASE = "/dashboard/student/requests";
@@ -90,7 +91,7 @@ function FilterDropdown<T extends string>({
 function RequestsToolbar() {
     const pathname = usePathname();
     const router = useRouter();
-    const { search, setSearch, sort, setSort, dateRange, setDateRange, addRequest } = useRequestFilters();
+    const { search, setSearch, sort, setSort, dateRange, setDateRange } = useRequestFilters();
     const [createOpen, setCreateOpen] = useState(false);
 
     return (
@@ -201,9 +202,9 @@ function RequestsToolbar() {
             <CreateRequestModal
                 open={createOpen}
                 onClose={() => setCreateOpen(false)}
-                onCreated={(request) => {
-                    addRequest(request);
-                    router.push(BASE);
+                onCreated={() => {
+                    // RequestContext already prepends the new request to the Active tab.
+                    if (pathname !== BASE) router.push(BASE);
                 }}
             />
         </>
@@ -213,13 +214,15 @@ function RequestsToolbar() {
 // ─── Layout ────────────────────────────────────────────────────────────────
 export default function RequestsLayout({ children }: { children: React.ReactNode }) {
     return (
-        <RequestFiltersProvider>
-            <StudentLayout header={<StudentHeader title="My Requests" />} headerMobileOnly>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", pb: "24px" }}>
-                    <RequestsToolbar />
-                    {children}
-                </Box>
-            </StudentLayout>
-        </RequestFiltersProvider>
+        <RequestProvider>
+            <RequestFiltersProvider>
+                <StudentLayout header={<StudentHeader title="My Requests" />} headerMobileOnly>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", pb: "24px" }}>
+                        <RequestsToolbar />
+                        {children}
+                    </Box>
+                </StudentLayout>
+            </RequestFiltersProvider>
+        </RequestProvider>
     );
 }

@@ -2,18 +2,22 @@
 
 import React, { useState } from "react";
 import { Box, ButtonBase, Menu, MenuItem, Typography } from "@mui/material";
-import { RQ, TEXT, formatCreated, type SampleRequest } from "./request-data";
+import type { StudentRequest } from "@/contexts/RequestContext";
+import { RQ, TEXT, cardStatus, formatCreated, repliesIn, requestTab } from "./request-data";
 import { CardStatusPill, DateStamp, Icon, RepliesPill, dropdownItemSx, dropdownPaperSx } from "./request-parts";
 
 export interface RequestCardProps {
-    request: SampleRequest;
+    request: StudentRequest;
     onView: () => void;
     onWithdraw?: () => void;
 }
 
 export default function RequestCard({ request, onView, onWithdraw }: RequestCardProps) {
     const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-    const isActive = request.tab === "active";
+    const tab = requestTab(request);
+    const isActive = tab === "active";
+    const replies = repliesIn(request);
+    const status = cardStatus(request);
 
     return (
         <Box
@@ -33,8 +37,8 @@ export default function RequestCard({ request, onView, onWithdraw }: RequestCard
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", minHeight: 24 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                            <CardStatusPill tab={request.tab} />
-                            {isActive && request.repliesIn && <RepliesPill label={request.repliesIn} />}
+                            <CardStatusPill tab={tab} label={request.requestStatus === "withdrawn" ? "Withdrawn" : undefined} />
+                            {replies && <RepliesPill label={replies} />}
                         </Box>
                         {isActive && (
                             <>
@@ -80,7 +84,7 @@ export default function RequestCard({ request, onView, onWithdraw }: RequestCard
                     </Box>
 
                     <Typography component="h3" sx={{ ...TEXT.semi18, color: RQ.white, overflowWrap: "anywhere" }}>
-                        {request.category}
+                        {request.requestType}
                     </Typography>
                 </Box>
 
@@ -105,8 +109,8 @@ export default function RequestCard({ request, onView, onWithdraw }: RequestCard
                             <Box sx={{ flex: 1, width: "1px", minHeight: "1px", backgroundImage: RQ.timelineLine }} />
                         </Box>
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, minWidth: 0 }}>
-                            <Typography sx={{ ...TEXT.med14, color: RQ.white }}>{request.statusLabel}</Typography>
-                            <DateStamp iso={request.statusAt} size="card" />
+                            <Typography sx={{ ...TEXT.med14, color: RQ.white }}>{status.label}</Typography>
+                            <DateStamp iso={status.at} size="card" />
                         </Box>
                     </Box>
                 </Box>
@@ -116,7 +120,7 @@ export default function RequestCard({ request, onView, onWithdraw }: RequestCard
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", pl: "12px", pr: "8px" }}>
                 <Typography sx={{ ...TEXT.med12, color: RQ.white }}>Created on {formatCreated(request.createdAt)}</Typography>
                 <ButtonBase
-                    aria-label={`View ${request.category} request`}
+                    aria-label={`View ${request.requestType} request`}
                     onClick={onView}
                     sx={{
                         width: 24,
