@@ -7,8 +7,8 @@ import { EXAM_STATUS_LABEL, examAsset, type Exam } from "./exam-data";
 import { CardOutlineButton, CardPrimaryButton, IncludeChip, RequestStatusPill, glassCardSx } from "./exam-ui";
 
 /** Ticket-shaped exam card: purple splash cut with side notches, a title panel and an action panel. */
-export default function ExamCard({ exam, onOpen }: { exam: Exam; onOpen: () => void }) {
-    const ongoing = exam.status === "ongoing";
+export default function ExamCard({ exam, onOpen, onStart }: { exam: Exam; onOpen: () => void; onStart: () => void }) {
+    const ongoing = exam.status === "ongoing" || Boolean(exam.activeAttemptId);
 
     return (
         <Box
@@ -89,7 +89,7 @@ export default function ExamCard({ exam, onOpen }: { exam: Exam; onOpen: () => v
                             Includes
                         </Typography>
                         <Box sx={{ display: "flex", gap: "12px", height: 37, overflow: "hidden" }}>
-                            {exam.includes.map((item) => (
+                            {[...new Set(exam.includes)].map((item) => (
                                 <IncludeChip key={item} label={item} />
                             ))}
                         </Box>
@@ -113,10 +113,10 @@ export default function ExamCard({ exam, onOpen }: { exam: Exam; onOpen: () => v
                         <CardPrimaryButton
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onOpen();
+                                onStart();
                             }}
                         >
-                            Start Exam
+                            {exam.activeAttemptId ? "Resume Exam" : "Start Exam"}
                         </CardPrimaryButton>
                     ) : (
                         <CardOutlineButton

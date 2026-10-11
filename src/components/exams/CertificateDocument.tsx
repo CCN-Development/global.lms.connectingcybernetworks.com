@@ -140,9 +140,9 @@ export default function CertificateDocument({ certificate }: { certificate: Exam
                 </Box>
 
                 <Box sx={{ position: "absolute", left: 155.01, top: 468.24, width: 147.593, fontFamily: M, lineHeight: "normal", letterSpacing: 0.2512 }}>
-                    <p style={{ fontWeight: 700, fontSize: 12.561, marginBottom: 2.3552 }}>{certificate.signatory.name}</p>
-                    <p style={{ fontWeight: 500, fontSize: 9.421, marginBottom: 2.3552 }}>{certificate.signatory.title}</p>
-                    <p style={{ fontWeight: 500, fontSize: 9.421 }}>{certificate.signatory.organisation}</p>
+                    {certificate.signatory.name && <p style={{ fontWeight: 700, fontSize: 12.561, marginBottom: 2.3552 }}>{certificate.signatory.name}</p>}
+                    {certificate.signatory.title && <p style={{ fontWeight: 500, fontSize: 9.421, marginBottom: 2.3552 }}>{certificate.signatory.title}</p>}
+                    <p style={{ fontWeight: 500, fontSize: 9.421 }}>{certificate.signatory.organisation ?? "Connecting Cyber Networks"}</p>
                 </Box>
 
                 <Box

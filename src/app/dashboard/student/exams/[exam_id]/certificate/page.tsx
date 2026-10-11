@@ -1,13 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Box, GlobalStyles, Link, Typography } from "@mui/material";
 import ExamDetailShell from "@/components/exams/ExamDetailShell";
 import CertificateDocument, { CERTIFICATE_ELEMENT_ID } from "@/components/exams/CertificateDocument";
-import { examAsset, examDetailPath, findExam, formatLongDate, EXAMS_PATH, type ExamCertificate } from "@/components/exams/exam-data";
-import { EXAM_COLORS, OutlineButton, TealPill, glassCardSx } from "@/components/exams/exam-ui";
-import { PrimaryButton } from "@/components/courses/my-courses-ui";
+import { examAsset, examDetailPath, formatLongDate, type ExamCertificate } from "@/components/exams/exam-data";
+import { EXAM_COLORS, OutlineButton, RequestStatusPill, TealPill, glassCardSx } from "@/components/exams/exam-ui";
+import { PrimaryButton, SkeletonBlock } from "@/components/courses/my-courses-ui";
+import { useExam } from "@/contexts/ExamContext";
 import { COLORS, TYPE } from "@/components/courses/my-courses-theme";
 
 const sideCardSx = (angle: string) => ({
@@ -44,20 +45,25 @@ const printStyles = (
 
 function linkedInAddUrl(certificate: ExamCertificate) {
     const [year, month] = certificate.issueDate.split("-");
-    const [expYear, expMonth] = certificate.validThrough.split("-");
     const params = new URLSearchParams({
         startTask: "CERTIFICATION_NAME",
         name: certificate.courseName,
         organizationName: "Connecting Cyber Networks",
         issueYear: year,
         issueMonth: String(Number(month)),
-        expirationYear: expYear,
-        expirationMonth: String(Number(expMonth)),
         certId: certificate.certificateId,
         certUrl: `https://${certificate.verifyHost}`,
     });
+    if (certificate.validThrough) {
+        const [expYear, expMonth] = certificate.validThrough.split("-");
+        params.set("expirationYear", expYear);
+        params.set("expirationMonth", String(Number(expMonth)));
+    }
     return `https://www.linkedin.com/profile/add?${params.toString()}`;
 }
+
+/** Valid-through dates are calendar days: the certificate is valid for the whole of that day. */
+const isExpired = (validThrough: string | null) => Boolean(validThrough && validThrough < new Date().toISOString().slice(0, 10));
 
 function printCertificate(fileName: string) {
     const previous = document.title;
@@ -69,33 +75,61 @@ function printCertificate(fileName: string) {
 
 export default function ExamCertificatePage() {
     const router = useRouter();
-    const params = useParams();
-    const exam = findExam(params?.exam_id as string | undefined);
-    const certificate = exam?.certificate;
+    const params = useParams<{ exam_id: string }>();
+    const examKey = params?.exam_id ?? "";
+    const { examCertificate, examDetail, getExamCertificate, getStudentExam } = useExam();
+    const [error, setError] = useState<string | null>(null);
+    const [loaded, setLoaded] = useState(false);
 
-    const back = () => router.push(exam ? examDetailPath(exam.examId) : EXAMS_PATH);
+    useEffect(() => {
+        if (!examKey) return;
+        getExamCertificate(examKey).then((res) => {
+            setError(res.success ? null : (res.message ?? "Certificate not available yet"));
+            setLoaded(true);
+        });
+    }, [examKey, getExamCertificate]);
 
-    if (!exam || !certificate) {
+    const exam = examDetail && [examDetail.examId, examDetail.courseId, examDetail.slug].includes(examKey) ? examDetail : null;
+    useEffect(() => {
+        if (!exam && examKey) getStudentExam(examKey);
+    }, [exam, examKey, getStudentExam]);
+
+    const certificate = loaded && !error ? examCertificate : null;
+    const back = () => router.push(examDetailPath(examKey));
+    const title = exam?.courseName ?? certificate?.courseName ?? "Certificate";
+
+    if (!certificate) {
         return (
-            <ExamDetailShell title={exam?.courseName ?? "Certificate"} onBack={back} decor="certificate">
-                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", py: 8, textAlign: "center" }}>
-                    <Typography sx={{ ...TYPE.headingSemibold20, color: COLORS.white }}>Certificate not available yet</Typography>
-                    <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>Clear every round of this exam to unlock your certificate.</Typography>
-                </Box>
+            <ExamDetailShell title={title} onBack={back} decor="certificate">
+                {!loaded ? (
+                    <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: "32px" }}>
+                        <SkeletonBlock height={540} radius={8} sx={{ flex: { lg: "0 1 661px" }, width: "100%" }} />
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "32px", width: { xs: "100%", lg: 500 } }}>
+                            <SkeletonBlock height={180} radius={24} />
+                            <SkeletonBlock height={280} radius={24} />
+                        </Box>
+                    </Box>
+                ) : (
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", py: 8, textAlign: "center" }}>
+                        <Typography sx={{ ...TYPE.headingSemibold20, color: COLORS.white }}>Certificate not available yet</Typography>
+                        <Typography sx={{ ...TYPE.smallMed14, color: COLORS.neutral300 }}>Clear every round of this exam to unlock your certificate.</Typography>
+                    </Box>
+                )}
             </ExamDetailShell>
         );
     }
 
+    const expired = isExpired(certificate.validThrough);
     const details: [string, string][] = [
         ["Candidate", certificate.candidate],
         ["Course", certificate.courseShort],
         ["Certificate ID", certificate.certificateId],
         ["Issue Date", formatLongDate(certificate.issueDate)],
-        ["Valid Through", formatLongDate(certificate.validThrough)],
+        ["Valid Through", certificate.validThrough ? formatLongDate(certificate.validThrough) : "Lifetime"],
     ];
 
     return (
-        <ExamDetailShell title={exam.courseName} onBack={back} decor="certificate">
+        <ExamDetailShell title={title} onBack={back} decor="certificate">
             {printStyles}
             <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, alignItems: "flex-start", gap: "32px" }}>
                 <Box sx={{ flex: { lg: "0 1 661px" }, width: "100%", minWidth: 0 }}>
@@ -108,7 +142,7 @@ export default function ExamCertificatePage() {
                             VERIFICATION
                         </Typography>
                         <Box sx={{ position: "relative", display: "flex" }}>
-                            <TealPill label="Verified - Authentic" angle="99.243deg" />
+                            {expired ? <RequestStatusPill tone="re-exam" label="Expired" size="md" /> : <TealPill label="Verified - Authentic" angle="99.243deg" />}
                         </Box>
                         <Typography sx={{ position: "relative", ...TYPE.mediumMed16, color: COLORS.white, whiteSpace: "pre-wrap" }}>
                             {"Anyone can verify  this credential using "}
@@ -152,3 +186,4 @@ export default function ExamCertificatePage() {
         </ExamDetailShell>
     );
 }
+
