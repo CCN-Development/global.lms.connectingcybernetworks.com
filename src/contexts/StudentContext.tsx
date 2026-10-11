@@ -26,13 +26,17 @@ export interface ParentDetails {
     parentCallingCode: string;
     parentPhoneNumber: string | null;
     parentRelation: string | null;
+    /** Set once the parent's phone number was confirmed with an OTP. */
+    isContactVerified?: boolean;
 }
 
 export interface StudentAddress {
     addressId: string;
     studentId: string;
+    /** "CURRENT" / "PERMANENT" (case-insensitive), "Office", "Other" */
     addressType: string | null;
     addressLine: string | null;
+    apartment?: string | null;
     city: string | null;
     state: string | null;
     country: string | null;
@@ -47,8 +51,12 @@ export interface StudentDocument {
     studentId: string;
     documentName: string;
     documentUrl: string;
+    /** "Education" / "Educational" (marksheets), "Academic" (enrollment letter, receipts…), "Identification", "Other" */
     documentType: string;
+    /** File size in bytes, when known. */
+    documentSize?: number | null;
     isVerified: boolean;
+    createdAt?: string;
 }
 
 export interface StudentAdhaarData {
@@ -128,6 +136,10 @@ export interface StudentPurchase {
     isAllPaymentsDone: boolean;
     isEMIEnabled: boolean;
     numberOfInstallments: number | null;
+    /** RM who owns this enrollment. */
+    rmId?: string | null;
+    /** Admission counsellor who closed the admission. */
+    counsellorName?: string | null;
     studentPaymentSchedules: StudentPaymentSchedule[];
 }
 
@@ -171,20 +183,27 @@ export interface LMSStudentData {
     studentName: string;
     callingCode: string;
     phoneNumber: string;
+    isPhoneNumberVerified?: boolean;
     dateOfBirth: string | null;
     gender: string | null;
     email: string | null;
+    isEmailVerified?: boolean;
     studentRegistrationNumber: string | null;
     studentPhoto: string | null;
     studentAlternatePhoneNumber: string | null;
+    whatsappCallingCode?: string;
+    whatsappNumber?: string | null;
+    isWhatsappNumberVerified?: boolean;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
+    passwordUpdatedAt?: string | null;
     branchId: string;
     onboardingRefId: string | null;
     machineCode: string | null;
     highestEducation: string | null;
     highestEducationInstitute: string | null;
+    highestEducationInstituteLocation?: string | null;
     webNotificationToken: string | null;
     androidNotificationToken: string | null;
     iosNotificationToken: string | null;
@@ -198,13 +217,48 @@ export interface LMSStudentData {
     studentPayments: StudentPayment[];
 }
 
+export interface PurchaseRM {
+    rmId: string;
+    rmName: string;
+    callingCode: string;
+    phoneNumber: string;
+    email: string | null;
+}
+
 /** `GET /student/profile` — the signed-in student's own record with every relation expanded */
 export interface StudentProfile
     extends Omit<LMSStudentData, "studentCourseAccesses" | "studentPackagesAccesses" | "studentPurchases"> {
     branch: { branchId: string; branchName: string };
     studentCourseAccesses: StudentCourseAccessWithCourse[];
     studentPackagesAccesses: StudentPackagesAccessWithPackage[];
-    studentPurchases: StudentPurchaseDetail[];
+    studentPurchases: (StudentPurchaseDetail & { rm: PurchaseRM | null })[];
+    /** Aadhaar numbers arrive masked ("XXXX XXXX 1234"). */
+    studentAdhaarDatas: StudentAdhaarData[];
+    /** false when the student only signs in with OTP and never set a password. */
+    hasPassword: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Profile helpers                                                     */
+/* ------------------------------------------------------------------ */
+
+const EDUCATION_DOCUMENT_TYPES = ["education", "educational", "marksheet"];
+
+/** Education proof (marksheet / certificate) shown on the Academic Details card. */
+export function isEducationDocument(doc: Pick<StudentDocument, "documentType">): boolean {
+    return EDUCATION_DOCUMENT_TYPES.includes(doc.documentType.trim().toLowerCase());
+}
+
+/** Current/residential address first, then the permanent one (matched case-insensitively). */
+export function findStudentAddress(addresses: StudentAddress[] | null | undefined, kind: "current" | "permanent"): StudentAddress | null {
+    const list = addresses ?? [];
+    const match = list.find((a) => {
+        const type = (a.addressType ?? "").trim().toLowerCase();
+        return kind === "current" ? type === "current" || type === "residential" : type === "permanent";
+    });
+    if (match) return match;
+    // Untyped legacy rows: treat the first one as the current address.
+    return kind === "current" ? list.find((a) => !a.addressType) ?? null : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -491,11 +545,322 @@ export interface StudentAttendance {
 export type { BatchQueryStatus, BatchRequestStatus, BatchStudentStatus };
 
 /* ------------------------------------------------------------------ */
+/* Fees — mirror `GET /student/profile/fees` (student-fees.service.ts) */
+/* ------------------------------------------------------------------ */
+
+export type FeeInstallmentStatus = "paid" | "overdue" | "due_today" | "upcoming";
+export type FeeProgramStatus = "active" | "new" | "completed" | "inactive";
+
+export interface FeePaymentInfo {
+    paymentId: string | null;
+    amount: number;
+    paidOn: string;
+    mode: string | null;
+    reference: string | null;
+    /** Covered by the amount collected at enrollment (no separate payment record). */
+    atEnrollment: boolean;
+}
+
+export interface FeeInstallment {
+    scheduleId: string;
+    purchaseId: string;
+    programName: string;
+    programShortName: string;
+    installmentNo: number;
+    /** "2nd Installment" */
+    label: string;
+    dueDate: string;
+    amount: number;
+    paidAmount: number;
+    outstandingAmount: number;
+    status: FeeInstallmentStatus;
+    isPartiallyPaid: boolean;
+    daysOverdue: number;
+    daysUntilDue: number;
+    lateFeePerDay: number;
+    /** daysOverdue × lateFeePerDay */
+    lateFee: number;
+    /** outstandingAmount + lateFee */
+    payableAmount: number;
+    payment: FeePaymentInfo | null;
+}
+
+export interface FeeProgram {
+    purchaseId: string;
+    name: string;
+    shortName: string;
+    kind: "package" | "course";
+    status: FeeProgramStatus;
+    durationInMonths: number | null;
+    courses: { courseId: string; courseName: string }[];
+    benefits: string[];
+    enrollmentDate: string;
+    studentRegistrationNumber: string | null;
+    rm: { rmId: string; name: string; callingCode: string; phoneNumber: string; email: string | null } | null;
+    counsellorName: string | null;
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    isEMIEnabled: boolean;
+    numberOfInstallments: number;
+    isAllPaymentsDone: boolean;
+    installmentsPaid: number;
+}
+
+export interface FeeDueBundle {
+    scheduleIds: string[];
+    installmentAmount: number;
+    lateFee: number;
+    totalPayable: number;
+}
+
+export interface FeeSummaryData {
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    percentPaid: number;
+    state: "overdue" | "due" | "settled";
+    overdueCount: number;
+    overdueAmount: number;
+    lateFee: number;
+    nextDue: FeeInstallment | null;
+    overdue: FeeInstallment[];
+    /** What "Pay Now" collects: every overdue installment (+ late fee), otherwise the next installment. */
+    payNow: FeeDueBundle | null;
+    /** Everything due up to the end of the current month, overdue included. */
+    dueThisMonth: FeeDueBundle & { count: number };
+}
+
+export interface FeeDocument {
+    documentId: string;
+    documentName: string;
+    documentUrl: string;
+    documentType: string;
+    documentSize: number | null;
+    fileExtension: string | null;
+    isVerified: boolean;
+    createdAt: string;
+}
+
+export interface StudentFees {
+    generatedAt: string;
+    timezone: string;
+    lateFeePerDay: number;
+    studentRegistrationNumber: string | null;
+    programs: FeeProgram[];
+    /** Every installment of every program, ordered by due date. */
+    installments: FeeInstallment[];
+    summary: FeeSummaryData;
+    documents: FeeDocument[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Achievements — mirror `GET /student/profile/achievements`           */
+/* ------------------------------------------------------------------ */
+
+export interface AchievementBadge {
+    badgeId: string;
+    code: string;
+    name: string;
+    description: string | null;
+    iconUrl: string | null;
+    courseLabel: string | null;
+    criteriaType: string;
+    xpReward: number;
+    earned: boolean;
+    awardedAt: string | null;
+    progressCurrent: number;
+    progressTarget: number;
+    progressPct: number;
+    /** "2/10 labs completed" */
+    progressLabel: string;
+}
+
+export interface XpHistoryEntry {
+    txnId: string;
+    title: string;
+    source: string;
+    sourceLabel: string;
+    courseName: string | null;
+    amount: number;
+    createdAt: string;
+}
+
+export interface CertificationItem {
+    courseId: string;
+    courseName: string;
+    name: string;
+    slug: string | null;
+    examId: string | null;
+    unlocked: boolean;
+    status: "issued" | "expired" | "revoked" | "locked";
+    certificateNo: string | null;
+    issuedAt: string | null;
+    validUntil: string | null;
+    /** "Complete MCQ, Lab and Viva to unlock certificate" */
+    requirement: string;
+    roundsRequired: string[];
+    roundsPassed: number;
+    roundsTotal: number;
+}
+
+export interface StudentAchievements {
+    rank: {
+        level: number;
+        title: string;
+        iconUrl: string | null;
+        totalXp: number;
+        xpToNextLevel: number | null;
+        nextLevel: { level: number; title: string; minXp: number } | null;
+        currentStreak: number;
+    };
+    badgesEarned: number;
+    badgesTotal: number;
+    badges: AchievementBadge[];
+    xpHistory: XpHistoryEntry[];
+    certifications: CertificationItem[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Dashboard (overview) — mirror `GET /student/dashboard`              */
+/* ------------------------------------------------------------------ */
+
+/** Session times are institute wall-clock values in UTC fields — format with `getUTC*`. */
+export interface DashboardSession {
+    batchSessionId: string;
+    batchId: string;
+    batchName: string;
+    courseName: string;
+    courseShortName: string;
+    /** Session topic, falling back to the course name. */
+    title: string;
+    sessionType: string;
+    sessionNumber: number;
+    startAt: string;
+    endAt: string | null;
+    mode: string | null;
+    classRoomNumber: string | null;
+    sessionStatus: string;
+    isRescheduled: boolean;
+}
+
+export interface DashboardTodaySession extends DashboardSession {
+    isLive: boolean;
+    /** Online class link; null for offline batches. */
+    joinUrl: string | null;
+}
+
+export interface DashboardTask {
+    assignmentId: string;
+    batchId: string;
+    courseName: string | null;
+    courseShortName: string | null;
+    title: string;
+    dueDate: string;
+    status: "overdue" | "pending";
+    progressStatus: string;
+    totalTasks: number;
+    submittedTasks: number;
+}
+
+export type DashboardUpdateCategory = "alert" | "announcement" | "news" | "blog";
+
+export type DashboardUpdateLink =
+    | { kind: "fees" }
+    | { kind: "batch"; batchId: string }
+    | { kind: "update"; updateType: "announcement" | "news" | "blog"; slug: string };
+
+export interface DashboardUpdate {
+    id: string;
+    category: DashboardUpdateCategory;
+    title: string;
+    description: string | null;
+    date: string | null;
+    createdAt: string;
+    dueAt: string | null;
+    link: DashboardUpdateLink | null;
+}
+
+export interface StudentDashboard {
+    generatedAt: string;
+    timezone: string;
+    performance: {
+        overall: number;
+        attendance: { percentage: number; attended: number; held: number };
+        courses: { completed: number; total: number; averageProgress: number };
+        activity: { earnedXp: number; totalXp: number; percentage: number };
+    };
+    todaySchedule: DashboardTodaySession | null;
+    upcomingSessions: DashboardSession[];
+    playerStatus: {
+        level: number;
+        totalPoints: number;
+        totalBadges: number;
+        currentStreak: number;
+        highestStreak: number;
+        globalRank: number | null;
+        branchRank: number | null;
+        batchRank: number | null;
+    };
+    activeMission: {
+        courseId: string;
+        slug: string | null;
+        courseName: string;
+        courseShortName: string;
+        enrollmentStatus: string;
+        progress: number;
+        level: { levelId: string; levelNo: number; title: string } | null;
+    } | null;
+    tasks: DashboardTask[];
+    updates: DashboardUpdate[];
+}
+
+export interface BirthdayRewardStatus {
+    isBirthday: boolean;
+    year: number;
+    xp: number;
+    claimed: boolean;
+    claimedAt: string | null;
+}
+
+export interface BirthdayRewardClaim {
+    alreadyClaimed: boolean;
+    xpAwarded: number;
+    totalXp: number;
+    rankLevel: number;
+    rankUp: { from: number; to: number } | null;
+    claimedAt: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Account actions                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface ChangePasswordInput {
+    /** Required only when the student already has a password. */
+    currentPassword?: string;
+    newPassword: string;
+}
+
+export interface PhoneInput {
+    callingCode: string;
+    phoneNumber: string;
+}
+
+export interface ParentOtpTicket extends PhoneInput {
+    otpLength: number;
+    resendAfterSec: number;
+    expiresInSec: number;
+}
+
+/* ------------------------------------------------------------------ */
 /* Context shape                                                       */
 /* ------------------------------------------------------------------ */
 
 interface StudentContextValue {
     profile: StudentProfile | null;
+    fees: StudentFees | null;
+    achievements: StudentAchievements | null;
     availableBatches: AvailableBatch[];
     enrolledBatches: EnrolledBatch[];
     completedBatches: CompletedBatch[];
@@ -503,8 +868,12 @@ interface StudentContextValue {
     batchQueries: StudentBatchQuery[];
     batchDetail: StudentBatchDetail | null;
     attendance: StudentAttendance | null;
+    dashboard: StudentDashboard | null;
+    birthdayReward: BirthdayRewardStatus | null;
 
     loadingProfile: boolean;
+    loadingFees: boolean;
+    loadingAchievements: boolean;
     loadingAvailableBatches: boolean;
     loadingEnrolledBatches: boolean;
     loadingCompletedBatches: boolean;
@@ -512,8 +881,16 @@ interface StudentContextValue {
     loadingBatchQueries: boolean;
     loadingBatchDetail: boolean;
     loadingAttendance: boolean;
+    loadingDashboard: boolean;
+    loadingBirthdayReward: boolean;
+    claimingBirthdayReward: boolean;
 
     getProfile: () => Promise<StandardResponse<StudentProfile>>;
+    getFees: () => Promise<StandardResponse<StudentFees>>;
+    getAchievements: () => Promise<StandardResponse<StudentAchievements>>;
+    changePassword: (data: ChangePasswordInput) => Promise<StandardResponse<{ hasPassword: boolean; passwordUpdatedAt: string }>>;
+    sendParentPhoneOtp: (parentId: string, phone?: PhoneInput) => Promise<StandardResponse<ParentOtpTicket>>;
+    verifyParentPhoneOtp: (parentId: string, otp: string, phone?: PhoneInput) => Promise<StandardResponse<ParentDetails>>;
     getAvailableBatches: () => Promise<StandardResponse<AvailableBatch[]>>;
     getEnrolledBatches: () => Promise<StandardResponse<EnrolledBatch[]>>;
     getCompletedBatches: () => Promise<StandardResponse<CompletedBatch[]>>;
@@ -523,6 +900,10 @@ interface StudentContextValue {
     createBatchRequest: (data: CreateStudentBatchRequestInput) => Promise<StandardResponse<BatchRequest>>;
     createBatchQuery: (data: CreateStudentBatchQueryInput) => Promise<StandardResponse<BatchQuery>>;
     getAttendance: (batchId?: string) => Promise<StandardResponse<StudentAttendance>>;
+    getDashboard: () => Promise<StandardResponse<StudentDashboard>>;
+    getBirthdayReward: () => Promise<StandardResponse<BirthdayRewardStatus>>;
+    /** Claims today's birthday XP and refreshes the dashboard's player points. */
+    claimBirthdayReward: () => Promise<StandardResponse<BirthdayRewardClaim>>;
 }
 
 const StudentContext = createContext<StudentContextValue | null>(null);
@@ -535,6 +916,8 @@ function toMessage(error: unknown, fallback: string): string {
 
 export function StudentProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<StudentProfile | null>(null);
+    const [fees, setFees] = useState<StudentFees | null>(null);
+    const [achievements, setAchievements] = useState<StudentAchievements | null>(null);
     const [availableBatches, setAvailableBatches] = useState<AvailableBatch[]>([]);
     const [enrolledBatches, setEnrolledBatches] = useState<EnrolledBatch[]>([]);
     const [completedBatches, setCompletedBatches] = useState<CompletedBatch[]>([]);
@@ -542,8 +925,12 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     const [batchQueries, setBatchQueries] = useState<StudentBatchQuery[]>([]);
     const [batchDetail, setBatchDetail] = useState<StudentBatchDetail | null>(null);
     const [attendance, setAttendance] = useState<StudentAttendance | null>(null);
+    const [dashboard, setDashboard] = useState<StudentDashboard | null>(null);
+    const [birthdayReward, setBirthdayReward] = useState<BirthdayRewardStatus | null>(null);
 
     const [loadingProfile, setLoadingProfile] = useState(false);
+    const [loadingFees, setLoadingFees] = useState(false);
+    const [loadingAchievements, setLoadingAchievements] = useState(false);
     const [loadingAvailableBatches, setLoadingAvailableBatches] = useState(false);
     const [loadingEnrolledBatches, setLoadingEnrolledBatches] = useState(false);
     const [loadingCompletedBatches, setLoadingCompletedBatches] = useState(false);
@@ -551,6 +938,9 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     const [loadingBatchQueries, setLoadingBatchQueries] = useState(false);
     const [loadingBatchDetail, setLoadingBatchDetail] = useState(false);
     const [loadingAttendance, setLoadingAttendance] = useState(false);
+    const [loadingDashboard, setLoadingDashboard] = useState(false);
+    const [loadingBirthdayReward, setLoadingBirthdayReward] = useState(false);
+    const [claimingBirthdayReward, setClaimingBirthdayReward] = useState(false);
 
     const getProfile = useCallback(async (): Promise<StandardResponse<StudentProfile>> => {
         setLoadingProfile(true);
@@ -562,6 +952,131 @@ export function StudentProvider({ children }: { children: ReactNode }) {
             return { success: false, message: toMessage(error, "Failed to fetch profile"), data: null };
         } finally {
             setLoadingProfile(false);
+        }
+    }, []);
+
+    const getFees = useCallback(async (): Promise<StandardResponse<StudentFees>> => {
+        setLoadingFees(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/profile/fees`, method: "GET" }) as StudentFees;
+            setFees(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch fee details"), data: null };
+        } finally {
+            setLoadingFees(false);
+        }
+    }, []);
+
+    const getAchievements = useCallback(async (): Promise<StandardResponse<StudentAchievements>> => {
+        setLoadingAchievements(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/profile/achievements`, method: "GET" }) as StudentAchievements;
+            setAchievements(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch achievements"), data: null };
+        } finally {
+            setLoadingAchievements(false);
+        }
+    }, []);
+
+    const getDashboard = useCallback(async (): Promise<StandardResponse<StudentDashboard>> => {
+        setLoadingDashboard(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/dashboard`, method: "GET" }) as StudentDashboard;
+            setDashboard(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch your dashboard"), data: null };
+        } finally {
+            setLoadingDashboard(false);
+        }
+    }, []);
+
+    const getBirthdayReward = useCallback(async (): Promise<StandardResponse<BirthdayRewardStatus>> => {
+        setLoadingBirthdayReward(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/rewards/birthday`, method: "GET" }) as BirthdayRewardStatus;
+            setBirthdayReward(res);
+            return { success: true, message: null, data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to fetch birthday reward"), data: null };
+        } finally {
+            setLoadingBirthdayReward(false);
+        }
+    }, []);
+
+    const claimBirthdayReward = useCallback(async (): Promise<StandardResponse<BirthdayRewardClaim>> => {
+        setClaimingBirthdayReward(true);
+        try {
+            const res = await axiosHandler({ path: `${BASE}/rewards/birthday/claim`, method: "POST" }) as BirthdayRewardClaim;
+            setBirthdayReward((prev) => prev && { ...prev, claimed: true, claimedAt: res.claimedAt ?? prev.claimedAt });
+            setDashboard((prev) => prev && {
+                ...prev,
+                playerStatus: { ...prev.playerStatus, totalPoints: res.totalXp, level: res.rankLevel },
+            });
+            return {
+                success: true,
+                message: res.alreadyClaimed ? "Birthday reward already claimed" : `+${res.xpAwarded} XP added to your account`,
+                data: res,
+            };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to claim birthday reward"), data: null };
+        } finally {
+            setClaimingBirthdayReward(false);
+        }
+    }, []);
+
+    const changePassword = useCallback(async (
+        data: ChangePasswordInput
+    ): Promise<StandardResponse<{ hasPassword: boolean; passwordUpdatedAt: string }>> => {
+        try {
+            const res = await axiosHandler({
+                path: `${BASE}/profile/change-password`,
+                method: "POST",
+                body: data,
+            }) as { hasPassword: boolean; passwordUpdatedAt: string };
+            setProfile((prev) => (prev ? { ...prev, hasPassword: true, passwordUpdatedAt: res.passwordUpdatedAt } : prev));
+            return { success: true, message: data.currentPassword ? "Password changed successfully" : "Password set successfully", data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to change password"), data: null };
+        }
+    }, []);
+
+    const sendParentPhoneOtp = useCallback(async (
+        parentId: string,
+        phone?: PhoneInput
+    ): Promise<StandardResponse<ParentOtpTicket>> => {
+        try {
+            const res = await axiosHandler({
+                path: `${BASE}/profile/parents/${parentId}/send-otp`,
+                method: "POST",
+                body: phone ?? {},
+            }) as ParentOtpTicket;
+            return { success: true, message: "Verification code sent", data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to send verification code"), data: null };
+        }
+    }, []);
+
+    const verifyParentPhoneOtp = useCallback(async (
+        parentId: string,
+        otp: string,
+        phone?: PhoneInput
+    ): Promise<StandardResponse<ParentDetails>> => {
+        try {
+            const res = await axiosHandler({
+                path: `${BASE}/profile/parents/${parentId}/verify-otp`,
+                method: "POST",
+                body: { otp, ...(phone ?? {}) },
+            }) as ParentDetails;
+            setProfile((prev) => (prev
+                ? { ...prev, parentDetails: prev.parentDetails.map((p) => (p.parentId === parentId ? { ...p, ...res } : p)) }
+                : prev));
+            return { success: true, message: "Parent phone number verified", data: res };
+        } catch (error: unknown) {
+            return { success: false, message: toMessage(error, "Failed to verify the code"), data: null };
         }
     }, []);
 
@@ -694,23 +1209,29 @@ export function StudentProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const value = useMemo<StudentContextValue>(() => ({
-        profile,
+        profile, fees, achievements,
         availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail, attendance,
-        loadingProfile,
+        dashboard, birthdayReward,
+        loadingProfile, loadingFees, loadingAchievements,
         loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
         loadingBatchRequests, loadingBatchQueries, loadingBatchDetail, loadingAttendance,
-        getProfile,
+        loadingDashboard, loadingBirthdayReward, claimingBirthdayReward,
+        getProfile, getFees, getAchievements, changePassword, sendParentPhoneOtp, verifyParentPhoneOtp,
         getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
         getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery, getAttendance,
+        getDashboard, getBirthdayReward, claimBirthdayReward,
     }), [
-        profile,
+        profile, fees, achievements,
         availableBatches, enrolledBatches, completedBatches, batchRequests, batchQueries, batchDetail, attendance,
-        loadingProfile,
+        dashboard, birthdayReward,
+        loadingProfile, loadingFees, loadingAchievements,
         loadingAvailableBatches, loadingEnrolledBatches, loadingCompletedBatches,
         loadingBatchRequests, loadingBatchQueries, loadingBatchDetail, loadingAttendance,
-        getProfile,
+        loadingDashboard, loadingBirthdayReward, claimingBirthdayReward,
+        getProfile, getFees, getAchievements, changePassword, sendParentPhoneOtp, verifyParentPhoneOtp,
         getAvailableBatches, getEnrolledBatches, getCompletedBatches, getBatchDetails,
         getBatchRequests, getBatchQueries, createBatchRequest, createBatchQuery, getAttendance,
+        getDashboard, getBirthdayReward, claimBirthdayReward,
     ]);
 
     return <StudentContext.Provider value={value}>{children}</StudentContext.Provider>;

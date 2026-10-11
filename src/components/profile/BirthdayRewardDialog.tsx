@@ -14,6 +14,8 @@ export interface BirthdayRewardDialogProps {
     xp?: number;
     onClaim?: () => void;
     claiming?: boolean;
+    /** Reward already credited this year: the button is shown as done. */
+    claimed?: boolean;
 }
 
 export default function BirthdayRewardDialog({
@@ -23,8 +25,13 @@ export default function BirthdayRewardDialog({
     xp = 100,
     onClaim,
     claiming = false,
+    claimed = false,
 }: BirthdayRewardDialogProps) {
     const handleClaim = () => {
+        if (claimed) {
+            onClose();
+            return;
+        }
         onClaim?.();
         if (!onClaim) onClose();
     };
@@ -187,7 +194,7 @@ export default function BirthdayRewardDialog({
                         }}
                     >
                         <span className="relative z-10">
-                            {claiming ? "Claiming…" : `Claim +${xp} XP`}
+                            {claiming ? "Claiming…" : claimed ? `+${xp} XP Claimed` : `Claim +${xp} XP`}
                         </span>
                         <div className="pointer-events-none absolute left-1/2 top-[calc(50%+60.5px)] size-[41px] -translate-x-1/2 -translate-y-1/2">
                             {/* eslint-disable-next-line @next/next/no-img-element */}

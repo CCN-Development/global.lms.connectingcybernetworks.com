@@ -35,6 +35,7 @@ const RELATION_OPTIONS = [
 
 type AddressForm = {
     addressLine: string;
+    apartment: string;
     city: string;
     state: string;
     country: string;
@@ -67,7 +68,7 @@ function parseAdhaarJson(raw: string | null | undefined): AdhaarJson | null {
 }
 
 function emptyAddress(): AddressForm {
-    return { addressLine: "", city: "", state: "", country: "India", postalCode: "", mapUrl: "" };
+    return { addressLine: "", apartment: "", city: "", state: "", country: "India", postalCode: "", mapUrl: "" };
 }
 
 function hasAddressData(address: AddressForm) {
@@ -113,6 +114,9 @@ export default function CreateStudentModal({
     const [studentPhoto, setStudentPhoto] = useState("");
     const [highestEducation, setHighestEducation] = useState("");
     const [highestEducationInstitute, setHighestEducationInstitute] = useState("");
+    const [instituteLocation, setInstituteLocation] = useState("");
+    const [whatsappNumber, setWhatsappNumber] = useState("");
+    const [counsellorName, setCounsellorName] = useState("");
 
     const [currentAddress, setCurrentAddress] = useState<AddressForm>(emptyAddress);
     const [permanentAddress, setPermanentAddress] = useState<AddressForm>(emptyAddress);
@@ -165,9 +169,14 @@ export default function CreateStudentModal({
         setStudentPhoto(onboarding.photoURL ?? "");
         setHighestEducation(onboarding.highestEducationLevel ?? "");
         setHighestEducationInstitute(onboarding.institutionName ?? "");
+        setInstituteLocation("");
+        // The onboarding form asks whether the primary number is on WhatsApp.
+        setWhatsappNumber(onboarding.isWhatsappContact ? onboarding.phoneNumber ?? "" : "");
+        setCounsellorName("");
 
         setCurrentAddress({
-            addressLine: [onboarding.currentStreetAddress, onboarding.currentAptSuite].filter(Boolean).join(", "),
+            addressLine: onboarding.currentStreetAddress ?? "",
+            apartment: onboarding.currentAptSuite ?? "",
             city: onboarding.currentCity ?? "",
             state: onboarding.currentState ?? "",
             country: "India",
@@ -175,7 +184,8 @@ export default function CreateStudentModal({
             mapUrl: asText(onboarding.currentGoogleMapRef),
         });
         setPermanentAddress({
-            addressLine: [onboarding.permanentStreetAddress, onboarding.permanentAptSuite].filter(Boolean).join(", "),
+            addressLine: onboarding.permanentStreetAddress ?? "",
+            apartment: onboarding.permanentAptSuite ?? "",
             city: onboarding.permanentCity ?? "",
             state: onboarding.permanentState ?? "",
             country: "India",
@@ -280,6 +290,13 @@ export default function CreateStudentModal({
             isActive: true,
             highestEducation: highestEducation.trim() || undefined,
             highestEducationInstitute: highestEducationInstitute.trim() || undefined,
+            highestEducationInstituteLocation: instituteLocation.trim() || undefined,
+            ...(whatsappNumber.trim() && {
+                whatsappCallingCode: callingCode || "91",
+                whatsappNumber: whatsappNumber.trim(),
+                // Same number as the OTP-verified primary phone.
+                isWhatsappNumberVerified: Boolean(onboarding.isWhatsappContact) && whatsappNumber.trim() === phoneNumber.trim(),
+            }),
             onboardingRefId: onboarding.onboardingId,
             addresses,
             parentDetails: parentName.trim()
@@ -289,6 +306,10 @@ export default function CreateStudentModal({
                     parentCallingCode: parentCallingCode || "91",
                     parentPhoneNumber: parentPhoneNumber.trim() || undefined,
                     parentEmail: parentEmail.trim() || undefined,
+                    // Keep the onboarding OTP verification only while the number is unchanged.
+                    isContactVerified:
+                        Boolean(onboarding.isParentPhoneVerified) &&
+                        parentPhoneNumber.trim() === (onboarding.parentContactNumber ?? "").trim(),
                 }]
                 : [],
             documents: educationDocumentUrl
@@ -322,6 +343,7 @@ export default function CreateStudentModal({
                     numberOfInstallments: emiEnabled ? Number(installments) : 1,
                     packageIds,
                     courseIds,
+                    counsellorName: counsellorName.trim() || undefined,
                 }
                 : undefined,
         };
@@ -373,6 +395,7 @@ export default function CreateStudentModal({
                         <AppTextField label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
                         <PhoneField label="Phone" codeValue={callingCode} numberValue={phoneNumber} onCodeChange={setCallingCode} onNumberChange={setPhoneNumber} />
                         <AppTextField label="Alternate phone" value={alternatePhone} onChange={(e) => setAlternatePhone(e.target.value)} />
+                        <AppTextField label="WhatsApp number" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ""))} />
                         <AppSelect label="Gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} />
                         <AppDateField label="Date of birth" value={dateOfBirth} onChange={setDateOfBirth} />
                         <AppTextField label="Registration number" value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} />
@@ -390,6 +413,7 @@ export default function CreateStudentModal({
                     <Section title="Education" icon={<GraduationCap size={12} />} color={BRAND.amber} bg={BRAND.amberBg}>
                         <AppTextField label="Highest education" value={highestEducation} onChange={(e) => setHighestEducation(e.target.value)} />
                         <AppTextField label="Institute" value={highestEducationInstitute} onChange={(e) => setHighestEducationInstitute(e.target.value)} />
+                        <AppTextField label="Institute location" placeholder="e.g. SakiNaka, Mumbai" value={instituteLocation} onChange={(e) => setInstituteLocation(e.target.value)} />
                         <div className="sm:col-span-2">
                             <FileField
                                 label={EDUCATION_DOCUMENT_NAME}
@@ -469,6 +493,7 @@ export default function CreateStudentModal({
                         <AppNumberField label="Total amount" value={amount} onChange={setAmount} />
                         <AppNumberField label="Amount already paid" value={paidAmount} onChange={setPaidAmount} />
                         <AppNumberField label="Number of installments" value={emiEnabled ? installments : 1} onChange={setInstallments} min={1} />
+                        <AppTextField label="Admission counsellor" value={counsellorName} onChange={(e) => setCounsellorName(e.target.value)} />
                         <div className="sm:col-span-2">
                             <AppMultiSelect label="Packages" values={packageIds} onChange={setPackageIds} options={packageOptions} color={BRAND.violet} />
                         </div>
@@ -538,7 +563,8 @@ function AddressFields({ value, onChange }: { value: AddressForm; onChange: (v: 
     const set = (key: keyof AddressForm) => (v: string) => onChange({ ...value, [key]: v });
     return (
         <>
-            <AppTextField label="Address line" className="sm:col-span-2" value={value.addressLine} onChange={(e) => set("addressLine")(e.target.value)} />
+            <AppTextField label="Street address" className="sm:col-span-2" value={value.addressLine} onChange={(e) => set("addressLine")(e.target.value)} />
+            <AppTextField label="Apartment / Flat" className="sm:col-span-2" value={value.apartment} onChange={(e) => set("apartment")(e.target.value)} />
             <AppTextField label="City" value={value.city} onChange={(e) => set("city")(e.target.value)} />
             <AppTextField label="State" value={value.state} onChange={(e) => set("state")(e.target.value)} />
             <AppTextField label="Country" value={value.country} onChange={(e) => set("country")(e.target.value)} />

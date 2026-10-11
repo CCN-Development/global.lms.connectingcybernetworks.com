@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Dialog, InputBase, Menu, MenuItem, Typography } from "@mui/material";
 import toast from "react-hot-toast";
@@ -21,21 +21,31 @@ export interface CreateRequestModalProps {
     open: boolean;
     onClose: () => void;
     onCreated: (request: StudentRequest) => void;
+    /** Pre-selected category / description, e.g. "Fee Query" from the fee page. */
+    defaultCategory?: RequestType;
+    defaultDescription?: string;
 }
 
-export default function CreateRequestModal({ open, onClose, onCreated }: CreateRequestModalProps) {
+export default function CreateRequestModal({ open, onClose, onCreated, defaultCategory, defaultDescription }: CreateRequestModalProps) {
     const { createRequest, uploadRequestDocument } = useRequests();
-    const [category, setCategory] = useState<RequestType | "">("");
-    const [description, setDescription] = useState("");
+    const [category, setCategory] = useState<RequestType | "">(defaultCategory ?? "");
+    const [description, setDescription] = useState(defaultDescription ?? "");
     const [file, setFile] = useState<File | null>(null);
     const [uploadPct, setUploadPct] = useState<number | null>(null);
     const [sending, setSending] = useState(false);
     const [categoryAnchor, setCategoryAnchor] = useState<HTMLElement | null>(null);
     const fileInput = useRef<HTMLInputElement>(null);
 
+    // Re-apply the prefill every time the dialog is opened.
+    useEffect(() => {
+        if (!open) return;
+        setCategory(defaultCategory ?? "");
+        setDescription(defaultDescription ?? "");
+    }, [open, defaultCategory, defaultDescription]);
+
     const reset = () => {
-        setCategory("");
-        setDescription("");
+        setCategory(defaultCategory ?? "");
+        setDescription(defaultDescription ?? "");
         setFile(null);
         setUploadPct(null);
     };

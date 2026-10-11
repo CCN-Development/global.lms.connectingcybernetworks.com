@@ -1,33 +1,24 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { useStudent } from "@/contexts/StudentContext";
 import BirthdayRewardDialog from "./BirthdayRewardDialog";
 
-/** DOB is stored as an ISO timestamp, so compare the UTC day/month against the local calendar day. */
-function isBirthdayToday(dateOfBirth: string | null | undefined): boolean {
-    if (!dateOfBirth) return false;
-    const dob = new Date(dateOfBirth);
-    if (Number.isNaN(dob.getTime())) return false;
-    const today = new Date();
-    console.log("DOB:", dob, "Today:", today);
-    return dob.getUTCMonth() === today.getMonth() && dob.getUTCDate() === today.getDate();
-}
-
 export interface BirthdayWishProps {
-    /** XP awarded for the birthday */
-    xp?: number;
-    onClaim?: () => void;
-    claiming?: boolean;
     className?: string;
     /** Render the banner even when it is not the student's birthday (for previews) */
     forceShow?: boolean;
+    /** Called after the XP was credited, e.g. to refresh dashboard stats. */
+    onClaimed?: () => void;
 }
 
-export default function BirthdayWish({ xp = 100, onClaim, claiming, className, forceShow }: BirthdayWishProps) {
-    const { profile, getProfile } = useStudent();
+/** Birthday detection and the once-a-year claim both live on the server (student timezone + XP ledger). */
+export default function BirthdayWish({ className, forceShow, onClaimed }: BirthdayWishProps) {
+    const { profile, getProfile, birthdayReward, getBirthdayReward, claimBirthdayReward, claimingBirthdayReward } = useStudent();
     const [open, setOpen] = useState(false);
     const requestedProfile = useRef(false);
+    const requestedReward = useRef(false);
 
     useEffect(() => {
         if (profile || requestedProfile.current) return;
@@ -35,14 +26,32 @@ export default function BirthdayWish({ xp = 100, onClaim, claiming, className, f
         void getProfile();
     }, [profile, getProfile]);
 
-    const isBirthday = useMemo(() => isBirthdayToday(profile?.dateOfBirth), [profile?.dateOfBirth]);
+    useEffect(() => {
+        if (requestedReward.current) return;
+        requestedReward.current = true;
+        void getBirthdayReward();
+    }, [getBirthdayReward]);
 
     const firstName = useMemo(
         () => profile?.studentName?.trim().split(/\s+/)[0] ?? "there",
         [profile?.studentName],
     );
 
-    if (!forceShow && !isBirthday) return null;
+    const handleClaim = async () => {
+        const res = await claimBirthdayReward();
+        if (!res.success) {
+            toast.error(res.message ?? "Couldn't claim your birthday reward");
+            return;
+        }
+        toast.success(res.message ?? "Birthday reward claimed");
+        setOpen(false);
+        if (res.data && !res.data.alreadyClaimed) onClaimed?.();
+    };
+
+    if (!forceShow && !birthdayReward?.isBirthday) return null;
+
+    const xp = birthdayReward?.xp ?? 100;
+    const claimed = birthdayReward?.claimed ?? false;
 
     return (
         <>
@@ -70,7 +79,9 @@ export default function BirthdayWish({ xp = 100, onClaim, claiming, className, f
                             className="text-[14px] font-medium leading-[21px] sm:text-[16px] sm:leading-[24px]"
                             style={{ fontFamily: "var(--font-lato)" }}
                         >
-                            To celebrate you, we have a special reward for you
+                            {claimed
+                                ? `Your +${xp} XP birthday reward has been added`
+                                : "To celebrate you, we have a special reward for you"}
                         </p>
                     </div>
 
@@ -92,7 +103,7 @@ export default function BirthdayWish({ xp = 100, onClaim, claiming, className, f
                             />
                         </div>
                         <span className="relative z-10 whitespace-nowrap text-[14px] font-medium leading-[21px] text-[#f2f2f2]">
-                            Open Birthday Reward
+                            {claimed ? "View Birthday Reward" : "Open Birthday Reward"}
                         </span>
 
                         <div className="pointer-events-none absolute left-1/2 top-[calc(50%+60.5px)] size-[41px] -translate-x-1/2 -translate-y-1/2">
@@ -177,8 +188,9 @@ export default function BirthdayWish({ xp = 100, onClaim, claiming, className, f
                 onClose={() => setOpen(false)}
                 name={firstName}
                 xp={xp}
-                onClaim={onClaim}
-                claiming={claiming}
+                onClaim={handleClaim}
+                claiming={claimingBirthdayReward}
+                claimed={claimed}
             />
         </>
     );

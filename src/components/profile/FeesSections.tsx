@@ -1,24 +1,141 @@
 "use client";
 
-import React, { useState } from "react";
-import { Box, ButtonBase, Typography } from "@mui/material";
+import React, { useMemo, useState } from "react";
+import { Box, ButtonBase, Tooltip, Typography } from "@mui/material";
 import { LmsButton } from "@/components/community/community-ui";
-import {
-    ACADEMIC_DOCUMENTS,
-    FeeSummary,
-    PC,
-    Program,
-    TIMELINE,
-    TIMELINE_TABS,
-    TimelineItem,
-    profileAsset,
-} from "./profile-data";
+import type { FeeDocument, FeeInstallment, FeeProgram, FeeProgramStatus, StudentFees } from "@/contexts/StudentContext";
+import { EMPTY, PC, formatBytes, formatDate, formatINR, formatLongDate, formatOrdinalDate, pluralDays, profileAsset } from "./profile-data";
 import { CardTitle, GlassCard, OutlineButton, PIcon, PT, RowBox, SegmentedTabs, StatusPill, ellipsis, strokeLayer } from "./profile-ui";
+import { GAUGE_TICKS, GAUGE_VIEWBOX } from "./progress-gauge-ticks";
+import { EmptyNote } from "./ProfileStates";
+
+// ─── View models ───────────────────────────────────────────────────────────
+type DueTone = "warning" | "success" | "error";
+
+interface DueLine {
+    key: string;
+    label: string;
+    amount: string;
+    pill?: string;
+    muted?: boolean;
+}
+
+export interface FeeSummaryView {
+    combinedLabel?: string;
+    total: string;
+    pending: string;
+    paid: string;
+    percent: number;
+    title?: string;
+    dueOn?: string;
+    status?: { label: string; tone: DueTone };
+    lines: DueLine[];
+    lateFee?: string;
+    lateFeeHint?: string;
+    totalPayable: string;
+    payAllDues?: string;
+    note?: string;
+    canPay: boolean;
+}
+
+/** "Cyber Security Professional - 2nd Installment" when several programs are listed, otherwise "2nd Installment". */
+export function installmentTitle(item: FeeInstallment, multi: boolean) {
+    return multi ? `${item.programShortName} - ${item.label}` : item.label;
+}
+
+function dueStatus(item: FeeInstallment): { label: string; tone: DueTone } {
+    if (item.status === "overdue") return { label: `Overdue by ${pluralDays(item.daysOverdue)}`, tone: "error" };
+    if (item.status === "due_today") return { label: "Due Today", tone: "success" };
+    if (item.daysUntilDue === 1) return { label: "Due Tomorrow", tone: "warning" };
+    return { label: `Due in ${pluralDays(item.daysUntilDue)}`, tone: "warning" };
+}
+
+/** Turns the API summary into the copy of the Figma "Fee summary" states (before due, due today, overdue, multi-overdue). */
+export function buildFeeSummaryView(fees: StudentFees): FeeSummaryView {
+    const { summary, lateFeePerDay } = fees;
+    const multi = fees.programs.length > 1;
+    const lateRate = `${formatINR(lateFeePerDay, { space: false })}/day`;
+    const base = {
+        combinedLabel: multi ? "All program/Courses combined" : undefined,
+        total: formatINR(summary.totalAmount),
+        pending: formatINR(summary.pendingAmount),
+        paid: formatINR(summary.paidAmount),
+        percent: summary.percentPaid,
+    };
+    const payAllDues = (alreadyCovered: number) =>
+        summary.dueThisMonth.count > alreadyCovered && summary.dueThisMonth.totalPayable > (summary.payNow?.totalPayable ?? 0)
+            ? formatINR(summary.dueThisMonth.totalPayable)
+            : undefined;
+
+    if (summary.state === "settled" || !summary.nextDue) {
+        return {
+            ...base,
+            title: summary.totalAmount > 0 ? "All installments paid" : "No dues",
+            dueOn: summary.totalAmount > 0 ? "You have no pending fee payments." : "There are no fee payments on your account.",
+            status: summary.totalAmount > 0 ? { label: "Paid", tone: "success" } : undefined,
+            lines: [],
+            totalPayable: formatINR(0),
+            canPay: false,
+        };
+    }
+
+    if (summary.state === "overdue") {
+        const overdue = summary.overdue;
+        const single = overdue.length === 1 ? overdue[0] : null;
+        const lines: DueLine[] = single
+            ? partialLines(single)
+            : overdue.map((item) => ({
+                key: item.scheduleId,
+                label: installmentTitle(item, multi),
+                amount: formatINR(item.outstandingAmount),
+                pill: `Overdue by ${pluralDays(item.daysOverdue)}`,
+            }));
+        const lateFeeHint = single
+            ? `${pluralDays(single.daysOverdue)} × ${formatINR(lateFeePerDay, { space: false })} late charge`
+            : `${lateRate} late charge for each overdue installment:\n${overdue
+                .map((item) => `${installmentTitle(item, multi)} — ${pluralDays(item.daysOverdue)} = ${formatINR(item.lateFee, { space: false })}`)
+                .join("\n")}`;
+        return {
+            ...base,
+            title: single ? installmentTitle(single, multi) : undefined,
+            dueOn: single ? `Due on ${formatLongDate(single.dueDate)}` : undefined,
+            status: single ? dueStatus(single) : undefined,
+            lines,
+            lateFee: formatINR(summary.payNow?.lateFee ?? summary.lateFee),
+            lateFeeHint,
+            totalPayable: formatINR(summary.payNow?.totalPayable ?? 0),
+            payAllDues: payAllDues(overdue.length),
+            canPay: true,
+        };
+    }
+
+    const next = summary.nextDue;
+    return {
+        ...base,
+        title: installmentTitle(next, multi),
+        dueOn: `Due on ${formatLongDate(next.dueDate)}`,
+        status: dueStatus(next),
+        lines: next.isPartiallyPaid ? partialLines(next) : [],
+        totalPayable: formatINR(summary.payNow?.totalPayable ?? next.payableAmount),
+        payAllDues: payAllDues(1),
+        note: `Pay on time to avoid ${lateRate} late charges.`,
+        canPay: true,
+    };
+}
+
+function partialLines(item: FeeInstallment): DueLine[] {
+    if (!item.isPartiallyPaid) return [{ key: item.scheduleId, label: "Installment Amount", amount: formatINR(item.outstandingAmount) }];
+    return [
+        { key: `${item.scheduleId}-amount`, label: "Installment Amount", amount: formatINR(item.amount) },
+        { key: `${item.scheduleId}-paid`, label: "Already Paid", amount: `- ${formatINR(item.paidAmount)}`, muted: true },
+    ];
+}
 
 // ─── Programs ──────────────────────────────────────────────────────────────
 function InfoChip({ value, label }: { value: string; label: string }) {
     return (
         <Box
+            title={value}
             sx={{
                 position: "relative",
                 flex: "1 1 0",
@@ -37,24 +154,42 @@ function InfoChip({ value, label }: { value: string; label: string }) {
     );
 }
 
-function MetaItem({ icon, children }: { icon: string; children: React.ReactNode }) {
-    return (
-        <Box sx={{ display: "flex", alignItems: "center", gap: "12px" }}>
+function MetaItem({ icon, children, hint }: { icon: string; children: React.ReactNode; hint?: string }) {
+    const content = (
+        <Box sx={{ display: "flex", alignItems: "center", gap: "12px", cursor: hint ? "help" : undefined }}>
             <PIcon name={icon} size={20} />
             <Typography sx={{ ...PT.med16, color: PC.n200, whiteSpace: "nowrap" }}>{children}</Typography>
         </Box>
     );
+    return hint ? (
+        <Tooltip title={<Box sx={{ whiteSpace: "pre-line" }}>{hint}</Box>} arrow>
+            {content}
+        </Tooltip>
+    ) : (
+        content
+    );
 }
 
-function ProgramStatusPill({ status }: { status: Program["status"] }) {
+const STATUS_PILL: Record<FeeProgramStatus, { label: string; background: string }> = {
+    active: { label: "Active", background: PC.gradientActive },
+    new: { label: "New", background: PC.gradientNew },
+    completed: { label: "Completed", background: PC.gradientPurple },
+    inactive: { label: "Inactive", background: "linear-gradient(90deg, #5A5A5A 0%, #262626 100%)" },
+};
+
+function ProgramStatusPill({ status }: { status: FeeProgramStatus }) {
+    const pill = STATUS_PILL[status];
     return (
-        <Box sx={{ px: "12px", py: "4px", borderRadius: "99px", backgroundImage: status === "active" ? PC.gradientActive : PC.gradientNew, flexShrink: 0 }}>
-            <Typography sx={{ ...PT.med16, color: PC.n50, whiteSpace: "nowrap" }}>{status === "active" ? "Active" : "New"}</Typography>
+        <Box sx={{ px: "12px", py: "4px", borderRadius: "99px", backgroundImage: pill.background, flexShrink: 0 }}>
+            <Typography sx={{ ...PT.med16, color: PC.n50, whiteSpace: "nowrap" }}>{pill.label}</Typography>
         </Box>
     );
 }
 
-function ProgramDetails({ program, longLabels }: { program: Program; longLabels?: boolean }) {
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+function ProgramDetails({ program, longLabels }: { program: FeeProgram; longLabels?: boolean }) {
+    const showCourses = program.kind === "package" && program.courses.length > 0;
     return (
         <>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -65,28 +200,36 @@ function ProgramDetails({ program, longLabels }: { program: Program; longLabels?
                     <ProgramStatusPill status={program.status} />
                 </Box>
                 <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: "24px", rowGap: "8px" }}>
-                    <MetaItem icon="icon-calendar.svg">{program.duration}</MetaItem>
-                    {program.courses && <MetaItem icon="icon-book-open.svg">{program.courses}</MetaItem>}
-                    <MetaItem icon="icon-star.svg">{program.benefits}</MetaItem>
+                    {program.durationInMonths ? <MetaItem icon="icon-calendar.svg">{plural(program.durationInMonths, "Month")}</MetaItem> : null}
+                    {showCourses && (
+                        <MetaItem icon="icon-book-open.svg" hint={program.courses.map((c) => c.courseName).join("\n")}>
+                            {plural(program.courses.length, "Course")}
+                        </MetaItem>
+                    )}
+                    {program.benefits.length > 0 && (
+                        <MetaItem icon="icon-star.svg" hint={program.benefits.join("\n")}>
+                            {plural(program.benefits.length, "Benefit")}
+                        </MetaItem>
+                    )}
                 </Box>
             </Box>
             <Box sx={{ display: "flex", flexWrap: { xs: "wrap", sm: "nowrap" }, gap: "12px" }}>
-                <InfoChip value={program.enrollmentDate} label="Enrollment Date" />
-                <InfoChip value={program.studentId} label="Student ID" />
-                <InfoChip value={program.rm} label={longLabels ? "Relationship Manager" : "RM"} />
-                <InfoChip value={program.counsellor} label={longLabels ? "Admission Counsellor" : "Counsellor"} />
+                <InfoChip value={formatDate(program.enrollmentDate)} label="Enrollment Date" />
+                <InfoChip value={program.studentRegistrationNumber || EMPTY} label="Student ID" />
+                <InfoChip value={program.rm?.name ?? "Not assigned"} label={longLabels ? "Relationship Manager" : "RM"} />
+                <InfoChip value={program.counsellorName || EMPTY} label={longLabels ? "Admission Counsellor" : "Counsellor"} />
             </Box>
         </>
     );
 }
 
-export function ProgramsCard({ programs }: { programs: Program[] }) {
+export function ProgramsCard({ programs }: { programs: FeeProgram[] }) {
     return (
         <GlassCard>
             <CardTitle>My Programs/Courses</CardTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "20px" }}>
                 {programs.map((program) => (
-                    <RowBox key={program.id} sx={{ display: "flex", flexDirection: "column", gap: "32px", p: { xs: "20px", md: "32px" } }}>
+                    <RowBox key={program.purchaseId} sx={{ display: "flex", flexDirection: "column", gap: "32px", p: { xs: "20px", md: "32px" } }}>
                         <ProgramDetails program={program} />
                     </RowBox>
                 ))}
@@ -95,7 +238,7 @@ export function ProgramsCard({ programs }: { programs: Program[] }) {
     );
 }
 
-export function SingleProgramCard({ program }: { program: Program }) {
+export function SingleProgramCard({ program }: { program: FeeProgram }) {
     return (
         <GlassCard strong decor={false}>
             <ProgramDetails program={program} longLabels />
@@ -104,23 +247,30 @@ export function SingleProgramCard({ program }: { program: Program }) {
 }
 
 // ─── Academic documents ────────────────────────────────────────────────────
-export function AcademicDocumentsCard() {
+function documentMeta(doc: FeeDocument) {
+    return [formatBytes(doc.documentSize), doc.fileExtension ?? doc.documentType].filter(Boolean).join(" · ");
+}
+
+export function AcademicDocumentsCard({ documents }: { documents: FeeDocument[] }) {
     return (
         <GlassCard>
             <CardTitle>Academic Documents</CardTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {ACADEMIC_DOCUMENTS.map((doc) => (
-                    <RowBox key={doc.name} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: 67, px: "16px", py: "12px" }}>
+                {documents.length === 0 && <EmptyNote>Your enrollment documents will appear here once they are issued.</EmptyNote>}
+                {documents.map((doc) => (
+                    <RowBox key={doc.documentId} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: 67, px: "16px", py: "12px" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
                             <Box sx={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                 <Box component="img" src={profileAsset("icon-pdf.svg")} alt="" aria-hidden sx={{ width: "74.79%", height: "100%" }} />
                             </Box>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
-                                <Typography sx={{ ...PT.med16, color: PC.n50, ...ellipsis }}>{doc.name}</Typography>
-                                <Typography sx={{ ...PT.interReg14, color: PC.n300, whiteSpace: "nowrap" }}>{doc.meta}</Typography>
+                                <Typography sx={{ ...PT.med16, color: PC.n50, ...ellipsis }}>{doc.documentName}</Typography>
+                                <Typography sx={{ ...PT.interReg14, color: PC.n300, whiteSpace: "nowrap" }}>{documentMeta(doc)}</Typography>
                             </Box>
                         </Box>
-                        <OutlineButton icon="icon-download.svg">Download</OutlineButton>
+                        <OutlineButton icon="icon-download.svg" onClick={() => window.open(doc.documentUrl, "_blank", "noopener,noreferrer")}>
+                            Download
+                        </OutlineButton>
                     </RowBox>
                 ))}
             </Box>
@@ -129,7 +279,7 @@ export function AcademicDocumentsCard() {
 }
 
 // ─── Help ──────────────────────────────────────────────────────────────────
-export function FeeHelpCard({ rm }: { rm: string }) {
+export function FeeHelpCard({ rmName, onContact }: { rmName: string | null; onContact: () => void }) {
     return (
         <Box
             component="section"
@@ -163,6 +313,7 @@ export function FeeHelpCard({ rm }: { rm: string }) {
                 </Typography>
             </Box>
             <ButtonBase
+                onClick={onContact}
                 sx={{
                     height: 44,
                     px: "12px",
@@ -175,7 +326,7 @@ export function FeeHelpCard({ rm }: { rm: string }) {
                     "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
                 }}
             >
-                Contact {rm} (RM)
+                {rmName ? `Contact ${rmName} (RM)` : "Contact your RM"}
             </ButtonBase>
         </Box>
     );
@@ -204,7 +355,19 @@ function VerticalRule() {
     );
 }
 
-function SummaryHeader({ summary }: { summary: FeeSummary }) {
+/** Tick gauge: one tick lights up per 1/26th of the fee paid, left to right. */
+function ProgressGauge({ percent }: { percent: number }) {
+    const lit = Math.round((Math.max(0, Math.min(100, percent)) / 100) * GAUGE_TICKS.length);
+    return (
+        <Box component="svg" viewBox={GAUGE_VIEWBOX} aria-hidden sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}>
+            {GAUGE_TICKS.map((d, index) => (
+                <path key={index} d={d} fill={index < lit ? "#A78BFA" : "#737373"} />
+            ))}
+        </Box>
+    );
+}
+
+function SummaryHeader({ summary }: { summary: FeeSummaryView }) {
     return (
         <Box
             sx={{
@@ -238,8 +401,12 @@ function SummaryHeader({ summary }: { summary: FeeSummary }) {
                 }}
             />
 
-            {/* Tick gauge (static Figma render of the current completion). */}
             <Box
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={summary.percent}
+                aria-label="Fees paid"
                 sx={{
                     position: "absolute",
                     right: -15,
@@ -249,7 +416,7 @@ function SummaryHeader({ summary }: { summary: FeeSummary }) {
                     display: { xs: "none", sm: "block" },
                 }}
             >
-                <Box component="img" src={profileAsset("progress-arc.svg")} alt="" aria-hidden sx={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+                <ProgressGauge percent={summary.percent} />
                 <Box sx={{ position: "absolute", left: 145, top: 68, width: 82, display: "flex", flexDirection: "column", alignItems: "center" }}>
                     <Typography sx={{ fontFamily: PT.poppinsSemi20.fontFamily, fontWeight: 600, fontSize: "38.262px", lineHeight: "57.393px", color: PC.white, textAlign: "center", mb: "-4.25px" }}>
                         {summary.percent}%
@@ -275,25 +442,31 @@ function SummaryHeader({ summary }: { summary: FeeSummary }) {
     );
 }
 
-function BreakdownRow({ label, amount, pill, danger, info }: { label: string; amount: string; pill?: string; danger?: boolean; info?: boolean }) {
+function BreakdownRow({ label, amount, pill, danger, muted, hint }: { label: string; amount: string; pill?: string; danger?: boolean; muted?: boolean; hint?: string }) {
     return (
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" }}>
                 <Typography sx={{ ...PT.interReg16, color: PC.n200 }}>{label}</Typography>
-                {info && <PIcon name="icon-alert-circle.svg" size={16} sx={{ transform: "rotate(180deg)" }} />}
+                {hint && (
+                    <Tooltip title={<Box sx={{ whiteSpace: "pre-line" }}>{hint}</Box>} arrow>
+                        <Box component="span" tabIndex={0} aria-label={hint} sx={{ display: "inline-flex", cursor: "help", borderRadius: "50%" }}>
+                            <PIcon name="icon-alert-circle.svg" size={16} sx={{ transform: "rotate(180deg)" }} />
+                        </Box>
+                    </Tooltip>
+                )}
                 {pill && (
                     <StatusPill tone="error" small>
                         {pill}
                     </StatusPill>
                 )}
             </Box>
-            <Typography sx={{ ...PT.interReg16, color: danger ? PC.error500 : PC.n100, whiteSpace: "nowrap" }}>{amount}</Typography>
+            <Typography sx={{ ...PT.interReg16, color: danger ? PC.error500 : muted ? PC.n400 : PC.n100, whiteSpace: "nowrap" }}>{amount}</Typography>
         </Box>
     );
 }
 
-export function FeeSummaryCard({ summary }: { summary: FeeSummary }) {
-    const hasBreakdown = Boolean(summary.lines?.length);
+export function FeeSummaryCard({ summary, onPayNow, onPayAllDues }: { summary: FeeSummaryView; onPayNow: () => void; onPayAllDues: () => void }) {
+    const hasBreakdown = summary.lines.length > 0 || Boolean(summary.lateFee);
     return (
         <Box
             component="section"
@@ -318,7 +491,7 @@ export function FeeSummaryCard({ summary }: { summary: FeeSummary }) {
                             <Typography component="h2" sx={{ ...PT.med18, color: PC.white }}>
                                 {summary.title}
                             </Typography>
-                            <Typography sx={{ ...PT.med14, color: PC.n200 }}>{summary.dueOn}</Typography>
+                            {summary.dueOn && <Typography sx={{ ...PT.med14, color: PC.n200 }}>{summary.dueOn}</Typography>}
                         </Box>
                         {summary.status && <StatusPill tone={summary.status.tone}>{summary.status.label}</StatusPill>}
                     </Box>
@@ -328,10 +501,10 @@ export function FeeSummaryCard({ summary }: { summary: FeeSummary }) {
                     {hasBreakdown && (
                         <>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                                {summary.lines!.map((line) => (
-                                    <BreakdownRow key={line.label} label={line.label} amount={line.amount} pill={line.pill} />
+                                {summary.lines.map((line) => (
+                                    <BreakdownRow key={line.key} label={line.label} amount={line.amount} pill={line.pill} muted={line.muted} />
                                 ))}
-                                {summary.lateFee && <BreakdownRow label="Late Fee" amount={summary.lateFee} danger info />}
+                                {summary.lateFee && <BreakdownRow label="Late Fee" amount={summary.lateFee} danger hint={summary.lateFeeHint} />}
                             </Box>
                             <Box component="img" src={profileAsset("dashed-divider.svg")} alt="" aria-hidden sx={{ display: "block", width: "100%", height: "1px" }} />
                         </>
@@ -343,9 +516,11 @@ export function FeeSummaryCard({ summary }: { summary: FeeSummary }) {
                 </RowBox>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: hasBreakdown ? "16px" : "20px" }}>
-                    <LmsButton sx={{ width: "100%" }}>Pay Now</LmsButton>
+                    <LmsButton sx={{ width: "100%" }} onClick={onPayNow} disabled={!summary.canPay}>
+                        {summary.canPay ? "Pay Now" : "No Dues"}
+                    </LmsButton>
                     {summary.payAllDues && (
-                        <OutlineButton fullWidth textSx={PT.med14}>
+                        <OutlineButton fullWidth textSx={PT.med14} onClick={onPayAllDues}>
                             Pay all dues this month
                             <Box component="img" src={profileAsset("dot-separator.svg")} alt="" aria-hidden sx={{ width: 4, height: 4, mx: "8px", verticalAlign: "middle" }} />
                             {summary.payAllDues}
@@ -386,41 +561,75 @@ function TimelineMarker({ paid, last }: { paid: boolean; last: boolean }) {
     );
 }
 
-function TimelineRow({ item, showProgram, last }: { item: TimelineItem; showProgram: boolean; last: boolean }) {
-    const programName = TIMELINE_TABS.find((t) => t.id === item.programId)?.label;
-    const title = item.paid ? item.paid.title : showProgram ? `${programName} - ${item.label}` : item.label;
+function paymentMethod(item: FeeInstallment) {
+    const payment = item.payment;
+    if (!payment) return "Payment recorded";
+    if (payment.atEnrollment) return "Paid at enrollment";
+    return [payment.mode, payment.reference].filter(Boolean).join(" · ") || "Payment recorded";
+}
+
+function TimelineRow({ item, showProgram, last, onReceipt }: { item: FeeInstallment; showProgram: boolean; last: boolean; onReceipt: (item: FeeInstallment) => void }) {
+    const paid = item.status === "paid";
+    const name = showProgram ? installmentTitle(item, true) : item.label;
+    const title = paid
+        ? `Paid ${formatINR(item.amount, { space: false })} on ${formatOrdinalDate(item.payment?.paidOn ?? item.dueDate)}`
+        : name;
+    const subtitle = paid
+        ? `${showProgram ? `${name} · ` : ""}${paymentMethod(item)}`
+        : item.isPartiallyPaid
+            ? `${formatINR(item.outstandingAmount)} left of ${formatINR(item.amount)}`
+            : formatINR(item.amount);
+    const dueColor = item.status === "overdue" ? PC.error500 : item.status === "due_today" ? PC.warning500 : PC.n300;
     return (
         <Box sx={{ display: "flex", gap: "12px" }}>
-            <TimelineMarker paid={Boolean(item.paid)} last={last} />
+            <TimelineMarker paid={paid} last={last} />
             <RowBox sx={{ flex: 1, minWidth: 0, minHeight: 70, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", px: "16px", py: "12px", flexWrap: { xs: "wrap", sm: "nowrap" } }}>
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
                     <Typography sx={{ ...PT.med16, color: PC.white }}>{title}</Typography>
-                    <Typography sx={{ ...PT.reg12, color: PC.n300, whiteSpace: "nowrap" }}>{item.paid ? item.paid.method : item.amount}</Typography>
+                    <Typography sx={{ ...PT.reg12, color: PC.n300 }}>{subtitle}</Typography>
                 </Box>
-                {item.paid ? (
-                    <OutlineButton icon="icon-download.svg">Download Receipt</OutlineButton>
+                {paid ? (
+                    <OutlineButton icon="icon-download.svg" onClick={() => onReceipt(item)}>
+                        Download Receipt
+                    </OutlineButton>
                 ) : (
-                    <Typography sx={{ ...PT.med12, color: PC.n300, whiteSpace: "nowrap" }}>{item.due}</Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: { xs: "flex-start", sm: "flex-end" }, gap: "2px" }}>
+                        <Typography sx={{ ...PT.med12, color: dueColor, whiteSpace: "nowrap" }}>
+                            {item.status === "due_today" ? "Due Today" : `Due on ${formatDate(item.dueDate)}`}
+                        </Typography>
+                        {item.status === "overdue" && (
+                            <Typography sx={{ ...PT.med12, color: PC.error500, whiteSpace: "nowrap" }}>
+                                {`Overdue by ${pluralDays(item.daysOverdue)} · +${formatINR(item.lateFee, { space: false })} late fee`}
+                            </Typography>
+                        )}
+                    </Box>
                 )}
             </RowBox>
         </Box>
     );
 }
 
-export function InstallmentTimelineCard({ defaultTab }: { defaultTab: string }) {
-    const [tab, setTab] = useState(defaultTab);
-    const items = tab === "all" ? TIMELINE : TIMELINE.filter((i) => i.programId === tab);
-    const paidCount = items.filter((i) => i.paid).length;
+export function InstallmentTimelineCard({ fees, onReceipt }: { fees: StudentFees; onReceipt: (item: FeeInstallment) => void }) {
+    const multi = fees.programs.length > 1;
+    const tabs = useMemo(
+        () => (multi ? [{ id: "all", label: "All" }, ...fees.programs.map((p) => ({ id: p.purchaseId, label: p.shortName }))] : []),
+        [multi, fees.programs],
+    );
+    // Default to the program of the next due installment, like the Figma "before due" state.
+    const [tab, setTab] = useState(() => (multi ? fees.summary.nextDue?.purchaseId ?? "all" : "all"));
+    const items = tab === "all" ? fees.installments : fees.installments.filter((i) => i.purchaseId === tab);
+    const paidCount = items.filter((i) => i.status === "paid").length;
 
     return (
         <GlassCard>
             <CardTitle action={<Typography sx={{ ...PT.med14, color: PC.white, whiteSpace: "nowrap", pl: "16px", pr: "12px" }}>{`${paidCount}/${items.length} Installments Paid`}</Typography>}>
                 Installment Timeline
             </CardTitle>
-            <SegmentedTabs options={TIMELINE_TABS} value={tab} onChange={setTab} stretch inactiveWidth={149} />
+            {multi && <SegmentedTabs options={tabs} value={tab} onChange={setTab} stretch inactiveWidth={149} />}
             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {items.length === 0 && <EmptyNote>No installments scheduled.</EmptyNote>}
                 {items.map((item, index) => (
-                    <TimelineRow key={item.id} item={item} showProgram={tab === "all"} last={index === items.length - 1} />
+                    <TimelineRow key={item.scheduleId} item={item} showProgram={multi && tab === "all"} last={index === items.length - 1} onReceipt={onReceipt} />
                 ))}
             </Box>
         </GlassCard>

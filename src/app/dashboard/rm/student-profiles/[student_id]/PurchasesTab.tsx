@@ -11,7 +11,7 @@ import { useRM, type AddPurchaseInput, type UpdatePurchaseInput } from "@/contex
 import { useContent } from "@/contexts/ContentContext";
 import type { StudentPaymentSchedule, StudentPurchaseDetail } from "@/contexts/StudentContext";
 import {
-    AddButton, AppDateField, AppMultiSelect, AppNumberField, AppOptionSelect, BRAND,
+    AddButton, AppDateField, AppMultiSelect, AppNumberField, AppOptionSelect, AppTextField, BRAND,
     EmptyState, FormCard, SectionShell, StatusChip, Surface, formatDate, formatMoney,
 } from "./ui";
 
@@ -23,6 +23,7 @@ type PurchaseForm = {
     numberOfInstallments: number | "";
     packageIds: string[];
     courseIds: string[];
+    counsellorName: string;
 };
 
 const emptyForm: PurchaseForm = {
@@ -33,6 +34,7 @@ const emptyForm: PurchaseForm = {
     numberOfInstallments: "",
     packageIds: [],
     courseIds: [],
+    counsellorName: "",
 };
 
 export default function PurchasesTab({ studentId }: { studentId: string }) {
@@ -112,6 +114,7 @@ export default function PurchasesTab({ studentId }: { studentId: string }) {
             currentPaidAmount: paid,
             isEMIEnabled: form.isEMIEnabled,
             numberOfInstallments: form.isEMIEnabled ? Number(form.numberOfInstallments) : 1,
+            counsellorName: form.counsellorName.trim(),
         };
 
         setBusy(true);
@@ -140,6 +143,7 @@ export default function PurchasesTab({ studentId }: { studentId: string }) {
             numberOfInstallments: p.numberOfInstallments ?? "",
             packageIds: p.packagesInPurchases.map((x) => x.packageId),
             courseIds: p.courseInPurchases.map((x) => x.courseId),
+            counsellorName: p.counsellorName ?? "",
         });
         setEditingId(p.purchaseId);
         setAdding(false);
@@ -187,6 +191,7 @@ export default function PurchasesTab({ studentId }: { studentId: string }) {
                 {(adding || editingId) && (
                     <FormCard color={BRAND.primary} onCancel={close} onSubmit={submit} busy={busy}>
                         <AppDateField label="Purchase date" value={form.purchasedAt} onChange={(v) => setForm({ ...form, purchasedAt: v })} />
+                        <AppTextField label="Admission counsellor" value={form.counsellorName} onChange={(e) => setForm({ ...form, counsellorName: e.target.value })} />
                         <AppNumberField
                             label="Total amount*"
                             value={form.amount}

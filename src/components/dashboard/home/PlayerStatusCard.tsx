@@ -3,13 +3,13 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { asset, Decor, GlassCard, lato, poppins } from "./shared";
-import { PLAYER_STATS, type PlayerStat } from "./data";
+import { type PlayerStat } from "./data";
 
 interface PlayerStatusCardProps {
-    stats?: PlayerStat[];
+    stats: PlayerStat[];
 }
 
-export default function PlayerStatusCard({ stats = PLAYER_STATS }: PlayerStatusCardProps) {
+export default function PlayerStatusCard({ stats }: PlayerStatusCardProps) {
     return (
         <GlassCard angle={174.89}>
             <Typography component="h2" sx={poppins(20, 30)}>

@@ -35,6 +35,11 @@ export interface UpdateStudentInput {
     isActive?: boolean;
     highestEducation?: string;
     highestEducationInstitute?: string;
+    /** e.g. "SakiNaka, Mumbai" */
+    highestEducationInstituteLocation?: string;
+    whatsappCallingCode?: string;
+    whatsappNumber?: string;
+    isWhatsappNumberVerified?: boolean;
     machineCode?: string;
 }
 
@@ -45,7 +50,7 @@ export interface CreateStudentInput extends UpdateStudentInput {
     branchId?: string;
     password?: string;
     onboardingRefId?: string;
-    parentDetails?: AddParentInput[];
+    parentDetails?: CreateParentInput[];
     addresses?: AddAddressInput[];
     documents?: CreateStudentDocumentInput[];
     adhaarData?: UpdateAdhaarInput;
@@ -60,11 +65,17 @@ export interface AddParentInput {
     parentRelation?: string;
 }
 
+/** Only honoured when creating a student (e.g. the parent number was OTP-verified during onboarding). */
+export type CreateParentInput = AddParentInput & { isContactVerified?: boolean };
+
 export type UpdateParentInput = Partial<AddParentInput>;
 
 export interface AddAddressInput {
     addressType?: string;
+    /** Street address */
     addressLine?: string;
+    /** Apartment / suite / flat */
+    apartment?: string;
     city?: string;
     state?: string;
     country?: string;
@@ -79,13 +90,17 @@ export type UpdateAddressInput = Partial<AddAddressInput>;
 export interface AddDocumentInput {
     documentName: string;
     documentUrl: string;
+    /** "Education" (marksheets), "Academic" (enrollment letter, receipts, agreements…), "Identification", "Other" */
     documentType: string;
+    /** File size in bytes */
+    documentSize?: number;
 }
 
 export interface UpdateDocumentInput {
     documentName?: string;
     documentUrl?: string;
     documentType?: string;
+    documentSize?: number | null;
     isVerified?: boolean;
 }
 
@@ -136,6 +151,10 @@ export interface AddPurchaseInput {
     numberOfInstallments?: number;
     packageIds?: string[];
     courseIds?: string[];
+    /** Owning RM; defaults to the RM creating the purchase. `null` clears it. */
+    rmId?: string | null;
+    /** Admission counsellor who closed the admission. */
+    counsellorName?: string;
 }
 
 export type UpdatePurchaseInput = Omit<AddPurchaseInput, "packageIds" | "courseIds">;

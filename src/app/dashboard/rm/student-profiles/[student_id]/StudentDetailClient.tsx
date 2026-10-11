@@ -379,6 +379,9 @@ function OverviewTab({
             isActive: student.isActive,
             highestEducation: student.highestEducation ?? undefined,
             highestEducationInstitute: student.highestEducationInstitute ?? undefined,
+            highestEducationInstituteLocation: student.highestEducationInstituteLocation ?? undefined,
+            whatsappCallingCode: student.whatsappCallingCode ?? student.callingCode,
+            whatsappNumber: student.whatsappNumber ?? undefined,
             machineCode: student.machineCode ?? undefined,
         });
     }, [editing, student]);
@@ -408,6 +411,13 @@ function OverviewTab({
                     onNumberChange={(v) => setForm({ ...form, phoneNumber: v })}
                 />
                 <AppTextField label="Alt. phone" value={form.studentAlternatePhoneNumber ?? ""} onChange={(e) => setForm({ ...form, studentAlternatePhoneNumber: e.target.value })} />
+                <PhoneField
+                    label="WhatsApp"
+                    codeValue={form.whatsappCallingCode ?? ""}
+                    numberValue={form.whatsappNumber ?? ""}
+                    onCodeChange={(v) => setForm({ ...form, whatsappCallingCode: v })}
+                    onNumberChange={(v) => setForm({ ...form, whatsappNumber: v })}
+                />
                 <AppTextField label="Email" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 <AppDateField label="DOB" value={form.dateOfBirth?.slice(0, 10) ?? ""} onChange={(v) => setForm({ ...form, dateOfBirth: v })} />
                 <AppSelect
@@ -419,6 +429,7 @@ function OverviewTab({
                 <AppTextField label="Machine code" value={form.machineCode ?? ""} onChange={(e) => setForm({ ...form, machineCode: e.target.value })} />
                 <AppAutocomplete label="Education" value={form.highestEducation ?? ""} onChange={(v) => setForm({ ...form, highestEducation: v })} options={EDUCATION_OPTIONS} />
                 <AppTextField label="Institute" value={form.highestEducationInstitute ?? ""} onChange={(e) => setForm({ ...form, highestEducationInstitute: e.target.value })} />
+                <AppTextField label="Institute location" value={form.highestEducationInstituteLocation ?? ""} onChange={(e) => setForm({ ...form, highestEducationInstituteLocation: e.target.value })} />
                 <div className="flex items-center gap-1.5 sm:col-span-2">
                     <Switch
                         size="small"
@@ -451,12 +462,14 @@ function OverviewTab({
                 <Panel title="Contact" icon={<Phone size={13} />} color={BRAND.sky} bg={BRAND.skyBg}>
                     <PanelRow label="Phone" value={`+${student.callingCode} ${student.phoneNumber}`} copy />
                     <PanelRow label="Alt. phone" value={student.studentAlternatePhoneNumber} copy />
+                    <PanelRow label="WhatsApp" value={student.whatsappNumber ? `+${student.whatsappCallingCode ?? student.callingCode} ${student.whatsappNumber}` : null} copy />
                     <PanelRow label="Email" value={student.email} copy />
                 </Panel>
 
                 <Panel title="Education" icon={<FileText size={13} />} color={BRAND.amber} bg={BRAND.amberBg}>
                     <PanelRow label="Highest education" value={student.highestEducation} />
                     <PanelRow label="Institute" value={student.highestEducationInstitute} />
+                    <PanelRow label="Location" value={student.highestEducationInstituteLocation ?? null} />
                 </Panel>
 
                 <Panel title="System" icon={<Calendar size={13} />} color={BRAND.emerald} bg={BRAND.emeraldBg}>
@@ -654,7 +667,7 @@ function AddressesTab({
     onRemove: (aid: string) => Promise<{ success: boolean; message: string | null; data: null }>;
     onSaved: () => void;
 }) {
-    const empty = { addressType: "", addressLine: "", city: "", state: "", country: "", postalCode: "", mapUrl: "" };
+    const empty = { addressType: "", addressLine: "", apartment: "", city: "", state: "", country: "", postalCode: "", mapUrl: "" };
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState<Record<string, string>>(empty);
@@ -682,6 +695,7 @@ function AddressesTab({
         setForm({
             addressType: a.addressType ?? "",
             addressLine: a.addressLine ?? "",
+            apartment: a.apartment ?? "",
             city: a.city ?? "",
             state: a.state ?? "",
             country: a.country ?? "",
@@ -703,7 +717,8 @@ function AddressesTab({
             {(adding || editingId) && (
                 <FormCard color={BRAND.emerald} onCancel={() => { setAdding(false); setEditingId(null); setForm(empty); }} onSubmit={submit} busy={busy}>
                     <AppAutocomplete label="Type" value={form.addressType} onChange={(v) => setForm({ ...form, addressType: v })} options={ADDRESS_TYPE_OPTIONS} />
-                    <AppTextField label="Address line" value={form.addressLine} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} />
+                    <AppTextField label="Street address" value={form.addressLine} onChange={(e) => setForm({ ...form, addressLine: e.target.value })} />
+                    <AppTextField label="Apartment / Flat" value={form.apartment} onChange={(e) => setForm({ ...form, apartment: e.target.value })} />
                     <AppTextField label="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
                     <AppTextField label="State" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
                     <AppAutocomplete label="Country" value={form.country} onChange={(v) => setForm({ ...form, country: v })} options={COUNTRY_NAME_OPTIONS} />
@@ -727,7 +742,7 @@ function AddressesTab({
                             onEdit={() => startEdit(a)}
                             onDelete={() => del(a.addressId)}
                         >
-                            {a.addressLine && <p className="text-xs text-gray-600">{a.addressLine}</p>}
+                            {(a.apartment || a.addressLine) && <p className="text-xs text-gray-600">{[a.apartment, a.addressLine].filter(Boolean).join(", ")}</p>}
                             {a.postalCode && <p className="text-[11px] text-gray-400">PIN: {a.postalCode}</p>}
                             {a.mapUrl && (
                                 <a href={a.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] hover:underline mt-1" style={{ color: BRAND.emerald }}>

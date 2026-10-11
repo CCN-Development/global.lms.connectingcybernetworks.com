@@ -2,30 +2,80 @@
 
 import React from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { Box, Typography } from "@mui/material";
-import { ACHIEVEMENT_STATS, BADGES, Badge, CERTIFICATIONS, PC, XP_HISTORY, profileAsset } from "./profile-data";
+import type { AchievementBadge, CertificationItem, StudentAchievements, XpHistoryEntry } from "@/contexts/StudentContext";
+import { examCertificatePath } from "@/components/exams/exam-data";
+import { PC, formatNumber, formatOrdinalDate, formatUsDate, profileAsset } from "./profile-data";
 import { CardTitle, GlassCard, OutlineButton, PIcon, PT, RowBox, ellipsis, strokeLayer } from "./profile-ui";
+import { EmptyNote } from "./ProfileStates";
+
+export type BadgeState = "earned" | "current" | "locked";
+
+interface BadgeView {
+    id: string;
+    title: string;
+    subtitle: string;
+    state: BadgeState;
+    iconUrl: string | null;
+    /** Progress bar fill width in px (track is 110px wide). */
+    progress: number;
+}
+
+const PROGRESS_TRACK = 110;
+
+/** Earned badges, then the next one being worked on ("current"), then the locked rest. */
+function toBadgeViews(badges: AchievementBadge[]): BadgeView[] {
+    const currentId = badges.find((b) => !b.earned)?.badgeId;
+    return badges.map((badge) => {
+        const state: BadgeState = badge.earned ? "earned" : badge.badgeId === currentId ? "current" : "locked";
+        const subtitle = state === "current" ? badge.progressLabel : badge.description || badge.progressLabel;
+        return {
+            id: badge.badgeId,
+            title: badge.name,
+            subtitle,
+            state,
+            iconUrl: badge.iconUrl,
+            progress: Math.max(1, Math.round((Math.min(100, badge.progressPct) / 100) * PROGRESS_TRACK)),
+        };
+    });
+}
 
 // ─── Stat banners ──────────────────────────────────────────────────────────
-export function AchievementStats() {
+// Image boxes are expressed relative to the 448×265 Figma card so they scale with the card width.
+const STAT_IMAGES = [
+    { image: "stat-title-bg.png", imageBox: { left: "-0.45%", top: "-7.92%", width: "107.37%", height: "107.55%" }, dim: false },
+    { image: "stat-badges-bg.png", imageBox: { left: "-0.37%", top: "-7.92%", width: "100.75%", height: "114.72%" }, dim: false },
+    { image: "stat-xp-bg.png", imageBox: { left: "-0.45%", top: "-7.92%", width: "115.85%", height: "107.55%" }, dim: true },
+] as const;
+
+export function AchievementStats({ achievements }: { achievements: StudentAchievements }) {
+    const stats = [
+        { value: achievements.rank.title, label: "Your Current Title" },
+        { value: `${achievements.badgesEarned}/${achievements.badgesTotal}`, label: "Total Badges Earned" },
+        { value: `${formatNumber(achievements.rank.totalXp)} XP`, label: "Total Points Earned" },
+    ];
     return (
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(3, minmax(0, 1fr))" }, gap: { xs: "16px", md: "24px" } }}>
-            {ACHIEVEMENT_STATS.map((stat) => (
-                <GlassCard
-                    key={stat.label}
-                    decor={false}
-                    sx={{ height: { xs: 200, md: 265 }, justifyContent: "flex-end", p: "24px", gap: "24px" }}
-                >
-                    <Box aria-hidden sx={{ position: "absolute", ...stat.imageBox, zIndex: -1 }}>
-                        <Image src={profileAsset(stat.image)} alt="" fill sizes="(min-width: 900px) 40vw, 100vw" style={{ objectFit: "cover" }} priority />
-                        {"dim" in stat && stat.dim && <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(0,0,0,0.2)" }} />}
-                    </Box>
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <Typography sx={{ ...PT.poppinsBold32, color: PC.white, fontSize: { xs: "26px", md: "32px" } }}>{stat.value}</Typography>
-                        <Typography sx={{ ...PT.med18, color: PC.n200 }}>{stat.label}</Typography>
-                    </Box>
-                </GlassCard>
-            ))}
+            {stats.map((stat, index) => {
+                const art = STAT_IMAGES[index];
+                return (
+                    <GlassCard
+                        key={stat.label}
+                        decor={false}
+                        sx={{ height: { xs: 200, md: 265 }, justifyContent: "flex-end", p: "24px", gap: "24px" }}
+                    >
+                        <Box aria-hidden sx={{ position: "absolute", ...art.imageBox, zIndex: -1 }}>
+                            <Image src={profileAsset(art.image)} alt="" fill sizes="(min-width: 900px) 40vw, 100vw" style={{ objectFit: "cover" }} priority />
+                            {art.dim && <Box sx={{ position: "absolute", inset: 0, bgcolor: "rgba(0,0,0,0.2)" }} />}
+                        </Box>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            <Typography sx={{ ...PT.poppinsBold32, color: PC.white, fontSize: { xs: "26px", md: "32px" } }}>{stat.value}</Typography>
+                            <Typography sx={{ ...PT.med18, color: PC.n200 }}>{stat.label}</Typography>
+                        </Box>
+                    </GlassCard>
+                );
+            })}
         </Box>
     );
 }
@@ -53,7 +103,10 @@ const BADGE_PARTS: Array<[string, number, number, number, number]> = [
     ["crown.svg", 20.75 - 28.45, -30.22, 74.875, 75.007],
 ];
 
-function BadgeIcon() {
+function BadgeIcon({ iconUrl }: { iconUrl: string | null }) {
+    if (iconUrl) {
+        return <Box component="img" src={iconUrl} alt="" aria-hidden sx={{ width: 64, height: 64, flexShrink: 0, objectFit: "contain" }} />;
+    }
     return (
         // The Figma group is mirrored horizontally (rotate 180° + flip Y).
         <Box aria-hidden sx={{ position: "relative", width: 64, height: 64, flexShrink: 0, transform: "scaleX(-1)" }}>
@@ -64,7 +117,7 @@ function BadgeIcon() {
     );
 }
 
-function StepMarker({ state }: { state: Badge["state"] }) {
+function StepMarker({ state }: { state: BadgeState }) {
     if (state === "current") {
         return (
             <Box sx={{ position: "relative", width: 32, height: 32 }}>
@@ -75,7 +128,7 @@ function StepMarker({ state }: { state: Badge["state"] }) {
     return <PIcon name={state === "earned" ? "step-done.svg" : "step-pending.svg"} size={32} />;
 }
 
-function BadgeTile({ badge }: { badge: Badge }) {
+function BadgeTile({ badge }: { badge: BadgeView }) {
     const current = badge.state === "current";
     return (
         <Box sx={{ position: "relative", width: COLUMN, height: 166 }}>
@@ -101,15 +154,15 @@ function BadgeTile({ badge }: { badge: Badge }) {
                     "&::before": { ...strokeLayer(PC.cardStroke), opacity: current ? 1 : 0.5 },
                 }}
             >
-                <BadgeIcon />
+                <BadgeIcon iconUrl={badge.iconUrl} />
                 <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px", maxWidth: "100%" }}>
-                    <Typography sx={{ ...PT.med16, color: PC.n50, textAlign: "center", ...ellipsis, maxWidth: "100%" }}>{badge.title}</Typography>
-                    <Typography sx={{ ...PT.reg12, color: PC.n400, textAlign: "center", whiteSpace: "nowrap" }}>{badge.subtitle}</Typography>
+                    <Typography sx={{ ...PT.med16, color: PC.n50, textAlign: "center", ...ellipsis, maxWidth: "100%" }} title={badge.title}>{badge.title}</Typography>
+                    <Typography sx={{ ...PT.reg12, color: PC.n400, textAlign: "center", ...ellipsis, maxWidth: "100%" }} title={badge.subtitle}>{badge.subtitle}</Typography>
                 </Box>
                 <Box
                     role="progressbar"
                     aria-valuemin={0}
-                    aria-valuemax={110}
+                    aria-valuemax={PROGRESS_TRACK}
                     aria-valuenow={badge.progress}
                     sx={{
                         position: "relative",
@@ -133,7 +186,8 @@ function BadgeTile({ badge }: { badge: Badge }) {
     );
 }
 
-export function BadgesSection() {
+export function BadgesSection({ badges }: { badges: AchievementBadge[] }) {
+    const views = toBadgeViews(badges);
     return (
         <Box component="section" sx={{ position: "relative", display: "flex", flexDirection: "column", gap: { xs: "24px", md: "53px" } }}>
             <Box
@@ -146,6 +200,11 @@ export function BadgesSection() {
             <Typography component="h2" sx={{ position: "relative", ...PT.med18, color: PC.n100 }}>
                 Your Badges
             </Typography>
+            {views.length === 0 && (
+                <Box sx={{ position: "relative", mx: "24px" }}>
+                    <EmptyNote>Badges unlock as you complete lessons, labs and quizzes in your courses.</EmptyNote>
+                </Box>
+            )}
             <Box
                 sx={{
                     position: "relative",
@@ -156,11 +215,11 @@ export function BadgesSection() {
                 }}
             >
                 <Box sx={{ display: "flex", gap: `${COLUMN_GAP}px`, width: "max-content" }}>
-                    {BADGES.map((badge, index) => (
+                    {views.map((badge, index) => (
                         <Box key={badge.id} sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "24px", width: COLUMN }}>
                             <Box sx={{ position: "relative", width: "100%", height: 32, display: "flex", justifyContent: "center" }}>
                                 <StepMarker state={badge.state} />
-                                {index < BADGES.length - 1 && (
+                                {index < views.length - 1 && (
                                     <Box
                                         component="img"
                                         src={profileAsset("step-line-a.svg")}
@@ -180,14 +239,25 @@ export function BadgesSection() {
 }
 
 // ─── XP history + certifications ───────────────────────────────────────────
-export function XpHistoryCard() {
+export function XpHistoryCard({ entries }: { entries: XpHistoryEntry[] }) {
     return (
         <GlassCard decor={false} sx={{ p: "24px", gap: "24px" }}>
             <CardTitle>XP Balance History</CardTitle>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {XP_HISTORY.map((entry) => (
+            <Box
+                sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "12px",
+                    maxHeight: 420,
+                    overflowY: "auto",
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "rgba(255,255,255,0.16) transparent",
+                }}
+            >
+                {entries.length === 0 && <EmptyNote>Complete lessons, quizzes and labs to start earning XP.</EmptyNote>}
+                {entries.map((entry) => (
                     <Box
-                        key={entry.id}
+                        key={entry.txnId}
                         sx={{
                             position: "relative",
                             display: "flex",
@@ -196,26 +266,32 @@ export function XpHistoryCard() {
                             gap: "12px",
                             px: "12px",
                             py: "8px",
+                            flexShrink: 0,
                             borderRadius: "12px",
                             backgroundImage: "linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(153,153,153,0.04) 100%)",
                             "&::before": strokeLayer(PC.rowStroke(0.24)),
                         }}
                     >
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
-                            <Typography sx={{ ...PT.med14, color: PC.white, ...ellipsis }}>{entry.title}</Typography>
-                            <Typography sx={{ ...PT.reg12, color: PC.n300 }}>{entry.date}</Typography>
+                            <Typography sx={{ ...PT.med14, color: PC.white, ...ellipsis }} title={entry.courseName ? `${entry.title} · ${entry.courseName}` : entry.title}>
+                                {entry.title}
+                            </Typography>
+                            <Typography sx={{ ...PT.reg12, color: PC.n300 }}>{formatOrdinalDate(entry.createdAt)}</Typography>
                         </Box>
                         <Typography
                             sx={{
                                 ...PT.med14,
                                 whiteSpace: "nowrap",
-                                backgroundImage: "linear-gradient(92deg, #2EC4B6 4.52%, #1B4C33 104.18%)",
+                                backgroundImage:
+                                    entry.amount >= 0
+                                        ? "linear-gradient(92deg, #2EC4B6 4.52%, #1B4C33 104.18%)"
+                                        : `linear-gradient(92deg, ${PC.error500} 0%, ${PC.error500} 100%)`,
                                 WebkitBackgroundClip: "text",
                                 backgroundClip: "text",
                                 color: "transparent",
                             }}
                         >
-                            {entry.xp}
+                            {`${entry.amount >= 0 ? "+" : "-"}${formatNumber(Math.abs(entry.amount))} XP`}
                         </Typography>
                     </Box>
                 ))}
@@ -224,19 +300,29 @@ export function XpHistoryCard() {
     );
 }
 
-export function CertificationsCard() {
+function certificationDetail(cert: CertificationItem) {
+    if (cert.status === "issued") return `Issued on ${formatUsDate(cert.issuedAt)}`;
+    if (cert.status === "expired") return `Expired on ${formatUsDate(cert.validUntil)}`;
+    return cert.requirement;
+}
+
+export function CertificationsCard({ certifications }: { certifications: CertificationItem[] }) {
+    const router = useRouter();
     return (
         <GlassCard>
             <CardTitle>My Certification</CardTitle>
             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {CERTIFICATIONS.map((cert) => (
-                    <RowBox key={cert.id} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", px: "16px", py: "12px", flexWrap: { xs: "wrap", sm: "nowrap" } }}>
+                {certifications.length === 0 && <EmptyNote>Certifications for your enrolled courses will appear here.</EmptyNote>}
+                {certifications.map((cert) => (
+                    <RowBox key={cert.courseId} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", px: "16px", py: "12px", flexWrap: { xs: "wrap", sm: "nowrap" } }}>
                         <Box sx={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
                             <Typography sx={{ ...PT.med16, color: PC.white }}>{cert.name}</Typography>
-                            <Typography sx={{ ...PT.interReg14, color: PC.n300 }}>{cert.detail}</Typography>
+                            <Typography sx={{ ...PT.interReg14, color: cert.status === "revoked" ? PC.error500 : PC.n300 }}>{certificationDetail(cert)}</Typography>
                         </Box>
                         {cert.unlocked ? (
-                            <OutlineButton icon="icon-download.svg">Download Certificate</OutlineButton>
+                            <OutlineButton icon="icon-download.svg" onClick={() => router.push(examCertificatePath(cert.slug ?? cert.examId ?? cert.courseId))}>
+                                Download Certificate
+                            </OutlineButton>
                         ) : (
                             <OutlineButton icon="icon-lock.svg" locked>
                                 Locked

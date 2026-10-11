@@ -3,14 +3,14 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { lato, poppins, rowSurface, RowGlows, SectionHeader, SeeAllButton } from "./shared";
-import { UPCOMING_SESSIONS, type SessionItem } from "./data";
+import { type SessionItem } from "./data";
 
 interface UpcomingSessionsListProps {
-    sessions?: SessionItem[];
+    sessions: SessionItem[];
     onSeeAll?: () => void;
 }
 
-export default function UpcomingSessionsList({ sessions = UPCOMING_SESSIONS, onSeeAll }: UpcomingSessionsListProps) {
+export default function UpcomingSessionsList({ sessions, onSeeAll }: UpcomingSessionsListProps) {
     return (
         <Box component="section" sx={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
             <SectionHeader title="Upcoming Sessions">
@@ -18,6 +18,12 @@ export default function UpcomingSessionsList({ sessions = UPCOMING_SESSIONS, onS
             </SectionHeader>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {sessions.length === 0 && (
+                    <Box sx={{ ...rowSurface, px: "24px", py: "20px", borderRadius: "24px", textAlign: "center" }}>
+                        <Typography sx={lato(14, 21, 400, "#8C8C8C")}>No upcoming sessions scheduled</Typography>
+                        <RowGlows />
+                    </Box>
+                )}
                 {sessions.map((session) => (
                     <Box
                         key={session.id}

@@ -5,11 +5,13 @@ import { Box, ButtonBase, Typography } from "@mui/material";
 import Image from "next/image";
 import { gradientBorder } from "@/components/aish/tokens";
 import { asset, Decor, glassFill, lato, poppins, RotatedDecor } from "./shared";
-import { ACTIVE_MISSION, type ActiveMission } from "./data";
+import { type ActiveMission } from "./data";
 
 interface ActiveMissionBannerProps {
-    mission?: ActiveMission;
+    mission: ActiveMission;
     onResume?: () => void;
+    /** Disables the button while the next lesson is being resolved. */
+    resuming?: boolean;
 }
 
 const BANNER_FILL =
@@ -151,7 +153,7 @@ function NoiseTexture() {
     );
 }
 
-export default function ActiveMissionBanner({ mission = ACTIVE_MISSION, onResume }: ActiveMissionBannerProps) {
+export default function ActiveMissionBanner({ mission, onResume, resuming = false }: ActiveMissionBannerProps) {
     const progress = Math.min(Math.max(mission.progress, 0), 100);
 
     return (
@@ -341,6 +343,7 @@ export default function ActiveMissionBanner({ mission = ACTIVE_MISSION, onResume
 
                 <ButtonBase
                     onClick={onResume}
+                    disabled={resuming}
                     sx={{
                         position: "relative",
                         overflow: "hidden",
@@ -355,6 +358,7 @@ export default function ActiveMissionBanner({ mission = ACTIVE_MISSION, onResume
                         boxShadow: "0 0 8px rgba(255,255,255,0.12)",
                         transition: "transform 0.15s ease",
                         "&:hover": { transform: "translateY(-1px)" },
+                        "&.Mui-disabled": { opacity: 0.7 },
                     }}
                 >
                     <Image src={asset("icon-play.svg")} alt="" width={18} height={18} />

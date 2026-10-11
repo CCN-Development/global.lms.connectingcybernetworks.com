@@ -5,7 +5,7 @@ import { Box, ButtonBase, Menu, MenuItem, Typography } from "@mui/material";
 import Image from "next/image";
 import { gradientBorder } from "@/components/aish/tokens";
 import { asset, Decor, EdgeGlows, lato, Line, RotatedDecor, SectionHeader, SeeAllButton } from "./shared";
-import { TASKS, type TaskItem, type TaskStatus } from "./data";
+import { type TaskItem, type TaskStatus } from "./data";
 
 type SortKey = "due" | "course" | "status";
 
@@ -25,7 +25,9 @@ const STATUS_ORDER: Record<TaskStatus, number> = { overdue: 0, pending: 1 };
 const SOFT_INNER_SHADOW = "inset 0 -2px 16px rgba(254,254,254,0.08)";
 
 interface YourTasksProps {
-    tasks?: TaskItem[];
+    tasks: TaskItem[];
+    /** Cards shown after sorting (the grid fits three per row). */
+    limit?: number;
     onSeeAll?: () => void;
     onViewTask?: (task: TaskItem) => void;
 }
@@ -128,7 +130,7 @@ function TaskCard({ task, onView }: { task: TaskItem; onView?: () => void }) {
     );
 }
 
-export default function YourTasks({ tasks = TASKS, onSeeAll, onViewTask }: YourTasksProps) {
+export default function YourTasks({ tasks, limit = 3, onSeeAll, onViewTask }: YourTasksProps) {
     const [sortKey, setSortKey] = useState<SortKey>("due");
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -137,8 +139,8 @@ export default function YourTasks({ tasks = TASKS, onSeeAll, onViewTask }: YourT
         if (sortKey === "due") list.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
         if (sortKey === "course") list.sort((a, b) => a.course.localeCompare(b.course));
         if (sortKey === "status") list.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
-        return list;
-    }, [tasks, sortKey]);
+        return list.slice(0, limit);
+    }, [tasks, sortKey, limit]);
 
     return (
         <Box component="section" sx={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%" }}>
@@ -224,6 +226,11 @@ export default function YourTasks({ tasks = TASKS, onSeeAll, onViewTask }: YourT
                     "&::-webkit-scrollbar": { display: "none" },
                 }}
             >
+                {sortedTasks.length === 0 && (
+                    <Typography sx={{ ...lato(14, 21, 400, "#8C8C8C"), gridColumn: "1 / -1", textAlign: "center", py: "24px" }}>
+                        You&apos;re all caught up — no pending tasks
+                    </Typography>
+                )}
                 {sortedTasks.map((task) => (
                     <TaskCard key={task.id} task={task} onView={onViewTask ? () => onViewTask(task) : undefined} />
                 ))}

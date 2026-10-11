@@ -1,4 +1,4 @@
-/** Design tokens + mock data for the student "My Profile" screens (Figma: LMS-3 › My Profile). */
+/** Design tokens + formatting helpers for the student "My Profile" screens (Figma: LMS-3 › My Profile). */
 
 export const profileAsset = (name: string) => `/profile/${name}`;
 
@@ -46,271 +46,95 @@ export const PC = {
         `linear-gradient(90deg, rgba(64,64,64,${alpha}) 0%, rgba(166,166,166,${alpha}) 100%)`,
 } as const;
 
-// ─── Personal details ──────────────────────────────────────────────────────
-export const PERSONAL = {
-    name: "Aanchal Ravi Gupta",
-    gender: "Female",
-    dateOfBirth: "06-11-2006",
-    phone: "+91 7888337278",
-    email: "aanchalg@gmail.com",
-    whatsapp: "+91 7454459098",
-    aadhaarMasked: "XXXX XXXX 4582",
-    passwordUpdated: "Last updated on 24 Jan 2026",
-    academic: {
-        institute: "Little Flower College of Science",
-        location: "SakiNaka, Mumbai",
-        highestEducation: "Class 12",
-        documentLabel: "12th Marksheet",
-        documentVerified: false,
-    },
-    parent: {
-        name: "Ravi Ashok Sharma",
-        phone: "+91 7888337278",
-        otpPhone: "+91-7637258223",
-        email: "sanjaysharma@gmail.com",
-        relationship: "Father",
-    },
-    residential: {
-        street: "Shree Heights, Andheri East",
-        apartment: "A Wing FlatNo. 1604",
-        city: "Mumbai",
-        state: "Maharashtra",
-        zip: "400069",
-    },
-} as const;
+// ─── Formatting ────────────────────────────────────────────────────────────
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-// ─── Fees ──────────────────────────────────────────────────────────────────
-export type ProgramStatus = "active" | "new";
-
-export interface Program {
-    id: string;
-    name: string;
-    shortName: string;
-    status: ProgramStatus;
-    duration: string;
-    courses?: string;
-    benefits: string;
-    enrollmentDate: string;
-    studentId: string;
-    rm: string;
-    counsellor: string;
+/** Fee dates are calendar days in India; render them in IST so they never shift by a day. */
+function istParts(value: string | Date | null | undefined) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const ist = new Date(date.getTime() + 330 * 60 * 1000);
+    return { day: ist.getUTCDate(), month: ist.getUTCMonth(), year: ist.getUTCFullYear() };
 }
 
-export interface TimelineItem {
-    id: string;
-    programId: string;
-    /** Label used when a single program is selected, e.g. "2nd Installment". */
-    label: string;
-    amount: string;
-    due?: string;
-    paid?: { title: string; method: string };
+export function ordinal(n: number) {
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+    return `${n}${({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th"}`;
 }
 
-export type DueTone = "warning" | "success" | "error";
-
-export interface DueLine {
-    label: string;
-    amount: string;
-    pill?: string;
+/** "12 May 2026" */
+export function formatDate(value: string | Date | null | undefined, fallback = "—") {
+    const p = istParts(value);
+    return p ? `${p.day} ${MONTHS_SHORT[p.month]} ${p.year}` : fallback;
 }
 
-export interface FeeSummary {
-    combinedLabel?: string;
-    total: string;
-    pending: string;
-    paid: string;
-    percent: number;
-    title?: string;
-    dueOn?: string;
-    status?: { label: string; tone: DueTone };
-    /** Itemised breakdown (overdue states); when omitted only "Total Payable" is shown. */
-    lines?: DueLine[];
-    lateFee?: string;
-    totalPayable: string;
-    payAllDues?: string;
-    note?: string;
+/** "10 February 2026" */
+export function formatLongDate(value: string | Date | null | undefined, fallback = "—") {
+    const p = istParts(value);
+    return p ? `${p.day} ${MONTHS_LONG[p.month]} ${p.year}` : fallback;
 }
 
-export interface FeeScenario {
-    layout: "multi" | "single";
-    programs: Program[];
-    summary: FeeSummary;
-    defaultTab: string;
+/** "12th May, 2026" */
+export function formatOrdinalDate(value: string | Date | null | undefined, fallback = "—") {
+    const p = istParts(value);
+    return p ? `${ordinal(p.day)} ${MONTHS_SHORT[p.month]}, ${p.year}` : fallback;
 }
 
-export const PROGRAMS: Record<string, Program> = {
-    cyber: {
-        id: "cyber",
-        name: "Cyber Security Professional Program",
-        shortName: "Cyber Security Professional",
-        status: "active",
-        duration: "12 Month",
-        courses: "6 Courses",
-        benefits: "3 Benefits",
-        enrollmentDate: "12 May 2026",
-        studentId: "CCN-2026-10",
-        rm: "Falguni Pathak",
-        counsellor: "Fatema Shaikh",
-    },
-    ethical: {
-        id: "ethical",
-        name: "Ethical Hacking",
-        shortName: "Ethical Hacking",
-        status: "new",
-        duration: "2 Month",
-        benefits: "3 Benefits",
-        enrollmentDate: "18 July 2026",
-        studentId: "CCN-2026-10",
-        rm: "Falguni Pathak",
-        counsellor: "Fatema Shaikh",
-    },
-};
-
-const INSTALLMENT_AMOUNT = "₹ 22,000";
-
-export const TIMELINE: TimelineItem[] = [
-    {
-        id: "cyber-1",
-        programId: "cyber",
-        label: "1st Installment",
-        amount: "₹ 10,000",
-        paid: { title: "Paid ₹10,000 on 12th May, 2026", method: "UPI · paytm@upi" },
-    },
-    { id: "cyber-2", programId: "cyber", label: "2nd Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 Feb 2026" },
-    { id: "ethical-3", programId: "ethical", label: "3rd Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 March 2026" },
-    { id: "cyber-3", programId: "cyber", label: "3rd Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 March 2026" },
-    { id: "cyber-4", programId: "cyber", label: "4th Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 April 2026" },
-    { id: "cyber-5", programId: "cyber", label: "5th Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 May 2026" },
-    { id: "cyber-6", programId: "cyber", label: "6th Installment", amount: INSTALLMENT_AMOUNT, due: "Due on 10 June 2026" },
-];
-
-export const TIMELINE_TABS = [
-    { id: "all", label: "All" },
-    { id: "cyber", label: "Cyber Security Professional" },
-    { id: "ethical", label: "Ethical Hacking" },
-] as const;
-
-export const ACADEMIC_DOCUMENTS = [
-    { name: "Enrollment Letter", meta: "1.2 MB · PDF" },
-    { name: "Admission Receipt", meta: "890 KB · PDF" },
-    { name: "Fee Agreement", meta: "2.1 MB · PDF" },
-    { name: "Invoice #INV-2026", meta: "540 KB · PDF" },
-    { name: "Student Contract", meta: "3.4 MB · PDF" },
-] as const;
-
-const BASE_AMOUNTS = { total: "₹ 1,20,000", pending: "₹ 1,10,000", paid: "₹ 10,000", percent: 8 } as const;
-const SINGLE_PROGRAM: Program = { ...PROGRAMS.cyber, studentId: "CCN-2026-1034" };
-
-/**
- * Preview states from the Figma file. Backend data is ignored for now, so the
- * page picks one with `?view=` (defaults to the multi-program "before due" screen).
- */
-export const FEE_SCENARIOS: Record<string, FeeScenario> = {
-    // LMS- Student Dashboard - My Profile - Fees Details - Before Due
-    multi: {
-        layout: "multi",
-        programs: [PROGRAMS.cyber, PROGRAMS.ethical],
-        defaultTab: "cyber",
-        summary: {
-            ...BASE_AMOUNTS,
-            combinedLabel: "All program/Courses combined",
-            title: "Cyber Security - 2nd Installment",
-            dueOn: "Due on 10 February 2026",
-            status: { label: "Due in 5 days", tone: "warning" },
-            totalPayable: INSTALLMENT_AMOUNT,
-            payAllDues: "₹ 42,000",
-            note: "Pay on time to avoid ₹250/day late charges.",
-        },
-    },
-    // LMS- Student Dashboard - My Profile - Fees Details - Due Today
-    "due-today": {
-        layout: "single",
-        programs: [SINGLE_PROGRAM],
-        defaultTab: "all",
-        summary: {
-            ...BASE_AMOUNTS,
-            title: "2nd Installment",
-            dueOn: "Due on 10 February 2026",
-            status: { label: "Due Today", tone: "success" },
-            totalPayable: INSTALLMENT_AMOUNT,
-            payAllDues: "₹ 42,000",
-            note: "Pay on time to avoid ₹250/day late charges.",
-        },
-    },
-    // LMS- Student Dashboard - My Profile - Fees Details - After Due (Overdue View)
-    overdue: {
-        layout: "single",
-        programs: [SINGLE_PROGRAM],
-        defaultTab: "cyber",
-        summary: {
-            ...BASE_AMOUNTS,
-            title: "2nd Installment",
-            dueOn: "Due on 10 February 2026",
-            status: { label: "Overdue by 3 days", tone: "error" },
-            lines: [{ label: "Installment Amount", amount: INSTALLMENT_AMOUNT }],
-            lateFee: "₹ 750",
-            totalPayable: "₹ 22,750",
-            payAllDues: "₹ 42,000",
-        },
-    },
-    // Combined dues across programs (multiple installments overdue)
-    "multi-overdue": {
-        layout: "multi",
-        programs: [PROGRAMS.cyber, PROGRAMS.ethical],
-        defaultTab: "cyber",
-        summary: {
-            ...BASE_AMOUNTS,
-            lines: [
-                { label: "Cyber Security Professional - 2nd Installment", amount: INSTALLMENT_AMOUNT, pill: "Overdue by 3 days" },
-                { label: "Ethical Hacking - 3rd Installment", amount: "₹ 12,000" },
-            ],
-            lateFee: "₹ 750",
-            totalPayable: "₹ 22,750",
-        },
-    },
-};
-
-// ─── Certifications & achievements ─────────────────────────────────────────
-// Image boxes are expressed relative to the 448×265 Figma card so they scale with the card width.
-export const ACHIEVEMENT_STATS = [
-    { value: "Cyber Explorer", label: "Your Current Title", image: "stat-title-bg.png", imageBox: { left: "-0.45%", top: "-7.92%", width: "107.37%", height: "107.55%" } },
-    { value: "8/12", label: "Total Badges Earned", image: "stat-badges-bg.png", imageBox: { left: "-0.37%", top: "-7.92%", width: "100.75%", height: "114.72%" } },
-    { value: "4,580 XP", label: "Total Points Earned", image: "stat-xp-bg.png", imageBox: { left: "-0.45%", top: "-7.92%", width: "115.85%", height: "107.55%" }, dim: true },
-] as const;
-
-export type BadgeState = "earned" | "current" | "locked";
-
-export interface Badge {
-    id: string;
-    title: string;
-    subtitle: string;
-    state: BadgeState;
-    /** Progress bar fill width in px (track is 110px wide). */
-    progress: number;
+/** "May 12, 2026" */
+export function formatUsDate(value: string | Date | null | undefined, fallback = "—") {
+    const p = istParts(value);
+    return p ? `${MONTHS_SHORT[p.month]} ${p.day}, ${p.year}` : fallback;
 }
 
-export const BADGES: Badge[] = [
-    { id: "b1", title: "Lab Master", subtitle: "Complete 10 labs", state: "earned", progress: 90 },
-    { id: "b2", title: "Lab Master", subtitle: "2/10 labs completed", state: "current", progress: 20 },
-    ...Array.from({ length: 7 }, (_, i): Badge => ({
-        id: `b${i + 3}`,
-        title: "Lab Master",
-        subtitle: "Complete 10 labs",
-        state: "locked",
-        progress: 1,
-    })),
-];
+/** Date of birth is a calendar date stored at UTC midnight: "06-11-2006" (DD-MM-YYYY). */
+export function formatDob(value: string | null | undefined, fallback = "—") {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    const dd = String(date.getUTCDate()).padStart(2, "0");
+    const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+    return `${dd}-${mm}-${date.getUTCFullYear()}`;
+}
 
-export const XP_HISTORY = Array.from({ length: 5 }, (_, i) => ({
-    id: `xp-${i}`,
-    title: "Introduction to SOC",
-    date: "22nd Aug, 2026",
-    xp: "+150 XP",
-}));
+/** "₹ 22,000" (Indian digit grouping, paise only when present). */
+export function formatINR(value: number | null | undefined, { space = true }: { space?: boolean } = {}) {
+    const amount = Number(value ?? 0);
+    const text = amount.toLocaleString("en-IN", { minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 });
+    return `₹${space ? " " : ""}${text}`;
+}
 
-export const CERTIFICATIONS = [
-    { id: "c1", name: "CCNA", detail: "Issued on May 12, 2026", unlocked: true },
-    { id: "c2", name: "Ethical Hacking", detail: "Complete MCQ, Lab and Viva to unlock certificate", unlocked: false },
-    { id: "c3", name: "Soft Skill", detail: "Complete MCQ and Viva to unlock certificate", unlocked: false },
-    { id: "c4", name: "Ethical Hacking", detail: "Complete MCQ, Lab and Viva to unlock certificate", unlocked: false },
-] as const;
+/** "+91 7888337278" */
+export function formatPhone(callingCode: string | null | undefined, phone: string | null | undefined, fallback = "—") {
+    if (!phone) return fallback;
+    const code = (callingCode ?? "").replace(/\D/g, "");
+    return code ? `+${code} ${phone}` : phone;
+}
+
+/** "1.2 MB" */
+export function formatBytes(bytes: number | null | undefined) {
+    if (!bytes || bytes <= 0) return null;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatNumber(value: number) {
+    return value.toLocaleString("en-IN");
+}
+
+/** "3 days" / "1 day" */
+export function pluralDays(n: number) {
+    return `${n} ${n === 1 ? "day" : "days"}`;
+}
+
+export function initialsOf(name: string | null | undefined) {
+    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+/** Fallback text for empty profile fields. */
+export const EMPTY = "—";

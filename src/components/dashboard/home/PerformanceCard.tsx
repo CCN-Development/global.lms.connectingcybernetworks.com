@@ -5,11 +5,11 @@ import { Box, Typography } from "@mui/material";
 import Image from "next/image";
 import { FONT_LATO } from "@/components/aish/tokens";
 import { asset, Decor, GlassCard, lato, Line, poppins } from "./shared";
-import { OVERALL_PERFORMANCE, PERFORMANCE_METRICS, type PerformanceMetric } from "./data";
+import { type PerformanceMetric } from "./data";
 
 interface PerformanceCardProps {
-    overall?: number;
-    metrics?: PerformanceMetric[];
+    overall: number;
+    metrics: PerformanceMetric[];
 }
 
 /** Three concentric rings (outer → inner), each a track + gradient arc + end indicator. */
@@ -66,10 +66,7 @@ function PerformanceRings({ value }: { value: number }) {
     );
 }
 
-export default function PerformanceCard({
-    overall = OVERALL_PERFORMANCE,
-    metrics = PERFORMANCE_METRICS,
-}: PerformanceCardProps) {
+export default function PerformanceCard({ overall, metrics }: PerformanceCardProps) {
     return (
         <GlassCard angle={168}>
             <Typography component="h2" sx={poppins(20, 30)}>

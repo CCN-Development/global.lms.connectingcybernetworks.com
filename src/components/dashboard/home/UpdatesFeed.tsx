@@ -4,19 +4,24 @@ import React, { useMemo, useState } from "react";
 import { Box, ButtonBase, Typography } from "@mui/material";
 import Image from "next/image";
 import { asset, EdgeGlows, GlassCard, lato, rowSurface, RowGlows } from "./shared";
-import { UPDATES, type UpdateCategory, type UpdateItem } from "./data";
+import { type UpdateCategory, type UpdateItem } from "./data";
 
 type TabKey = "all" | "alert" | "announcement";
 
 const TAG: Partial<Record<UpdateCategory, { label: string; icon: string }>> = {
-    announcement: { label: "Latest News", icon: "icon-menu.svg" },
+    announcement: { label: "Announcement", icon: "icon-menu.svg" },
+    news: { label: "Latest News", icon: "icon-menu.svg" },
     blog: { label: "Blog", icon: "icon-file-text.svg" },
 };
+
+/** The "Announcements" tab also lists institute news. */
+const inTab = (update: UpdateItem, tab: TabKey) =>
+    tab === "all" || update.category === tab || (tab === "announcement" && update.category === "news");
 
 const ACTIVE_TAB_STROKE = "linear-gradient(180deg, #E3E9F8 0%, rgba(227,233,248,0.24) 100%)";
 
 interface UpdatesFeedProps {
-    updates?: UpdateItem[];
+    updates: UpdateItem[];
     onOpen?: (update: UpdateItem) => void;
 }
 
@@ -70,22 +75,22 @@ function UpdateRow({ update, onOpen }: { update: UpdateItem; onOpen?: () => void
     );
 }
 
-export default function UpdatesFeed({ updates = UPDATES, onOpen }: UpdatesFeedProps) {
+export default function UpdatesFeed({ updates, onOpen }: UpdatesFeedProps) {
     const [tab, setTab] = useState<TabKey>("all");
 
     const tabs = useMemo(
         () => [
             { key: "all" as const, label: "All" },
-            { key: "alert" as const, label: `Alerts (${updates.filter((u) => u.category === "alert").length})` },
+            { key: "alert" as const, label: `Alerts (${updates.filter((u) => inTab(u, "alert")).length})` },
             {
                 key: "announcement" as const,
-                label: `Announcements (${updates.filter((u) => u.category === "announcement").length})`,
+                label: `Announcements (${updates.filter((u) => inTab(u, "announcement")).length})`,
             },
         ],
         [updates],
     );
 
-    const visible = tab === "all" ? updates : updates.filter((u) => u.category === tab);
+    const visible = updates.filter((u) => inTab(u, tab));
 
     return (
         <GlassCard
