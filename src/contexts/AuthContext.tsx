@@ -11,7 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import axiosHandler from "../lib/enhanced-axios";
 
-type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant";
+type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant" | "Placement";
 
 export interface TokenPayload {
     user_id: string;

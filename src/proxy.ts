@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant";
+type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant" | "Placement";
 
 interface TokenPayload {
     user_id: string;
@@ -18,6 +18,7 @@ const ROLE_PATH_MAP: Record<UserRole, string> = {
     Trainer: "/dashboard/trainer",
     Student: "/dashboard/student",
     Accountant: "/dashboard/accountants",
+    Placement: "/dashboard/placement",
 };
 
 /** Next.js flight/RSC data request: `RSC: 1` header, or the `_rsc` cache-busting query param. */

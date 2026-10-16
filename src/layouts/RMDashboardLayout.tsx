@@ -9,11 +9,12 @@ import {
     MdOutlineChat,
     MdOutlineInventory2,
     MdOutlineMenuBook,
+    MdOutlineForum,
 } from 'react-icons/md'
 
 type Props = {
     children?: React.ReactNode,
-    title?: string,
+    title?: React.ReactNode,
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -25,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'News and Updates', link: '/dashboard/rm/updates', icon: <MdOutlineChat /> },
     { label: 'Packages', link: '/dashboard/rm/packages', icon: <MdOutlineInventory2 /> },
     { label: 'Courses', link: '/dashboard/rm/courses', icon: <MdOutlineMenuBook /> },
+    { label: 'CCN Forum', link: '/dashboard/rm/ccn-forum', icon: <MdOutlineForum /> },
     { label: 'Chats', link: '/dashboard/chats', icon: <MdOutlineChat /> },
 ]
 

@@ -2,16 +2,38 @@
 
 import React from "react";
 import { Box, ButtonBase, Typography } from "@mui/material";
-import { CC, CURRENT_USER_ID, htmlToText, Post, timeAgo } from "./community-data";
-import { AuthorRow, CategoryLabel, ellipsis, GlassCard, Icon, TagChip, TEXT } from "./community-ui";
+import toast from "react-hot-toast";
+import { POST_TYPE_LABELS, type CommunityPost } from "@/contexts/CommunityContext";
+import { CC, POST_STATUS_LABELS, timeAgo } from "./community-data";
+import { AuthorRow, CategoryLabel, ellipsis, GlassCard, Icon, StatusChip, TagChip, TEXT } from "./community-ui";
 import { useCommunity } from "./CommunityContext";
-import { Engagement, PollOptions } from "./PostParts";
+import { Engagement, PollOptions, usePollVoting } from "./PostParts";
 
-export default function PostCard({ post, onOpen }: { post: Post; onOpen: () => void }) {
-    const { resolveAuthor, togglePostLike, votePoll } = useCommunity();
-    const author = resolveAuthor(post.author);
-    const isPinned = Boolean(post.pinnedBy);
-    const excerpt = htmlToText(post.html);
+/** Accent colours for the post-type / state chips (solid, per the design preferences). */
+export const POST_TYPE_COLORS = { question: "#93A9E2", poll: "#FFAD4F", quiz: "#D1293D", announcement: "#8C24FF", answered: CC.success } as const;
+
+export function PostBadges({ post }: { post: CommunityPost }) {
+    const statusLabel = POST_STATUS_LABELS[post.status];
+    return (
+        <>
+            {post.postType !== "discussion" && <StatusChip label={POST_TYPE_LABELS[post.postType]} color={POST_TYPE_COLORS[post.postType]} />}
+            {post.isAnswered && <StatusChip label="Answered" color={POST_TYPE_COLORS.answered} />}
+            {post.isLocked && <StatusChip label="Locked" color={CC.n300} />}
+            {statusLabel && <StatusChip label={statusLabel} color={post.status === "pending_review" ? "#FFAD4F" : CC.error} />}
+        </>
+    );
+}
+
+/** `footer` — extra row under the card (moderation queue actions). */
+export default function PostCard({ post, onOpen, footer }: { post: CommunityPost; onOpen: () => void; footer?: React.ReactNode }) {
+    const { api } = useCommunity();
+    const { busyPollId, vote } = usePollVoting();
+    const isPinned = post.isPinned;
+
+    const like = async () => {
+        const res = await api.togglePostLike(post);
+        if (!res.success) toast.error(res.message ?? "Couldn't update your like");
+    };
 
     return (
         <GlassCard interactive onClick={onOpen} component="article" sx={{ display: "flex", flexDirection: "column", gap: "16px", flexShrink: 0 }}>
@@ -20,30 +42,36 @@ export default function PostCard({ post, onOpen }: { post: Post; onOpen: () => v
                 {isPinned ? (
                     <Box sx={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
                         <Icon name="icon-pinned-purple.svg" size={24} />
-                        <Typography sx={{ ...TEXT.med16, color: CC.purple, ...ellipsis }}>Pinned by {post.pinnedBy}</Typography>
+                        <Typography sx={{ ...TEXT.med16, color: CC.purple, ...ellipsis }}>Pinned by {post.pinnedBy ?? "Moderator"}</Typography>
                     </Box>
                 ) : (
                     <Box sx={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" }}>
-                        <CategoryLabel categoryId={post.categoryId} />
+                        <CategoryLabel category={post.category} />
                         {post.tags.map((tag) => (
                             <TagChip key={tag} label={tag} />
                         ))}
+                        <PostBadges post={post} />
                     </Box>
                 )}
-                <Typography sx={{ ...TEXT.med14, color: CC.n300, whiteSpace: "nowrap" }} suppressHydrationWarning>
-                    {timeAgo(post.createdAt)}
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                    {post.hasNewActivity && !post.isMine && (
+                        <Box aria-label="New activity" sx={{ width: 8, height: 8, borderRadius: "99px", bgcolor: CC.modalStroke, flexShrink: 0 }} />
+                    )}
+                    <Typography sx={{ ...TEXT.med14, color: CC.n300, whiteSpace: "nowrap" }} suppressHydrationWarning>
+                        {timeAgo(post.createdAt)}
+                    </Typography>
+                </Box>
             </Box>
 
             {/* Body */}
             <Box sx={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <AuthorRow author={author} you={post.author.id === CURRENT_USER_ID} />
+                <AuthorRow author={post.author} you={post.isMine} />
                 <Box sx={{ display: "flex", flexDirection: "column", gap: "24px", pl: { xs: 0, sm: "42px" } }}>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: "8px", minWidth: 0 }}>
                         <Typography component="h3" sx={{ ...TEXT.semi18, color: CC.white, ...ellipsis }}>
                             {post.title}
                         </Typography>
-                        {excerpt && (
+                        {post.excerpt && (
                             <Typography
                                 sx={{
                                     ...TEXT.med14,
@@ -54,24 +82,27 @@ export default function PostCard({ post, onOpen }: { post: Post; onOpen: () => v
                                     overflow: "hidden",
                                 }}
                             >
-                                {excerpt}
+                                {post.excerpt}
+                            </Typography>
+                        )}
+                        {post.postType === "quiz" && (
+                            <Typography sx={{ ...TEXT.med14, color: CC.n300 }}>
+                                {post.polls.length} question{post.polls.length === 1 ? "" : "s"} · open the thread to answer
                             </Typography>
                         )}
                     </Box>
 
                     {post.poll && (
-                        <PollOptions post={post} showResults={Boolean(post.poll.votedOptionId)} onVote={(id) => votePoll(post.id, id)} />
+                        <PollOptions
+                            poll={post.poll}
+                            disabled={post.isLocked || post.status !== "published" || busyPollId === post.poll.id}
+                            onVote={(ids) => vote(post.poll!.id, ids)}
+                        />
                     )}
 
                     {!isPinned && (
                         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap" }}>
-                            <Engagement
-                                likes={post.likes}
-                                liked={post.liked}
-                                onLike={() => togglePostLike(post.id)}
-                                comments={post.replies.length}
-                                views={post.views}
-                            />
+                            <Engagement likes={post.likes} liked={post.liked} onLike={like} comments={post.replyCount} views={post.views} />
                             <ButtonBase
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -101,6 +132,15 @@ export default function PostCard({ post, onOpen }: { post: Post; onOpen: () => v
                     )}
                 </Box>
             </Box>
+
+            {footer && (
+                <Box
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", pt: "16px", borderTop: "1px solid rgba(255,255,255,0.08)", cursor: "default" }}
+                >
+                    {footer}
+                </Box>
+            )}
         </GlassCard>
     );
 }

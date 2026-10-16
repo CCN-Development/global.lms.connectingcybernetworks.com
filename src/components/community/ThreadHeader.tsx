@@ -3,20 +3,29 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, ButtonBase, Typography } from "@mui/material";
-import { CC, ONLINE_COUNT } from "./community-data";
+import { CC } from "./community-data";
 import { Icon, TEXT } from "./community-ui";
 import { useCommunity } from "./CommunityContext";
+import NotificationsButton from "./NotificationsButton";
 
-/** Header used on a discussion thread: back to feed, online count and discussion search. */
-export default function ThreadHeader() {
+/**
+ * Header with online count, notifications and discussion search. On a thread it shows "Back to Feed";
+ * pass `title` for the staff forum home ("CCN Forum") instead.
+ */
+export default function ThreadHeader({ title }: { title?: string }) {
     const router = useRouter();
-    const { search, setSearch } = useCommunity();
+    const { search, setSearch, api, paths } = useCommunity();
     const [query, setQuery] = useState(search);
 
-    const goToFeed = () => router.push("/dashboard/student/community");
+    const goToFeed = () => router.push(paths.feed);
 
     return (
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", width: "100%" }}>
+            {title ? (
+                <Typography component="h1" noWrap sx={{ ...TEXT.poppinsMed20, fontSize: { xs: "16px", sm: "20px" }, color: CC.white, minWidth: 0 }}>
+                    {title}
+                </Typography>
+            ) : (
             <Box sx={{ display: "flex", alignItems: "center", gap: { xs: "12px", sm: "16px" }, minWidth: 0 }}>
                 <ButtonBase
                     aria-label="Back to feed"
@@ -39,6 +48,7 @@ export default function ThreadHeader() {
                     Back to Feed
                 </Typography>
             </Box>
+            )}
 
             <Box sx={{ display: "flex", alignItems: "center", gap: "24px", minWidth: 0 }}>
                 <Box
@@ -54,8 +64,10 @@ export default function ThreadHeader() {
                     }}
                 >
                     <Icon name="online-dot.svg" size={6} />
-                    <Typography sx={{ ...TEXT.med16, color: CC.white, whiteSpace: "nowrap" }}>{ONLINE_COUNT} online</Typography>
+                    <Typography sx={{ ...TEXT.med16, color: CC.white, whiteSpace: "nowrap" }}>{api.onlineCount} online</Typography>
                 </Box>
+
+                <NotificationsButton />
 
                 <Box
                     component="form"

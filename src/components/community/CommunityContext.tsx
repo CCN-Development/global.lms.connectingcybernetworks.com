@@ -1,106 +1,168 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useStudent } from "@/contexts/StudentContext";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Attachment,
-    Author,
-    CategoryId,
-    CURRENT_USER_ID,
-    FeedFilter,
-    makeCurrentUser,
-    Post,
-    Reply,
-    seedPosts,
-    SortKey,
-    uid,
-} from "./community-data";
+    CommunityApiContextValue,
+    CommunityCapability,
+    CommunityCategory,
+    CommunityPostDetail,
+    CommunityTag,
+    feedParamsFromSelection,
+    useCommunityApi,
+} from "@/contexts/CommunityContext";
+import { buildFeedMenu, CommunityVariant, FeedFilter, FeedMenuItem, ManageView, SortKey } from "./community-data";
 
-export interface NewPostInput {
-    title: string;
-    categoryId: CategoryId;
-    tags: string[];
-    html: string;
-    attachments: Attachment[];
+const PAGE_SIZE = 20;
+
+export interface CommunityPaths {
+    feed: string;
+    thread: (postId: string, replyId?: string) => string;
+    view: (view: ManageView) => string;
 }
 
-export interface ReplyInput {
-    html: string;
-    attachments: Attachment[];
-}
-
+/**
+ * Screen state for the community pages (filters, sort, search, modals) on top of the API context.
+ * Data and actions live in `api` (CommunityApiProvider) so every component shares the same state.
+ * The same components serve students (/dashboard/student/community) and every staff role
+ * (/dashboard/<role>/ccn-forum); `variant` turns on the management UI, `basePath` drives links.
+ */
 interface CommunityContextValue {
-    posts: Post[];
-    currentUser: Author;
-    /** Resolves the seeded "me" author to the signed-in student. */
-    resolveAuthor: (author: Author) => Author;
+    api: CommunityApiContextValue;
+    ready: boolean;
+    bootError: string | null;
+    retryBootstrap: () => void;
+
+    variant: CommunityVariant;
+    /** Staff variant and the signed-in member is staff. */
+    isStaffView: boolean;
+    paths: CommunityPaths;
+    /** Global (role) capability of the signed-in member. */
+    can: (capability: CommunityCapability) => boolean;
+    /** Re-fetch the moderation queue counts (sidebar badges). */
+    refreshQueue: () => void;
+
+    menu: FeedMenuItem[];
+    /** Categories / tags the viewer may post with (staff-only ones hidden for students). */
+    postableCategories: CommunityCategory[];
+    postableTags: CommunityTag[];
+    tagLabel: (slug: string) => string;
+
     filter: FeedFilter;
     setFilter: (filter: FeedFilter) => void;
+    /** Tag slugs. */
     tagFilter: string[];
     setTagFilter: (tags: string[]) => void;
     sortKey: SortKey;
     setSortKey: (key: SortKey) => void;
     search: string;
     setSearch: (q: string) => void;
+    loadMore: () => void;
+    refreshFeed: () => void;
+    /** First page of a new filter / sort / search is loading. */
+    refreshing: boolean;
+
     newDiscussionOpen: boolean;
+    editingPost: CommunityPostDetail | null;
     openNewDiscussion: () => void;
+    openEditDiscussion: (post: CommunityPostDetail) => void;
     closeNewDiscussion: () => void;
-    getPost: (id: string) => Post | undefined;
-    createPost: (input: NewPostInput) => Post;
-    togglePostLike: (postId: string) => void;
-    togglePostSave: (postId: string) => void;
-    votePoll: (postId: string, optionId: string) => void;
-    registerView: (postId: string) => void;
-    addReply: (postId: string, input: ReplyInput) => void;
-    updateReply: (postId: string, replyId: string, input: ReplyInput) => void;
-    deleteReply: (postId: string, replyId: string) => void;
-    toggleReplyLike: (postId: string, replyId: string) => void;
 }
 
 const CommunityContext = createContext<CommunityContextValue | null>(null);
 
-const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+export interface CommunityProviderProps {
+    children: React.ReactNode;
+    /** Route of the feed, e.g. /dashboard/admin/ccn-forum. Threads live at `${basePath}/<postId>`. */
+    basePath: string;
+    variant?: CommunityVariant;
+}
 
-export function CommunityProvider({ children }: { children: React.ReactNode }) {
-    const { profile, getProfile } = useStudent();
-    useEffect(() => {
-        if (!profile) void getProfile();
-    }, [profile, getProfile]);
-    const [posts, setPosts] = useState<Post[]>(() => seedPosts());
+export function CommunityProvider({ children, basePath, variant = "student" }: CommunityProviderProps) {
+    const api = useCommunityApi();
+    const { getBootstrap, getFeed, getQueueSummary, initialized, me, categories, tags, feedMeta, loadingFeed } = api;
+
+    const [bootError, setBootError] = useState<string | null>(null);
     const [filter, setFilter] = useState<FeedFilter>("all");
     const [tagFilter, setTagFilter] = useState<string[]>([]);
     const [sortKey, setSortKey] = useState<SortKey>("latest");
     const [search, setSearch] = useState("");
     const [newDiscussionOpen, setNewDiscussionOpen] = useState(false);
+    const [editingPost, setEditingPost] = useState<CommunityPostDetail | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const refreshId = useRef(0);
 
-    const studentName = profile?.studentName;
-    const studentPhoto = profile?.studentPhoto;
-    const currentUser = useMemo(
-        () => makeCurrentUser(studentName ? titleCase(studentName) : "Rohit Kulkarni", studentPhoto),
-        [studentName, studentPhoto],
+    const bootstrap = useCallback(async () => {
+        setBootError(null);
+        const res = await getBootstrap();
+        if (!res.success) setBootError(res.message ?? "Couldn't load the community");
+    }, [getBootstrap]);
+
+    useEffect(() => {
+        void bootstrap();
+    }, [bootstrap]);
+
+    const feedParams = useCallback(
+        (page: number) => ({ ...feedParamsFromSelection(filter), tags: tagFilter, sort: sortKey, search: search.trim() || undefined, page, limit: PAGE_SIZE }),
+        [filter, tagFilter, sortKey, search],
     );
 
-    const resolveAuthor = useCallback(
-        (author: Author) => (author.id === CURRENT_USER_ID ? { ...currentUser, avatar: currentUser.avatar ?? author.avatar } : author),
-        [currentUser],
+    const refreshFeed = useCallback(async () => {
+        const id = ++refreshId.current;
+        setRefreshing(true);
+        await getFeed(feedParams(1));
+        if (id === refreshId.current) setRefreshing(false);
+    }, [getFeed, feedParams]);
+
+    useEffect(() => {
+        if (initialized) void refreshFeed();
+    }, [initialized, refreshFeed]);
+
+    const loadMore = useCallback(() => {
+        if (!feedMeta?.hasMore || loadingFeed) return;
+        void getFeed(feedParams(feedMeta.page + 1), { append: true });
+    }, [feedMeta, loadingFeed, getFeed, feedParams]);
+
+    const isStaff = Boolean(me?.isStaff);
+    const isStaffView = variant === "staff" && isStaff;
+    const capabilities = me?.capabilities;
+    const can = useCallback((capability: CommunityCapability) => Boolean(capabilities?.includes(capability)), [capabilities]);
+
+    const refreshQueue = useCallback(() => {
+        if (isStaffView) void getQueueSummary();
+    }, [isStaffView, getQueueSummary]);
+    useEffect(() => {
+        refreshQueue();
+    }, [refreshQueue]);
+
+    const paths = useMemo<CommunityPaths>(
+        () => ({
+            feed: basePath,
+            thread: (postId, replyId) => `${basePath}/${postId}${replyId ? `?reply=${replyId}` : ""}`,
+            view: (view) => `${basePath}?view=${view}`,
+        }),
+        [basePath],
     );
 
-    const updatePost = useCallback((postId: string, fn: (post: Post) => Post) => {
-        setPosts((prev) => prev.map((p) => (p.id === postId ? fn(p) : p)));
-    }, []);
+    const menu = useMemo(() => buildFeedMenu(categories), [categories]);
+    const postableCategories = useMemo(() => categories.filter((c) => c.isActive && (isStaff || !c.staffOnly)), [categories, isStaff]);
+    const postableTags = useMemo(() => tags.filter((t) => t.isActive && (isStaff || !t.isStaffOnly)), [tags, isStaff]);
+    const tagLabel = useCallback((slug: string) => tags.find((t) => t.slug === slug)?.label ?? slug, [tags]);
 
-    const updateReplies = useCallback(
-        (postId: string, fn: (replies: Reply[]) => Reply[]) => updatePost(postId, (p) => ({ ...p, replies: fn(p.replies) })),
-        [updatePost],
-    );
-
-    const value = useMemo<CommunityContextValue>(() => {
-        const getPost = (id: string) => posts.find((p) => p.id === id);
-
-        return {
-            posts,
-            currentUser,
-            resolveAuthor,
+    const value = useMemo<CommunityContextValue>(
+        () => ({
+            api,
+            ready: initialized,
+            bootError,
+            retryBootstrap: () => void bootstrap(),
+            variant,
+            isStaffView,
+            paths,
+            can,
+            refreshQueue,
+            menu,
+            postableCategories,
+            postableTags,
+            tagLabel,
             filter,
             setFilter,
             tagFilter,
@@ -109,72 +171,26 @@ export function CommunityProvider({ children }: { children: React.ReactNode }) {
             setSortKey,
             search,
             setSearch,
+            loadMore,
+            refreshFeed: () => void refreshFeed(),
+            refreshing,
             newDiscussionOpen,
-            openNewDiscussion: () => setNewDiscussionOpen(true),
-            closeNewDiscussion: () => setNewDiscussionOpen(false),
-            getPost,
-            createPost: (input) => {
-                const post: Post = {
-                    id: uid("post"),
-                    categoryId: input.categoryId,
-                    tags: input.tags,
-                    author: { ...currentUser, id: CURRENT_USER_ID },
-                    createdAt: Date.now(),
-                    title: input.title,
-                    html: input.html,
-                    attachments: input.attachments,
-                    likes: 0,
-                    liked: false,
-                    views: 0,
-                    saved: false,
-                    replies: [],
-                };
-                setPosts((prev) => [post, ...prev]);
-                return post;
+            editingPost,
+            openNewDiscussion: () => {
+                setEditingPost(null);
+                setNewDiscussionOpen(true);
             },
-            togglePostLike: (postId) =>
-                updatePost(postId, (p) => ({ ...p, liked: !p.liked, likes: p.likes + (p.liked ? -1 : 1) })),
-            togglePostSave: (postId) => updatePost(postId, (p) => ({ ...p, saved: !p.saved })),
-            votePoll: (postId, optionId) =>
-                updatePost(postId, (p) => {
-                    if (!p.poll || p.poll.votedOptionId === optionId) return p;
-                    const previous = p.poll.votedOptionId;
-                    return {
-                        ...p,
-                        poll: {
-                            votedOptionId: optionId,
-                            options: p.poll.options.map((o) => ({
-                                ...o,
-                                votes: o.votes + (o.id === optionId ? 1 : 0) - (o.id === previous ? 1 : 0),
-                            })),
-                        },
-                    };
-                }),
-            registerView: (postId) => updatePost(postId, (p) => ({ ...p, views: p.views + 1 })),
-            addReply: (postId, input) =>
-                updateReplies(postId, (replies) => [
-                    ...replies,
-                    {
-                        id: uid("reply"),
-                        author: { ...currentUser, id: CURRENT_USER_ID },
-                        createdAt: Date.now(),
-                        html: input.html,
-                        attachments: input.attachments,
-                        likes: 0,
-                        liked: false,
-                    },
-                ]),
-            updateReply: (postId, replyId, input) =>
-                updateReplies(postId, (replies) =>
-                    replies.map((r) => (r.id === replyId ? { ...r, html: input.html, attachments: input.attachments } : r)),
-                ),
-            deleteReply: (postId, replyId) => updateReplies(postId, (replies) => replies.filter((r) => r.id !== replyId)),
-            toggleReplyLike: (postId, replyId) =>
-                updateReplies(postId, (replies) =>
-                    replies.map((r) => (r.id === replyId ? { ...r, liked: !r.liked, likes: r.likes + (r.liked ? -1 : 1) } : r)),
-                ),
-        };
-    }, [posts, currentUser, resolveAuthor, filter, tagFilter, sortKey, search, newDiscussionOpen, updatePost, updateReplies]);
+            openEditDiscussion: (post) => {
+                setEditingPost(post);
+                setNewDiscussionOpen(true);
+            },
+            closeNewDiscussion: () => {
+                setNewDiscussionOpen(false);
+                setEditingPost(null);
+            },
+        }),
+        [api, initialized, bootError, bootstrap, variant, isStaffView, paths, can, refreshQueue, menu, postableCategories, postableTags, tagLabel, filter, tagFilter, sortKey, search, loadMore, refreshFeed, refreshing, newDiscussionOpen, editingPost],
+    );
 
     return <CommunityContext.Provider value={value}>{children}</CommunityContext.Provider>;
 }

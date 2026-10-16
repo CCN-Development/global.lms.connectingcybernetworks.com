@@ -7,10 +7,26 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { Box, ButtonBase, Paper, Popover, Popper, Tooltip, Typography } from "@mui/material";
 import toast from "react-hot-toast";
 import { isRichTextEmpty } from "@/components/editor/RichTextEditor";
-import { Attachment, Author, CC, MENTIONABLE, uid } from "./community-data";
+import type { CommunityAttachment, CommunityAuthor } from "@/contexts/CommunityContext";
+import { CC, formatBytes, uid } from "./community-data";
 import { darkScroll, dropdownPaperSx, Icon, LmsButton, TEXT, UserAvatar } from "./community-ui";
+import { useCommunity } from "./CommunityContext";
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** An attachment in the editor: uploading (temporary id) or uploaded (server attachment id). */
+export interface EditorAttachment {
+    id: string;
+    name: string;
+    /** 0–100; 100 = uploaded. */
+    progress: number;
+    url?: string;
+    /** Uploaded during this editing session — removing it also deletes the unused upload. */
+    fresh?: boolean;
+}
+
+export const toEditorAttachment = (a: CommunityAttachment): EditorAttachment => ({ id: a.id, name: a.name, progress: 100, url: a.url });
+
+const ACCEPT =
+    "image/*,video/mp4,video/webm,audio/*,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.md,.zip,.7z,.rar,.tar,.gz,.pcap,.pcapng,.json,.xml";
 
 type ToolId = "bold" | "italic" | "underline" | "orderedList" | "bulletList" | "image" | "link";
 
@@ -20,15 +36,24 @@ const TOOLS: { id: ToolId; title: string; icon: string }[] = [
     { id: "underline", title: "Underline", icon: "tb-underline.svg" },
     { id: "orderedList", title: "Numbered list", icon: "tb-ordered-list.svg" },
     { id: "bulletList", title: "Bullet list", icon: "tb-bullet-list.svg" },
-    { id: "image", title: "Attach image", icon: "tb-image.svg" },
+    { id: "image", title: "Attach image or file", icon: "tb-image.svg" },
     { id: "link", title: "Link", icon: "tb-link.svg" },
 ];
 
-/** Mentions are stored as `<span class="mention">@name</span>`. */
+/** Mentions are stored as `<span class="mention" data-member-id="…">@name</span>` — the API notifies that member. */
 const MentionMark = Mark.create({
     name: "mention",
     inclusive: false,
     excludes: "_",
+    addAttributes() {
+        return {
+            memberId: {
+                default: null,
+                parseHTML: (element: HTMLElement) => element.getAttribute("data-member-id"),
+                renderHTML: (attributes: { memberId?: string | null }) => (attributes.memberId ? { "data-member-id": attributes.memberId } : {}),
+            },
+        };
+    },
     parseHTML() {
         return [{ tag: "span.mention" }];
     },
@@ -66,8 +91,10 @@ interface CommunityEditorProps {
     value: string;
     onChange: (html: string) => void;
     placeholder: string;
-    attachments: Attachment[];
-    setAttachments: React.Dispatch<React.SetStateAction<Attachment[]>>;
+    attachments: EditorAttachment[];
+    setAttachments: React.Dispatch<React.SetStateAction<EditorAttachment[]>>;
+    /** Space the content is posted in — @mention suggestions only list people who can read it. */
+    spaceId?: string;
     height?: number;
     autoFocus?: boolean;
 }
@@ -78,41 +105,55 @@ export default function CommunityEditor({
     placeholder,
     attachments,
     setAttachments,
+    spaceId,
     height = 298,
     autoFocus,
 }: CommunityEditorProps) {
+    const { api } = useCommunity();
+    const { searchMembers, uploadAttachment, deletePendingAttachment, config } = api;
     const fileRef = useRef<HTMLInputElement>(null);
-    const timers = useRef<number[]>([]);
+    const uploads = useRef(new Map<string, AbortController>());
     const [linkAnchor, setLinkAnchor] = useState<HTMLElement | null>(null);
     const [linkUrl, setLinkUrl] = useState("");
     const [mention, setMention] = useState<MentionState | null>(null);
     const [mentionIndex, setMentionIndex] = useState(0);
+    const [suggestions, setSuggestions] = useState<CommunityAuthor[]>([]);
 
-    const suggestions: Author[] = mention
-        ? MENTIONABLE.filter((p) => p.name.toLowerCase().includes(mention.query.toLowerCase())).slice(0, 5)
-        : [];
+    const mentionQuery = mention ? mention.query : null;
+    useEffect(() => {
+        if (mentionQuery === null) return;
+        let cancelled = false;
+        const timer = window.setTimeout(async () => {
+            const res = await searchMembers({ q: mentionQuery || undefined, spaceId, limit: 5 });
+            if (!cancelled) setSuggestions(res.success && res.data ? res.data : []);
+        }, 180);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [mentionQuery, spaceId, searchMembers]);
 
     // Refs give the ProseMirror key handler access to the latest mention state.
-    const mentionRef = useRef<{ mention: MentionState | null; suggestions: Author[]; mentionIndex: number }>({
+    const mentionRef = useRef<{ mention: MentionState | null; suggestions: CommunityAuthor[]; mentionIndex: number }>({
         mention: null,
         suggestions: [],
         mentionIndex: 0,
     });
     useLayoutEffect(() => {
-        mentionRef.current = { mention, suggestions, mentionIndex };
+        mentionRef.current = { mention, suggestions: mention ? suggestions : [], mentionIndex };
     });
 
     const editorRef = useRef<Editor | null>(null);
 
-    const insertMention = (person: Author) => {
+    const insertMention = (person: CommunityAuthor) => {
         const editor = editorRef.current;
         const current = mentionRef.current.mention;
-        if (!editor || !current) return;
+        if (!editor || !current || !person.id) return;
         editor
             .chain()
             .focus()
             .insertContentAt({ from: current.from, to: current.to }, [
-                { type: "text", text: `@${person.name.toLowerCase()}`, marks: [{ type: "mention" }] },
+                { type: "text", text: `@${person.name.toLowerCase()}`, marks: [{ type: "mention", attrs: { memberId: person.id } }] },
                 { type: "text", text: " " },
             ])
             .run();
@@ -200,41 +241,48 @@ export default function CommunityEditor({
         if ((value || "") !== current) editor.commands.setContent(value || "", { emitUpdate: false });
     }, [editor, value]);
 
-    useEffect(() => () => timers.current.forEach((t) => window.clearInterval(t)), []);
-
-    const simulateUpload = (id: string) => {
-        const timer = window.setInterval(() => {
-            setAttachments((prev) => {
-                const target = prev.find((a) => a.id === id);
-                if (!target || target.progress >= 100) {
-                    window.clearInterval(timer);
-                    return prev;
-                }
-                const progress = Math.min(100, target.progress + 15 + Math.round(Math.random() * 20));
-                return prev.map((a) => (a.id === id ? { ...a, progress } : a));
-            });
-        }, 350);
-        timers.current.push(timer);
-    };
+    useEffect(() => {
+        const pending = uploads.current;
+        return () => pending.forEach((controller) => controller.abort());
+    }, []);
 
     const handleFiles = (files: FileList | null) => {
         if (!files) return;
-        Array.from(files).forEach((file) => {
-            if (!file.type.startsWith("image/")) return void toast.error(`${file.name} is not an image`);
-            if (file.size > MAX_IMAGE_BYTES) return void toast.error(`${file.name} is larger than 5 MB`);
-            const attachment: Attachment = { id: uid("att"), name: file.name, progress: 0, url: URL.createObjectURL(file) };
-            setAttachments((prev) => [...prev, attachment]);
-            simulateUpload(attachment.id);
+        const room = config.maxAttachmentsPerItem - attachments.length;
+        const list = Array.from(files);
+        if (list.length > room) toast.error(`You can attach up to ${config.maxAttachmentsPerItem} files`);
+        list.slice(0, Math.max(0, room)).forEach(async (file) => {
+            if (file.size > config.maxAttachmentBytes) return void toast.error(`${file.name} is larger than ${formatBytes(config.maxAttachmentBytes)}`);
+            const tempId = uid("upload");
+            const controller = new AbortController();
+            uploads.current.set(tempId, controller);
+            setAttachments((prev) => [...prev, { id: tempId, name: file.name, progress: 0, fresh: true }]);
+            const res = await uploadAttachment(file, {
+                signal: controller.signal,
+                onProgress: (progress) => setAttachments((prev) => prev.map((a) => (a.id === tempId ? { ...a, progress } : a))),
+            });
+            uploads.current.delete(tempId);
+            if (controller.signal.aborted) return;
+            if (!res.success || !res.data) {
+                setAttachments((prev) => prev.filter((a) => a.id !== tempId));
+                return void toast.error(`${file.name}: ${res.message ?? "upload failed"}`);
+            }
+            const uploaded = res.data;
+            setAttachments((prev) => prev.map((a) => (a.id === tempId ? { id: uploaded.id, name: uploaded.name, progress: 100, url: uploaded.url, fresh: true } : a)));
         });
         if (fileRef.current) fileRef.current.value = "";
     };
 
-    const removeAttachment = (id: string) =>
-        setAttachments((prev) => {
-            const target = prev.find((a) => a.id === id);
-            if (target?.url?.startsWith("blob:")) URL.revokeObjectURL(target.url);
-            return prev.filter((a) => a.id !== id);
-        });
+    const removeAttachment = (target: EditorAttachment) => {
+        const controller = uploads.current.get(target.id);
+        if (controller) {
+            controller.abort();
+            uploads.current.delete(target.id);
+        } else if (target.fresh && target.progress >= 100) {
+            void deletePendingAttachment(target.id);
+        }
+        setAttachments((prev) => prev.filter((a) => a.id !== target.id));
+    };
 
     const openLink = (anchor: HTMLElement) => {
         setLinkUrl(editor?.getAttributes("link").href ?? "");
@@ -304,7 +352,7 @@ export default function CommunityEditor({
                         </Tooltip>
                     );
                 })}
-                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => handleFiles(e.target.files)} />
+                <input ref={fileRef} type="file" accept={ACCEPT} multiple hidden onChange={(e) => handleFiles(e.target.files)} />
             </Box>
 
             <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", cursor: "text", ...darkScroll }} onClick={(e) => {
@@ -314,7 +362,7 @@ export default function CommunityEditor({
                 {attachments.length > 0 && (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                         {attachments.map((a) => (
-                            <AttachmentChip key={a.id} attachment={a} onRemove={() => removeAttachment(a.id)} />
+                            <AttachmentChip key={a.id} attachment={a} onRemove={() => removeAttachment(a)} />
                         ))}
                     </Box>
                 )}
@@ -400,7 +448,7 @@ export default function CommunityEditor({
     );
 }
 
-export function AttachmentChip({ attachment, onRemove }: { attachment: Attachment; onRemove?: () => void }) {
+export function AttachmentChip({ attachment, onRemove }: { attachment: Pick<EditorAttachment, "name" | "progress" | "url">; onRemove?: () => void }) {
     const done = attachment.progress >= 100;
     const content = (
         <>

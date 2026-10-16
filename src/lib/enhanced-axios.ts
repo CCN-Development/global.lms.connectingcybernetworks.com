@@ -7,7 +7,7 @@ type Props = {
     baseURL?: string
     body?: object
     headers?: object
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     params?: object
     loadingEndCallback?: () => void
     isVerbose?: boolean
@@ -24,7 +24,7 @@ function getCookie(name: string): string | null {
 export default async function axiosHandler(props: Props) {
     const token = props.token || getCookie('authToken') || null
     if (props.isVerbose) console.log("Enhanced Axios Called with props:", props)
-    if (!['get', 'post', 'put', 'delete'].includes(props.method?.toLowerCase() || 'get')) throw new Error('Invalid HTTP method')
+    if (!['get', 'post', 'put', 'patch', 'delete'].includes(props.method?.toLowerCase() || 'get')) throw new Error('Invalid HTTP method')
     if (props.body && typeof props.body !== 'object') throw new Error('Body must be an object')
     if (props.headers && typeof props.headers !== 'object') throw new Error('Headers must be an object')
     const baseUrl = props.baseURL || environment_variables.api_base_url

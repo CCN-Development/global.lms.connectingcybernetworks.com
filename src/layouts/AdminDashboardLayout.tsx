@@ -8,17 +8,17 @@ import {
     MdOutlineSchool,
     MdOutlineBadge,
     MdOutlineChat,
+    MdOutlineForum,
 } from 'react-icons/md'
 
 type Props = {
     children?: React.ReactNode,
-    title?: string,
+    title?: React.ReactNode,
 }
 
 const NAV_ITEMS: NavItem[] = [
     { label: 'Overview', link: '/dashboard/admin/overview', icon: <MdOutlineDashboard /> },
-    { label: 'CRM Management', link: '/dashboard/admin/crm-management', icon: <MdOutlineHandshake /> },
-    { label: 'HRMS Management', link: '/dashboard/admin/hrms-management', icon: <MdOutlineBadge /> },
+    { label: 'CRM Requests', link: '/dashboard/admin/crm-management', icon: <MdOutlineHandshake /> },
     { label: 'Onboarding', link: '/dashboard/admin/onboarding', icon: <MdOutlinePayment /> },
     { label: 'LMS Users', link: '/dashboard/admin/lms-users', icon: <MdOutlineSchool /> },
     {
@@ -30,6 +30,11 @@ const NAV_ITEMS: NavItem[] = [
         label: 'Exam Management',
         link: '/dashboard/admin/exam-management',
         icon: <MdOutlineSchool />
+    },
+    {
+        label: "CCN Forum",
+        link: '/dashboard/admin/ccn-forum',
+        icon: <MdOutlineForum />
     },
     { label: 'Chats', link: '/dashboard/chats', icon: <MdOutlineChat /> },
 ]

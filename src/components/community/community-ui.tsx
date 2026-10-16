@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { Box, ButtonBase, Dialog, Menu, MenuItem, SxProps, Theme, Typography } from "@mui/material";
 import { FONT_INTER, FONT_LATO, FONT_POPPINS, gradientBorder } from "@/components/aish/tokens";
-import { Author, CategoryId, CC, communityAsset, findCategory } from "./community-data";
+import { AuthorLike, CC, communityAsset } from "./community-data";
 
 // ─── Text presets (Figma text styles) ──────────────────────────────────────
 export const TEXT = {
@@ -112,8 +112,7 @@ export function CategorySwatch({ color }: { color: string }) {
     return <Box sx={{ width: 12, height: 12, flexShrink: 0, bgcolor: color }} />;
 }
 
-export function CategoryLabel({ categoryId, gap = "8px", color = CC.n200 }: { categoryId: CategoryId; gap?: string; color?: string }) {
-    const category = findCategory(categoryId);
+export function CategoryLabel({ category, gap = "8px", color = CC.n200 }: { category: { label: string; color: string }; gap?: string; color?: string }) {
     return (
         <Box sx={{ display: "flex", alignItems: "center", gap, minWidth: 0 }}>
             <CategorySwatch color={category.color} />
@@ -155,7 +154,7 @@ export function TagChip({ label, onRemove }: { label: string; onRemove?: () => v
 }
 
 // ─── People ────────────────────────────────────────────────────────────────
-export function UserAvatar({ author, size = 32 }: { author: Author; size?: number }) {
+export function UserAvatar({ author, size = 32 }: { author: AuthorLike; size?: number }) {
     const scale = size / 32;
     const isLocal = author.avatar?.startsWith("/");
     return (
@@ -193,7 +192,7 @@ export function UserAvatar({ author, size = 32 }: { author: Author; size?: numbe
     );
 }
 
-export function AuthorRow({ author, subtitle, size = 32, you }: { author: Author; subtitle?: string; size?: number; you?: boolean }) {
+export function AuthorRow({ author, subtitle, size = 32, you }: { author: AuthorLike; subtitle?: string; size?: number; you?: boolean }) {
     return (
         <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
             <UserAvatar author={author} size={size} />
@@ -202,7 +201,7 @@ export function AuthorRow({ author, subtitle, size = 32, you }: { author: Author
                     {author.name}
                     {you ? " (You)" : ""}
                 </Typography>
-                <Typography sx={{ ...TEXT.med12, color: CC.n500, ...ellipsis }}>{subtitle ?? author.role}</Typography>
+                <Typography sx={{ ...TEXT.med12, color: CC.n500, ...ellipsis }}>{subtitle ?? author.headline ?? author.roleLabel ?? ""}</Typography>
             </Box>
         </Box>
     );
@@ -263,10 +262,11 @@ export function LmsButton({ children, onClick, icon, disabled, type = "button", 
 }
 
 /** Rounded outline button used for "Post your thoughts" / "Share". */
-export function PillButton({ icon, children, onClick }: { icon: string; children: React.ReactNode; onClick?: () => void }) {
+export function PillButton({ icon, children, onClick, disabled }: { icon: string; children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
     return (
         <ButtonBase
             onClick={onClick}
+            disabled={disabled}
             sx={{
                 display: "flex",
                 alignItems: "center",
@@ -281,6 +281,7 @@ export function PillButton({ icon, children, onClick }: { icon: string; children
                 whiteSpace: "nowrap",
                 transition: "border-color .15s ease, background-color .15s ease",
                 "&:hover": { borderColor: CC.link, bgcolor: "rgba(66,106,204,0.08)" },
+                "&.Mui-disabled": { opacity: 0.5, color: CC.link },
             }}
         >
             <Icon name={icon} size={20} />
@@ -317,7 +318,8 @@ export const dropdownItemSx = (active = false) => ({
 
 export interface ActionMenuItem {
     label: string;
-    icon: string;
+    /** Community asset name, or a ready icon node. */
+    icon: string | React.ReactNode;
     danger?: boolean;
     onClick: () => void;
 }
@@ -363,7 +365,7 @@ export function ActionMenu({ items, trigger, label }: { items: ActionMenuItem[];
                             "&:hover": { bgcolor: "rgba(255,255,255,0.06)" },
                         }}
                     >
-                        <Icon name={item.icon} size={20} />
+                        {typeof item.icon === "string" ? <Icon name={item.icon} size={20} /> : item.icon}
                         {item.label}
                     </MenuItem>
                 ))}
@@ -442,5 +444,372 @@ export function CommunityModal({ open, onClose, title, width, children }: Commun
                 {children}
             </Box>
         </Dialog>
+    );
+}
+
+// ─── Status chip (TagChip with an accent colour) ───────────────────────────
+export function StatusChip({ label, color }: { label: string; color: string }) {
+    return (
+        <Box
+            sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                px: "6px",
+                py: "3px",
+                borderRadius: "4px",
+                border: `1px solid ${color}`,
+                bgcolor: "rgba(0,0,0,0.24)",
+                flexShrink: 0,
+            }}
+        >
+            <Typography sx={{ ...TEXT.med14, color, whiteSpace: "nowrap" }}>{label}</Typography>
+        </Box>
+    );
+}
+
+// ─── Checkbox row (same box as the tag filter menu) ────────────────────────
+export function CheckRow({ checked, onChange, label, hint }: { checked: boolean; onChange: (checked: boolean) => void; label: string; hint?: string }) {
+    return (
+        <ButtonBase
+            role="checkbox"
+            aria-checked={checked}
+            onClick={() => onChange(!checked)}
+            sx={{ display: "flex", alignItems: "flex-start", gap: "12px", justifyContent: "flex-start", textAlign: "left", borderRadius: "6px", py: "4px" }}
+        >
+            <Box
+                aria-hidden
+                sx={{
+                    width: 16,
+                    height: 16,
+                    mt: "4px",
+                    borderRadius: "4px",
+                    border: `1.5px solid ${checked ? CC.primary200 : CC.n500}`,
+                    bgcolor: checked ? CC.primary500 : "transparent",
+                    flexShrink: 0,
+                }}
+            />
+            <Box sx={{ display: "flex", flexDirection: "column" }}>
+                <Typography sx={{ ...TEXT.med16, color: CC.n100 }}>{label}</Typography>
+                {hint && <Typography sx={{ ...TEXT.reg12, color: CC.n500 }}>{hint}</Typography>}
+            </Box>
+        </ButtonBase>
+    );
+}
+
+// ─── Confirm modal (the design's "Delete reply?" dialog) ───────────────────
+interface ConfirmModalProps {
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    busy?: boolean;
+    onConfirm: () => void;
+    onClose: () => void;
+}
+
+export function ConfirmModal({ open, title, message, confirmLabel = "Delete", busy, onConfirm, onClose }: ConfirmModalProps) {
+    return (
+        <CommunityModal open={open} onClose={onClose} title={title} width={440}>
+            <Typography sx={{ ...TEXT.med16, color: CC.n200 }}>{message}</Typography>
+            <Box sx={{ display: "flex", gap: "12px" }}>
+                <ButtonBase
+                    onClick={onClose}
+                    sx={{ flex: 1, height: 44, borderRadius: "10px", border: `1px solid ${CC.n700}`, color: CC.n100, ...TEXT.interMed14, "&:hover": { borderColor: CC.n500 } }}
+                >
+                    Cancel
+                </ButtonBase>
+                <ButtonBase
+                    onClick={onConfirm}
+                    disabled={busy}
+                    sx={{
+                        flex: 1,
+                        height: 44,
+                        borderRadius: "10px",
+                        bgcolor: CC.error,
+                        color: CC.white,
+                        ...TEXT.interMed14,
+                        "&:hover": { bgcolor: "#b52233" },
+                        "&.Mui-disabled": { opacity: 0.6, color: CC.white },
+                    }}
+                >
+                    {busy ? "Please wait…" : confirmLabel}
+                </ButtonBase>
+            </Box>
+        </CommunityModal>
+    );
+}
+
+// ─── Filter / dropdown trigger (feed filter bar style) ─────────────────────
+export function FilterButton({
+    children,
+    open,
+    onClick,
+    label,
+    chevron = true,
+}: {
+    children: React.ReactNode;
+    open: boolean;
+    onClick: (e: React.MouseEvent<HTMLElement>) => void;
+    label: string;
+    chevron?: boolean;
+}) {
+    return (
+        <ButtonBase
+            aria-label={label}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={onClick}
+            sx={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                height: 40,
+                pl: "16px",
+                pr: chevron ? "12px" : "16px",
+                borderRadius: "8px",
+                bgcolor: CC.filterBg,
+                backdropFilter: "blur(12px)",
+                color: CC.white,
+                ...TEXT.med16,
+                whiteSpace: "nowrap",
+                maxWidth: "100%",
+                transition: "background-color .15s ease",
+                "&:hover": { bgcolor: "rgba(64,64,64,0.6)" },
+            }}
+        >
+            {children}
+            {chevron && <Icon name="icon-chevron-down.svg" size={24} sx={{ transition: "transform .15s ease", transform: open ? "rotate(180deg)" : "none" }} />}
+        </ButtonBase>
+    );
+}
+
+// ─── Pill choice (post type, poll duration, tabs) ──────────────────────────
+export function ChoiceChip({
+    active,
+    onClick,
+    color,
+    count,
+    children,
+}: {
+    active: boolean;
+    onClick: () => void;
+    color?: string;
+    count?: number;
+    children: React.ReactNode;
+}) {
+    return (
+        <ButtonBase
+            role="radio"
+            aria-checked={active}
+            onClick={onClick}
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                height: 36,
+                px: "14px",
+                borderRadius: "8px",
+                border: `1px solid ${active ? CC.primary200 : CC.n700}`,
+                bgcolor: active ? CC.dropdownActive : CC.filterBg,
+                color: active ? CC.white : CC.n200,
+                ...TEXT.med14,
+                whiteSpace: "nowrap",
+                transition: "border-color .15s ease, background-color .15s ease",
+                "&:hover": { borderColor: active ? CC.primary200 : CC.n500 },
+            }}
+        >
+            {color && <CategorySwatch color={color} />}
+            {children}
+            {count !== undefined && (
+                <Box component="span" sx={{ ...TEXT.med12, color: active ? CC.primary200 : CC.n400 }}>
+                    {count}
+                </Box>
+            )}
+        </ButtonBase>
+    );
+}
+
+// ─── Inputs ────────────────────────────────────────────────────────────────
+const inputSx = {
+    width: "100%",
+    minWidth: 0,
+    px: "14px",
+    borderRadius: "8px",
+    border: `1px solid ${CC.n700}`,
+    bgcolor: "transparent",
+    color: CC.white,
+    ...TEXT.med14,
+    outline: "none",
+    transition: "border-color .15s ease",
+    "&:focus": { borderColor: CC.primary200 },
+    "&::placeholder": { color: CC.n500 },
+} as const;
+
+export function FieldInput({ sx, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { sx?: SxProps<Theme> }) {
+    return <Box component="input" {...props} sx={[{ ...inputSx, height: 44 }, ...(Array.isArray(sx) ? sx : [sx])]} />;
+}
+
+export function TextArea({ sx, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { sx?: SxProps<Theme> }) {
+    return <Box component="textarea" {...props} sx={[{ ...inputSx, py: "12px", minHeight: 80, resize: "vertical" }, ...(Array.isArray(sx) ? sx : [sx])]} />;
+}
+
+/** Label + field + optional hint. */
+export function FormRow({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+    return (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <Typography sx={{ ...TEXT.reg14, color: CC.n300 }}>{label}</Typography>
+            {children}
+            {hint && <Typography sx={{ ...TEXT.reg12, color: CC.n500 }}>{hint}</Typography>}
+        </Box>
+    );
+}
+
+// ─── Row action button (same look as "Open Thread") ────────────────────────
+const TONES = {
+    default: { color: CC.white, border: "rgba(140,140,140,0.5)", hover: CC.primary200 },
+    primary: { color: CC.primary200, border: "rgba(147,169,226,0.5)", hover: CC.primary200 },
+    success: { color: CC.success, border: "rgba(46,196,182,0.5)", hover: CC.success },
+    danger: { color: "#F07A88", border: "rgba(209,41,61,0.55)", hover: CC.error },
+    warning: { color: "#FFAD4F", border: "rgba(255,173,79,0.5)", hover: "#FFAD4F" },
+} as const;
+export type ActionTone = keyof typeof TONES;
+
+export function ActionButton({
+    children,
+    onClick,
+    tone = "default",
+    icon,
+    disabled,
+    trailing,
+}: {
+    children: React.ReactNode;
+    onClick: (e: React.MouseEvent<HTMLElement>) => void;
+    tone?: ActionTone;
+    icon?: React.ReactNode;
+    disabled?: boolean;
+    trailing?: React.ReactNode;
+}) {
+    const t = TONES[tone];
+    return (
+        <ButtonBase
+            disabled={disabled}
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick(e);
+            }}
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                height: 36,
+                px: "12px",
+                borderRadius: "8px",
+                border: `0.6px solid ${t.border}`,
+                backgroundImage: "linear-gradient(180deg, rgba(191,191,191,0.12) 0%, rgba(89,89,89,0.04) 100%)",
+                color: t.color,
+                ...TEXT.med14,
+                whiteSpace: "nowrap",
+                transition: "border-color .15s ease",
+                "&:hover": { borderColor: t.hover },
+                "&.Mui-disabled": { opacity: 0.5, color: t.color },
+            }}
+        >
+            {icon}
+            {children}
+            {trailing}
+        </ButtonBase>
+    );
+}
+
+// ─── Panel header (management views) ───────────────────────────────────────
+export function PanelHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
+    return (
+        <Box sx={{ display: "flex", alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between", gap: "12px", flexWrap: "wrap", flexShrink: 0 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0 }}>
+                <Typography component="h2" sx={{ ...TEXT.poppinsSemi20, fontSize: { xs: "18px", sm: "20px" }, color: CC.white }}>
+                    {title}
+                </Typography>
+                {subtitle && <Typography sx={{ ...TEXT.reg14, color: CC.n400 }}>{subtitle}</Typography>}
+            </Box>
+            {actions && <Box sx={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>{actions}</Box>}
+        </Box>
+    );
+}
+
+/** Empty / info state inside a panel. */
+export function EmptyCard({ title, message, action }: { title: string; message?: string; action?: React.ReactNode }) {
+    return (
+        <GlassCard sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", py: "40px !important", textAlign: "center", flexShrink: 0 }}>
+            <Typography sx={{ ...TEXT.semi18, color: CC.white }}>{title}</Typography>
+            {message && <Typography sx={{ ...TEXT.med14, color: CC.n300, maxWidth: 420 }}>{message}</Typography>}
+            {action}
+        </GlassCard>
+    );
+}
+
+// ─── Reason modal (hide / reject / delete / ban) ───────────────────────────
+interface ReasonModalProps {
+    open: boolean;
+    title: string;
+    message?: string;
+    confirmLabel: string;
+    /** Reason must be filled in (reject / ban). */
+    required?: boolean;
+    danger?: boolean;
+    busy?: boolean;
+    placeholder?: string;
+    children?: React.ReactNode;
+    onConfirm: (reason: string) => void;
+    onClose: () => void;
+}
+
+export function ReasonModal({ open, title, message, confirmLabel, required, danger, busy, placeholder, children, onConfirm, onClose }: ReasonModalProps) {
+    const [reason, setReason] = useState("");
+    const [lastOpen, setLastOpen] = useState(open);
+    if (open !== lastOpen) {
+        setLastOpen(open);
+        if (open) setReason("");
+    }
+    const disabled = busy || (required && !reason.trim());
+    return (
+        <CommunityModal open={open} onClose={busy ? () => undefined : onClose} title={title} width={480}>
+            {message && <Typography sx={{ ...TEXT.med16, color: CC.n200 }}>{message}</Typography>}
+            {children}
+            <FormRow label={required ? "Reason (shared with the member)" : "Reason (optional, shared with the member)"}>
+                <TextArea value={reason} maxLength={1000} rows={3} placeholder={placeholder} onChange={(e) => setReason(e.target.value)} autoFocus />
+            </FormRow>
+            <Box sx={{ display: "flex", gap: "12px" }}>
+                <ButtonBase
+                    onClick={onClose}
+                    disabled={busy}
+                    sx={{ flex: 1, height: 44, borderRadius: "10px", border: `1px solid ${CC.n700}`, color: CC.n100, ...TEXT.interMed14, "&:hover": { borderColor: CC.n500 } }}
+                >
+                    Cancel
+                </ButtonBase>
+                {danger ? (
+                    <ButtonBase
+                        onClick={() => onConfirm(reason.trim())}
+                        disabled={disabled}
+                        sx={{
+                            flex: 1,
+                            height: 44,
+                            borderRadius: "10px",
+                            bgcolor: CC.error,
+                            color: CC.white,
+                            ...TEXT.interMed14,
+                            "&:hover": { bgcolor: "#b52233" },
+                            "&.Mui-disabled": { opacity: 0.6, color: CC.white },
+                        }}
+                    >
+                        {busy ? "Please wait…" : confirmLabel}
+                    </ButtonBase>
+                ) : (
+                    <LmsButton onClick={() => onConfirm(reason.trim())} disabled={disabled} sx={{ flex: 1 }}>
+                        {busy ? "Please wait…" : confirmLabel}
+                    </LmsButton>
+                )}
+            </Box>
+        </CommunityModal>
     );
 }

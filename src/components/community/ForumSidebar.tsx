@@ -1,35 +1,93 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
+import { useRouter } from "next/navigation";
 import { Box, ButtonBase, Typography } from "@mui/material";
+import { BarChart3, Flag, Layers3, ScrollText, ShieldCheck, Tags, Users } from "lucide-react";
 import { FONT_INTER, gradientBorder } from "@/components/aish/tokens";
-import { CC, CURRENT_USER_ID, FEED_MENU, FeedFilter, Post } from "./community-data";
+import { CC, FeedFilter, MANAGE_MENU, ManageView, menuCount } from "./community-data";
 import { darkScroll, ellipsis, Icon, LmsButton, TEXT } from "./community-ui";
-
-export function countFor(posts: Post[], filter: FeedFilter) {
-    switch (filter) {
-        case "all":
-            return posts.length;
-        case "pinned":
-            return posts.filter((p) => p.pinnedBy).length;
-        case "mine":
-            return posts.filter((p) => p.author.id === CURRENT_USER_ID).length;
-        case "saved":
-            return posts.filter((p) => p.saved).length;
-        default:
-            return posts.filter((p) => p.categoryId === filter).length;
-    }
-}
+import { useCommunity } from "./CommunityContext";
 
 interface ForumSidebarProps {
-    posts: Post[];
-    active: FeedFilter | null;
+    /** Active feed filter, or the active management view (staff). */
+    active: FeedFilter | ManageView | null;
     onSelect: (filter: FeedFilter) => void;
     onNewDiscussion: () => void;
 }
 
-export default function ForumSidebar({ posts, active, onSelect, onNewDiscussion }: ForumSidebarProps) {
-    const counts = useMemo(() => Object.fromEntries(FEED_MENU.map((m) => [m.id, countFor(posts, m.id)])), [posts]);
+/** No Figma assets exist for the management items — lucide icons drawn in the same stroke / colour. */
+const MANAGE_ICONS: Record<ManageView, React.ElementType> = {
+    queue: ShieldCheck,
+    reports: Flag,
+    members: Users,
+    spaces: Layers3,
+    taxonomy: Tags,
+    analytics: BarChart3,
+    log: ScrollText,
+};
+
+function MenuRow({
+    active,
+    onClick,
+    icon,
+    label,
+    trailing,
+}: {
+    active: boolean;
+    onClick: () => void;
+    icon: React.ReactNode;
+    label: string;
+    trailing: React.ReactNode;
+}) {
+    return (
+        <ButtonBase
+            onClick={onClick}
+            aria-current={active ? "page" : undefined}
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                width: "100%",
+                px: "16px",
+                py: "12px",
+                flexShrink: 0,
+                borderRadius: "16px",
+                backgroundImage: active ? CC.menuActive : "none",
+                transition: "background-color .15s ease",
+                "&:hover": { bgcolor: active ? "transparent" : "rgba(255,255,255,0.04)" },
+            }}
+        >
+            <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                {icon}
+                <Typography sx={{ ...TEXT.med14, color: CC.n100, ...ellipsis }}>{label}</Typography>
+            </Box>
+            {trailing}
+        </ButtonBase>
+    );
+}
+
+const countSx = { fontFamily: FONT_INTER, fontSize: "12px", lineHeight: "18px", color: CC.n300 } as const;
+
+function Badge({ value, color }: { value: number; color: string }) {
+    if (!value) return null;
+    return (
+        <Box sx={{ minWidth: 20, height: 20, px: "6px", borderRadius: "99px", border: `1px solid ${color}`, ...countSx, color, textAlign: "center" }}>
+            {value > 99 ? "99+" : value}
+        </Box>
+    );
+}
+
+export default function ForumSidebar({ active, onSelect, onNewDiscussion }: ForumSidebarProps) {
+    const router = useRouter();
+    const { menu, api, isStaffView, paths, can } = useCommunity();
+    const counts = api.counts;
+    const queue = api.queue;
+    const manageItems = isStaffView ? MANAGE_MENU.filter((m) => !m.capability || can(m.capability)) : [];
+
+    const badgeFor = (view: ManageView) =>
+        view === "queue" ? <Badge value={queue?.pendingPosts ?? 0} color="#FFAD4F" /> : view === "reports" ? <Badge value={queue?.openReports ?? 0} color={CC.error} /> : null;
 
     return (
         <Box
@@ -52,42 +110,37 @@ export default function ForumSidebar({ posts, active, onSelect, onNewDiscussion 
                 "&::before": gradientBorder(),
             }}
         >
-            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", minHeight: 0 }}>
-                <Typography sx={{ ...TEXT.reg14, color: CC.n500 }}>MENU</Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", mx: "-4px", px: "4px", ...darkScroll }}>
-                    {FEED_MENU.map((item) => {
-                        const isActive = active === item.id;
-                        return (
-                            <ButtonBase
-                                key={item.id}
-                                onClick={() => onSelect(item.id)}
-                                aria-current={isActive ? "page" : undefined}
-                                sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: "12px",
-                                    width: "100%",
-                                    px: "16px",
-                                    py: "12px",
-                                    flexShrink: 0,
-                                    borderRadius: "16px",
-                                    backgroundImage: isActive ? CC.menuActive : "none",
-                                    transition: "background-color .15s ease",
-                                    "&:hover": { bgcolor: isActive ? "transparent" : "rgba(255,255,255,0.04)" },
-                                }}
-                            >
-                                <Box sx={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-                                    <Icon name={item.icon} size={24} rotate={item.rotateIcon ? 180 : undefined} />
-                                    <Typography sx={{ ...TEXT.med14, color: CC.n100, ...ellipsis }}>{item.label}</Typography>
-                                </Box>
-                                <Typography sx={{ fontFamily: FONT_INTER, fontSize: "12px", lineHeight: "18px", color: CC.n300 }}>
-                                    {counts[item.id]}
-                                </Typography>
-                            </ButtonBase>
-                        );
-                    })}
-                </Box>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: "12px", minHeight: 0, overflowY: "auto", mx: "-4px", px: "4px", ...darkScroll }}>
+                <Typography sx={{ ...TEXT.reg14, color: CC.n500, flexShrink: 0 }}>MENU</Typography>
+                {menu.map((item) => (
+                    <MenuRow
+                        key={item.id}
+                        active={active === item.id}
+                        onClick={() => onSelect(item.id)}
+                        icon={<Icon name={item.icon} size={24} rotate={item.rotateIcon ? 180 : undefined} />}
+                        label={item.label}
+                        trailing={<Typography sx={countSx}>{menuCount(counts, item.id)}</Typography>}
+                    />
+                ))}
+
+                {manageItems.length > 0 && (
+                    <>
+                        <Typography sx={{ ...TEXT.reg14, color: CC.n500, mt: "12px", flexShrink: 0 }}>MANAGE</Typography>
+                        {manageItems.map((item) => {
+                            const IconCmp = MANAGE_ICONS[item.id];
+                            return (
+                                <MenuRow
+                                    key={item.id}
+                                    active={active === item.id}
+                                    onClick={() => router.push(paths.view(item.id))}
+                                    icon={<IconCmp size={22} color={CC.n100} strokeWidth={1.5} style={{ flexShrink: 0 }} />}
+                                    label={item.short ?? item.label}
+                                    trailing={badgeFor(item.id)}
+                                />
+                            );
+                        })}
+                    </>
+                )}
             </Box>
 
             <LmsButton onClick={onNewDiscussion} icon={<Icon name="icon-plus.svg" size={20} sx={{ position: "relative" }} />} sx={{ width: "100%", flexShrink: 0 }}>

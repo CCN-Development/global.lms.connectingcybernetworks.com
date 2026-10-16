@@ -35,7 +35,7 @@ import { CountriesData } from "@/utils/countries";
 type Mode = "otp" | "password";
 type Step = "identifier" | "otp";
 type Channel = "phone" | "email";
-type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant";
+type UserRole = "Owner" | "Admin" | "RM" | "Trainer" | "Student" | "Accountant" | "Placement";
 
 const ROLE_PATH_MAP: Record<UserRole, string> = {
     Owner: "/dashboard/owner/overview",
@@ -44,6 +44,7 @@ const ROLE_PATH_MAP: Record<UserRole, string> = {
     Trainer: "/dashboard/trainer/overview",
     Student: "/dashboard/student/overview",
     Accountant: "/dashboard/accountants/overview",
+    Placement: "/dashboard/placement/overview",
 };
 
 interface Country {

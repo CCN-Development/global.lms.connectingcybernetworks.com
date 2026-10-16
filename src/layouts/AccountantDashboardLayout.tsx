@@ -8,11 +8,12 @@ import {
     MdOutlineReceipt,
     MdOutlinePeople,
     MdOutlineChat,
+    MdOutlineForum,
 } from 'react-icons/md'
 
 type Props = {
     children?: React.ReactNode,
-    title?: string,
+    title?: React.ReactNode,
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -22,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'Due & Upcoming Payments',       link: '/dashboard/accountants/due-upcoming-payments',          icon: <MdOutlinePendingActions /> },
     { label: 'Accounts Management',           link: '/dashboard/accountants/accounts-management',            icon: <MdOutlineAccountBalance /> },
     { label: 'Student Profiles',              link: '/dashboard/accountants/student-profiles',               icon: <MdOutlinePeople /> },
+    { label: 'CCN Forum',                     link: '/dashboard/accountants/ccn-forum',                      icon: <MdOutlineForum /> },
     { label: 'Chats',                         link: '/dashboard/chats',                          icon: <MdOutlineChat /> },
 ]
 
